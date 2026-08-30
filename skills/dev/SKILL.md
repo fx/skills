@@ -8,6 +8,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
+>
+> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
+> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
+> Substitute it; never write a literal `.claude/` path on another host.
 
 This skill defines the **mandatory** workflow for one explicitly invoked `/dev` lifecycle. Follow its steps in order for that lifecycle; do not infer or auto-start it from an ordinary coding request.
 
@@ -631,23 +635,24 @@ Agent tool:
 | GitHub Copilot | `copilot-review` | Auto-reviews; we explicitly request via API as a defensive belt. Does NOT re-review on push by default. |
 | CodeRabbit | `coderabbit-review` | PR-level only — there is no local pass. Applies when the GitHub App auto-reviews PRs: re-reviews after pushes and exposes state via the `CodeRabbit` check. Classify new feedback in the shared ledger and settle its threads within the bounds below. `STATUS=NOT_CONFIGURED` means the App is absent — report once and skip. |
 
-##### Run every waiter in the background — there is no mode selection
+##### Run every waiter concurrently — there is no mode selection
 
-**⛔ Launch each configured reviewer's wait script in the SAME message with `run_in_background: true`, each redirecting to its own log file.** They then run concurrently, and a completion notification wakes you per reviewer. This works identically in every context — root session, `team` coordinator, or sub-agent — so there is nothing to choose and no "can I spawn sub-agents?" branch. **Do not spawn sub-agents for reviewer waits; they buy nothing here.**
+**⛔ Launch each configured reviewer's wait script concurrently, each redirecting to its own log file.** Take the shape of the wait from `references/host-adapters.md` § Long waits — on Claude Code it is one message with every call `run_in_background: true`, woken per reviewer by its completion notification, and spawning sub-agents for the wait buys nothing; on Codex the same table says to delegate each waiter to a teammate and `wait_agent` on it. Either way the concurrency is the same and there is no "can I spawn sub-agents?" branch to agonise over: root session, `team` coordinator, and sub-agent all follow their host's row. **Where the row makes each waiter a child, those children spend the host's concurrency slots** — Codex has three for teammates, so two reviewers plus the Step 7 CI wait already fill a wave. Launch them in batches of at most three and reconcile between batches; a spawn past the limit queues, and a queued waiter looks exactly like a hung one.
 ```bash
-# Both in ONE message, both run_in_background: true
-mkdir -p .claude/team/waits && \
+# Claude Code spelling: both in ONE message, both run_in_background: true.
+# On another host, same two waiters, that host's shape (§ Long waits).
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh [PR_NUMBER] \
-     > .claude/team/waits/copilot-[PR_NUMBER].log 2>&1
+     > [AGENT_DIR]/team/waits/copilot-[PR_NUMBER].log 2>&1
 
-mkdir -p .claude/team/waits && \
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NUMBER] \
-     > .claude/team/waits/rabbit-[PR_NUMBER].log 2>&1
+     > [AGENT_DIR]/team/waits/rabbit-[PR_NUMBER].log 2>&1
 ```
 
-**Never run a waiter in the foreground.** The Bash tool caps a foreground `timeout` at 600 000 ms, which is below every waiter's 900 s budget — a foreground call is guaranteed to be killed mid-poll, printing no STATUS and no exit code, and the caller then re-runs it blindly. Backgrounded processes are not subject to that cap. **Never background one without the redirect**: the cycle is driven by what the script prints.
+**Never run a waiter in a call that cannot outlive it.** On Claude Code that means never in the foreground: the Bash tool caps a foreground `timeout` at 600 000 ms, below every waiter's 900 s budget, so the call is killed mid-poll, printing no STATUS and no exit code, and the caller then re-runs it blindly. Every host has some equivalent ceiling — Codex yields `exec_command` after 30 s — which is why `references/host-adapters.md` § Long waits gives each one a shape that survives the budget. **Never launch one without the redirect**: the cycle is driven by what the script prints.
 
-###### Then, per reviewer, on its notification
+###### Then, per reviewer, on its wake
 
 1. Read the log and branch on its `STATUS=` line (each reviewer skill documents its own table; the five states are shared):
    - `TERMINAL_PASS` / `TERMINAL_FAIL` — settled. Do **not** re-run for a better answer.
@@ -685,15 +690,15 @@ transition to manage in this workflow.
 
 #### 7.1 Wait for CI Checks to Start and Complete
 
-**⛔ Run the bundled CI check script in the BACKGROUND** (`run_in_background: true`), redirecting to a log file, then read that log when the completion notification arrives:
+**⛔ Run the bundled CI check script as a long wait** — `references/host-adapters.md` § Long waits — redirecting to a log file and reading that log on the wake. On Claude Code that is `run_in_background: true` plus the completion notification:
 
 ```bash
-mkdir -p .claude/team/waits && \
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh [PR_NUMBER] \
-     > .claude/team/waits/ci-[PR_NUMBER].log 2>&1
+     > [AGENT_DIR]/team/waits/ci-[PR_NUMBER].log 2>&1
 ```
 
-**Do NOT run it in the foreground.** The Bash tool caps a foreground `timeout` at 600 000 ms, which is below the script's 900 s budget — a foreground call is guaranteed to be killed mid-poll, losing the output entirely. Backgrounded processes are not subject to that cap. **Never background it without the redirect**: the workflow reacts to what the script prints.
+**Do NOT run it in a call that cannot outlive it.** On Claude Code the Bash tool caps a foreground `timeout` at 600 000 ms, below the script's 900 s budget, so a foreground call is killed mid-poll and the output is lost; backgrounded processes are not subject to that cap. **Never launch it without the redirect**: the workflow reacts to what the script prints.
 
 Script behavior:
 - Phase 1 (discovery): waits up to 90 s for any check to appear.

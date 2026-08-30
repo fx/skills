@@ -28,6 +28,7 @@ reference another file.
 
 - Flag a host limitation stated as a universal. "Sub-agents cannot spawn sub-agents" is Claude Code's constraint, not Codex's — it belongs in a host-notes block, not an architectural rule. A rule holding on every host must say so, and why.
 - Concrete `Agent tool:` / `Skill tool:` syntax is fine as illustration. Flag it only where presented as the sole spelling, or where a host-coupled operation has no entry in `skills/dev/references/host-adapters.md`.
+- **`host-adapters.md` is where concrete, host-specific syntax belongs — do not flag it there.** The illustrative-syntax rule governs the *skills*, and it works by pointing at the adapter file; that file's job is to carry each host's exact spelling, including a namespaced tool call such as Codex's `to=functions.collaboration.spawn_agent`. Verbatim host wording in an adapter row is a citation, not a hardcoded contract.
 - Flag hardcoded model names; tiers (`large`/`medium`/`small`) are resolved by the host.
 
 ### Cross-Skill Paths
@@ -35,6 +36,7 @@ reference another file.
 - `[SKILLS_DIR]/<skill>/scripts/<script>.sh` is the correct form for referencing a sibling skill's bundled script, and it is intentionally a placeholder. Do not flag it as an unresolved path or suggest a literal path in its place.
 - Any `SKILL.md` using `[SKILLS_DIR]` must define it in a note under its H1. Flag a file that uses the placeholder without the note.
 - Flag hardcoded `.claude/skills/` paths — these skills install into many different agent directories.
+- Scratch space and worktrees use `[AGENT_DIR]/team/...` and `[AGENT_DIR]/worktrees/...`, also placeholders, also requiring the note under the H1. Flag any bare `.claude/` path outside prose that is explicitly about Claude Code — on another host it writes the run's artifacts into a foreign agent's state directory.
 
 ### Explicit-Use Descriptions
 

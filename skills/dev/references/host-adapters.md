@@ -14,7 +14,7 @@ Every orchestration skill in this catalog — `dev`, `team`, `workflow-runner`, 
 |---|---|---|
 | 1 | **Delegate** | Work runs in a *separate context* with its own instructions, at a chosen capability tier, and reports back |
 | 2 | **Load a skill** | The delegate begins with a named skill's full instructions in context |
-| 3 | **Wait** | The coordinator can block on one or more delegates and read each result |
+| 3 | **Wait** | The coordinator can block on one or more delegates and read each result. **Whether a finished delegate wakes the coordinator, or the coordinator must ask, is host-specific — check your row before writing a wait loop or omitting one** |
 | 4 | **Message** | A correction reaches a *running* delegate without restarting it |
 | 5 | **Ask the user** | Execution stops until a human answers; the answer is not inferred |
 | 6 | **Run long, concurrently** | A multi-minute command runs without blocking the coordinator, and its output is retrievable |
@@ -30,11 +30,11 @@ Every orchestration skill in this catalog — `dev`, `team`, `workflow-runner`, 
 |---|---|
 | Delegate | `Agent` tool. `name` (addressable handle), `prompt`, `description`, `model` (tier), `isolation`, `run_in_background` |
 | Load a skill | `Skill` tool inside the delegate's prompt: `Skill tool: skill='<name>'` |
-| Wait | Completion notification for a backgrounded `Agent`; `TaskOutput` for its report |
+| Wait | Completion notification for a backgrounded `Agent` wakes the coordinator; `TaskOutput` for its report. Nothing to poll, and a live teammate survives the coordinator's turn ending |
 | Message | `SendMessage` to the agent's `name` or id |
 | Ask the user | `AskUserQuestion` |
 | Run long, concurrently | `Bash` with `run_in_background: true`, redirect to a log, read the log on notification |
-| Scratch space | `.claude/team/` |
+| Scratch space | `.claude/team/` (`[AGENT_DIR]` = `.claude`) |
 
 Capabilities that shape orchestration here:
 
@@ -47,19 +47,49 @@ Capabilities that shape orchestration here:
 
 | Op | Mapping |
 |---|---|
-| Delegate | `spawn_agent`, with per-spawn model and `reasoning_effort` |
-| Load a skill | Name the skill in the child's prompt; the child reads its `SKILL.md` |
-| Wait | `wait_agent`; `list_agents` to see what is outstanding |
-| Message | `send_message`, or `followup_task` |
+| Delegate | `spawn_agent` — `task_name`, `message`, `fork_turns`, and (only with `fork_turns` set) `model` / `reasoning_effort`. Returns the canonical name `/root/<task_name>`. **`task_name` accepts only lowercase letters, digits, and underscores** — a hyphenated handle is rejected outright, so `coder-0105a` must be spelled `coder_0105a` |
+| Load a skill | Name the skill in the child's `message` **and give the absolute path to its `SKILL.md`** — there is no `Skill` tool, the child just reads the file |
+| Wait | `wait_agent` (explicit, takes `timeout_ms`); `list_agents` for a status snapshot |
+| Message | `send_message` (delivers without triggering a turn), `followup_task` (delivers and triggers one), `interrupt_agent` to stop one |
 | Ask the user | A normal user turn — or structured user input where the host exposes it |
-| Run long, concurrently | A persistent command session, polled via its stdin/stdout handle |
-| Scratch space | `.agents/team/`, or the host's own agent working directory |
+| Run long, concurrently | `exec_command`, which returns a `session_id` when its `yield_time_ms` elapses (**max 30 000 ms**, verified) and leaves the command running; re-read that session to collect the rest. See § Long waits below — a 900 s waiter needs a different shape here |
+| Scratch space | `.agents/team/` (`[AGENT_DIR]` = `.agents`), or the host's own agent working directory |
 
-Capabilities that shape orchestration here:
+Capabilities that shape orchestration here — all of the following verified against codex-cli 0.145.0 **and re-verified unchanged on 0.151.0**, on 2026-08-30, by reading the session's own developer instructions and by running spawn tests:
 
+- **⛔ Waiting is explicit, and ending a turn kills live children.** A child's `FINAL_ANSWER` is delivered to the parent with `trigger_turn: false` — it lands in the parent's context but does **not** wake it. There is no completion notification. If the coordinator ends its turn while a teammate is running, the run terminates and the teammate is interrupted mid-task (observed: child aborted 0.2 s after the root's turn ended, `reason: interrupted`). **The coordinator must `wait_agent` before it stops.** This is the single largest behavioural difference from Claude Code, where the notification does wake you and blocking is the bug. Codex itself asks for long waits — *"prefer longer waits (minutes) to avoid busy polling"* — so give `timeout_ms` minutes, not seconds; a short timeout turns the blocking primitive back into a poll loop.
+
+- **Teammates are first-class threads, so they are inspectable from outside the session.** Every spawn writes its own row to the shared thread store (`~/.codex/state_5.sqlite`) with `source = {"subagent":{"thread_spawn":{parent_thread_id, depth, agent_path, agent_nickname}}}`, plus an edge in `thread_spawn_edges(parent_thread_id, child_thread_id, status)` and its own rollout under `~/.codex/sessions/`. That holds for `codex exec` runs too, not just daemon-hosted ones. The in-session view is `list_agents` (`/root` plus each child and its state); out of session, the store and the rollouts are the ground truth. Note that `thread_spawn_edges.status` has been observed still reading `open` for children that finished long ago — do not treat it as liveness.
+- **Delegation must be explicitly asked for.** Every session carries `<multi_agent_mode>`: *"Do not spawn sub-agents unless the user or applicable AGENTS.md/skill instructions explicitly ask for sub-agents, delegation, or parallel agent work."* A skill that means to fan out must say so in those words. Prose about "the Agent tool" does not read as an ask, and a child inherits the same restriction — so a child that should fan out has to be told to, in its `message`.
+- **Four concurrency slots, including the coordinator** — at most three teammates active at once. Spawns beyond that queue, and a queued spawn looks exactly like a hung one. Size waves to the slot count.
+- **`fork_turns` decides what the child sees, and gates the tier.** Omitted or `"all"` means a full-history fork: the child inherits the parent's whole context *and* its model and effort, and **override attempts are rejected**. Pass `fork_turns: "none"` (or a positive integer string) to set `model`/`reasoning_effort` per spawn — which the size table in `dev`/`team` requires. With `"none"` the child sees only the `message`, so the Scope Brief must be in it verbatim.
 - **Delegates CAN delegate.** Codex children spawn their own children, so the agent tree is not flat. The coordinator-owns-the-SDLC rule still applies (see below), but as a design choice rather than a platform limit.
-- **Reasoning effort is settable per spawn**, independently of the model. Where this catalog says a role is judgment-heavy, raise effort as well as tier.
-- Concurrency is bounded per session — check the limit rather than assuming it is unbounded.
+- **No isolation flag exists, and all agents share one filesystem and one working directory.** Edits by one are immediately visible to the others. Worktree pinning by prompt preamble (`team` STEP 2.5) is the only isolation there is.
+- **There is no three-model ladder to map the tiers onto.** Codex currently exposes two general-purpose coding models, so resolve the tier with the effort dial as well: `large` = the stronger model at `high`, `medium` = the same model at `medium`, `small` = the faster model at `low`. Do not report the tier as unmappable and silently default the spawn — that puts every teammate at the coordinator's model.
+- **Collaboration tools are not callable from inside `functions.exec`.** They are deliberately absent from the `tools.*` namespace, so a spawn attempted inside a code-mode batch does not happen. Call them as direct tool calls (`to=functions.collaboration.spawn_agent`).
+
+### Long waits: the 900 s waiter scripts, per host
+
+Every reviewer and CI waiter in this catalog runs to a 900 s budget and prints a `STATUS=` line on exit. The workflow skills forbid polling because on Claude Code polling is pure waste — but *how you learn the script finished* is an operation (op 6 plus op 3), and it does not have the same answer everywhere. Take the shape from this table, not from the example syntax in a skill:
+
+| Host | Shape |
+|---|---|
+| Claude Code | `Bash` with `run_in_background: true` and a redirect to a log; the completion notification wakes you; read the log then. A foreground call is capped at 600 000 ms — below the 900 s budget — so it is killed mid-poll. **Do not delegate the wait to a sub-agent: it buys nothing over the notification.** |
+| Codex | There is no completion notification and `exec_command` yields after at most 30 s, so a single call cannot span the budget. **Delegate the waiter to a teammate** — `spawn_agent` a small-tier child whose only job is to run the script and report its `STATUS=` line, then `wait_agent` on that child with a `timeout_ms` of minutes. That converts ~30 collection reads at full coordinator context into one blocking wait, and the child pays the context cost. Re-reading the `exec_command` session yourself is the fallback when delegation is unavailable, and it is the only case in this catalog where a bounded re-read is the correct behaviour rather than the forbidden one. |
+
+The rule the skills state — *never spend coordinator turns on a timer* — is unchanged by either row. What changes is which mechanism satisfies it.
+
+### `[AGENT_DIR]` — the in-repo agent directory
+
+Scratch space (op 7) and team worktrees live under the host's own agent directory inside the repo. The skills write it as `[AGENT_DIR]`; substitute your host's value, with no trailing slash:
+
+| Host | `[AGENT_DIR]` |
+|---|---|
+| Claude Code | `.claude` |
+| Codex | `.agents` |
+| Anything else | Whatever directory that host already keeps its per-repo state in — add the row here |
+
+**A literal `.claude/` path on a non-Claude host is a bug, not a harmless default.** It puts coordination artifacts, waiter logs, and review findings into another agent's state directory, where the running host neither ignores nor cleans them and the user does not look for them. If a skill in this catalog still shows a bare `.claude/` path outside a Claude-Code-specific note, fix the skill.
 
 > **Verify these names against your host before relying on them.** Tool surfaces move, and a mapping table is exactly the kind of document that rots into confident wrongness. If a name here is wrong, the fix is to correct this file, not to work around it in a skill.
 
@@ -76,7 +106,7 @@ The workflow skills show Claude Code syntax inline, because writing every call t
 | `run_in_background: true` | Run long, concurrently (op 6) |
 | `AskUserQuestion` | Ask the user (op 5) |
 | `SendMessage` | Message a running delegate (op 4) |
-| `.claude/team/...` | A path under scratch space (op 7) |
+| `[AGENT_DIR]/team/...` | A path under scratch space (op 7) — `.claude/team/...` on Claude Code, `.agents/team/...` on Codex |
 
 The **fields** of a delegate call, which every host needs in some spelling:
 

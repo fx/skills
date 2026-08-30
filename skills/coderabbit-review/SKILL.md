@@ -8,6 +8,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
+>
+> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
+> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
+> Substitute it; never write a literal `.claude/` path on another host.
 
 **⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure — carrying the Scope Brief, triaging in filter order,
@@ -74,21 +78,22 @@ CodeRabbit alone; it does not relax Copilot, CI, tests, or other merge gates.
 
 CodeRabbit auto-runs — there is **no review-request step**.
 
-**⛔ Run the waiter in the BACKGROUND** (`run_in_background: true`), redirecting
-stdout and stderr to a log file, then read that file when the completion
-notification arrives:
+**⛔ Run the waiter as a long wait** (`[SKILLS_DIR]/dev/references/host-adapters.md`
+§ Long waits), redirecting stdout and stderr to a log file and reading that file on
+the wake. On Claude Code that is `run_in_background: true` plus its completion
+notification:
 ```bash
-mkdir -p .claude/team/waits && \
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh <PR_NUMBER> \
-  > .claude/team/waits/rabbit-<PR_NUMBER>.log 2>&1
+  > [AGENT_DIR]/team/waits/rabbit-<PR_NUMBER>.log 2>&1
 ```
 
-**Do NOT run it in the foreground.** The Bash tool caps a foreground `timeout` at
-600 000 ms, which is below the script's 900 s budget — a foreground call is
-guaranteed to be killed mid-poll, printing no STATUS and no exit code, which is
-exactly what used to force blind re-runs. Backgrounded processes are not subject to
-that cap. Never background it *without* the redirect: the cycle is driven by what
-the script prints.
+**Do NOT run it in a call that cannot outlive it.** On Claude Code the Bash tool
+caps a foreground `timeout` at 600 000 ms, below the script's 900 s budget — such
+a call is killed mid-poll, printing no STATUS and no exit code, which is exactly
+what used to force blind re-runs; backgrounded processes are not subject to that
+cap. Never launch it *without* the redirect: the cycle is driven by what the
+script prints.
 
 ### Read the `STATUS=` line
 
@@ -187,10 +192,10 @@ query {
 
 ## Concurrency with other reviewers
 
-This skill runs **in parallel** with `copilot-review`. Because every waiter
-is backgrounded, that parallelism needs no sub-agents and no mode selection: launch
-each reviewer's waiter in the same message, then handle whichever notification
-arrives first.
+This skill runs **in parallel** with `copilot-review`. That parallelism needs no
+mode selection: launch each reviewer's waiter in the shape your host's row
+prescribes (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits), then
+handle whichever wake arrives first.
 
 The SDLC step gating merge on automated review should wait for every configured
 reviewer to settle — terminal, zero unresolved threads, **and no blocking finding

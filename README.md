@@ -68,6 +68,10 @@ Several skills invoke scripts bundled with a *sibling* skill — `dev` runs `cod
 
 For sibling scripts to resolve, install the skills that reference each other into the same directory. Installing `dev` alone will leave its waiter invocations unresolvable.
 
+## `[AGENT_DIR]`
+
+The same treatment for the host's *own* per-repo directory, where the workflow skills put scratch artifacts — waiter logs, the `team` ledger, worktrees. Written as `[AGENT_DIR]/team/...`, it resolves to `.claude` on Claude Code and `.agents` on Codex; the table is in `skills/dev/references/host-adapters.md`. A skill that hardcoded `.claude/` would drop a Codex run's artifacts into Claude Code's state directory.
+
 ## Naming
 
 Skills install flat: `skills/<name>/` becomes `<agent>/skills/<name>/`, and the directory name is what you invoke. There is no namespace, so a name matching a host agent's built-in silently shadows it.

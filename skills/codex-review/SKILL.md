@@ -8,6 +8,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
+>
+> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
+> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
+> Substitute it; never write a literal `.claude/` path on another host.
 
 **⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure — carrying the Scope Brief, triaging in filter order,
@@ -172,9 +176,9 @@ rather than silently retrying.
 invocation, and the `AGENTS.md` pointer check, so none of them can be
 half-remembered:
 ```bash
-mkdir -p .claude/team/waits && \
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/codex-review/scripts/run-codex-review.sh /tmp/scope-prompt.md \
-  > .claude/team/waits/codex-review.log 2>&1
+  > [AGENT_DIR]/team/waits/codex-review.log 2>&1
 ```
 
 Write the scope prompt (built as below) to a file and pass its path, or pass `-`
@@ -187,10 +191,12 @@ the fastest way to confirm the MCP flag set is complete.
 The script picks the current branch, diffs it against its base, and prints the
 review (highest-risk first) to stdout. It never modifies your working tree.
 
-**⛔ Run it in the BACKGROUND (`run_in_background: true`) and let the completion
-notification wake you.** A review of a real branch takes many minutes and `codex`
-buffers, so the capture file stays empty until it finishes — polling it teaches you
-nothing and costs a full context read every time. Do not chain sleeps waiting on it.
+**⛔ Run it as a long wait** (`[SKILLS_DIR]/dev/references/host-adapters.md`
+§ Long waits) — on Claude Code, `run_in_background: true` and let the completion
+notification wake you. A review of a real branch takes many minutes and `codex`
+buffers, so the capture file stays empty until it finishes — reading it early
+teaches you nothing and costs a full context read every time. Do not chain sleeps
+waiting on it.
 
 The script has **no timeout**: Codex is one-shot and its runtime is its own. It
 exits 3 on a usage error (missing or empty scope prompt, `codex` not on PATH) —

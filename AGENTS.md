@@ -95,6 +95,12 @@ A skill referencing a sibling's bundled script writes it as:
 
 Never hardcode `.claude/skills/` — these skills install into 70+ different agent directories.
 
+### `[AGENT_DIR]` — scratch space and worktrees
+
+A skill writing into the host's own per-repo directory — waiter logs, the `team` ledger, worktrees — writes it as `[AGENT_DIR]/team/...` or `[AGENT_DIR]/worktrees/...`. `[AGENT_DIR]` is `.claude` on Claude Code, `.agents` on Codex, resolved in `skills/dev/references/host-adapters.md` § `[AGENT_DIR]`. Same rule as `[SKILLS_DIR]`: any `SKILL.md` using it defines it in the note under its H1, with the wording copied from an existing one.
+
+A literal `.claude/` path is not a harmless default on another host — it was observed sending Codex review-pass artifacts into Claude Code's state directory, which the running host neither ignores nor cleans and the user never looks in. The only place a bare `.claude/` path belongs is inside prose that is explicitly about Claude Code (`~/.claude/CLAUDE.md`, the Claude Code host-notes block).
+
 ## Security and privacy
 
 **Never include private or sensitive information** in skills, docs, or examples: private repository names, internal URLs or endpoints, API keys, company-specific identifiers, infrastructure details.
