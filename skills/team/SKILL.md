@@ -191,7 +191,7 @@ For each task (or group of parallel tasks), walk through the dev skill's SDLC st
 1. **Can I handle this step directly?** (e.g., invoking a skill, running a `gh` command) → Do it yourself.
 2. **Does this step require writing/modifying code?** → Spawn a focused agent with a single-purpose prompt for just that step.
 
-### ⛔ ALL Agent spawns MUST pass `name` (BLOCKING)
+### ⛔ ALL spawns MUST carry a handle (BLOCKING)
 
 **Every spawn you make as the team coordinator — coder, verify, fix, anything — MUST carry a handle** (`name` on Claude Code, `task_name` on Codex). The handle is what makes a teammate addressable for a mid-flight correction and identifiable in its own report — on Claude Code it is also what puts it in the team config's `members[]`, and on Codex it becomes the canonical `/root/<task_name>` that `list_agents` and `wait_agent` speak. Omitting it produces an effectively anonymous worker you can't message or steer by name, defeating the point of `/team`.
 
@@ -225,7 +225,7 @@ The handle should be specific and human-readable so it's useful in logs and when
 
 Paths under `[AGENT_DIR]/team/` in this document are **scratch space** (host-adapters.md, op 7) — coordination artifacts, never part of a change. `[AGENT_DIR]` is your host's in-repo agent directory, per the Path note above.
 
-**Self-check before EVERY Agent call:** "Did I pass `name`? Did I pick a `model` size?" If either is missing, fix the call before sending it. This rule is non-negotiable.
+**Self-check before EVERY spawn:** "Did I pass the handle under my host's field name — `name` on Claude Code, `task_name` on Codex? Did I pick a tier?" If either is missing, fix the call before sending it. This rule is non-negotiable.
 
 ### Pick an agent SIZE for every spawn
 
@@ -248,13 +248,13 @@ Two constraints worth knowing rather than rediscovering:
 
 ### Key orchestration principles
 
-**Implementation steps** (planning, coding, testing) → Spawn focused agents. For any coder that will run **concurrently** with another, give it an isolated worktree via STEP 2.5 and start its prompt with the worktree preamble — do NOT rely on `isolation: "worktree"` (it's a no-op for teammates; see the prohibition above). Give each agent ONLY its specific job — the change doc path, spec path, plan, and acceptance criteria. Do NOT tell it to follow the full SDLC. Always pass `name` (see above).
+**Implementation steps** (planning, coding, testing) → Spawn focused agents. For any coder that will run **concurrently** with another, give it an isolated worktree via STEP 2.5 and start its prompt with the worktree preamble — do NOT rely on `isolation: "worktree"` (it's a no-op for teammates; see the prohibition above). Give each agent ONLY its specific job — the change doc path, spec path, plan, and acceptance criteria. Do NOT tell it to follow the full SDLC. Always pass the handle (see above).
 
 When you spawn the coder for the FINAL piece of a change, your prompt MUST include: "This is the final implementing PR for <change>. In the same commit, flip `**Status:** draft` → `**Status:** complete` in `docs/changes/<NNNN>-*.md` AND flip `status: draft` → `status: complete` for that change's entry in `docs/index.yml`. Sync `docs/index.md` if present." For every NON-final coder on the same change, your prompt MUST include: "Leave the change-doc `**Status:**` field and `docs/index.yml` entry untouched — the final PR flips them." This split prevents rebase-conflict storms across multi-PR changes and ensures the final PR carries the Status flip atomically.
 
 **PR creation** → Either do it yourself via `gh pr create` or spawn a focused PR preparer agent. Load `github` skill first. **⛔ If you create the PR yourself, the `--title` MUST be a conventional-commit subject — `type(scope): description` — matching the canonical regex `^(feat|fix|docs|refactor|chore|test|perf|build|ci|style|revert)(\(.+\))?!?: .+` (see the github skill's "Use Conventional Formats"). Do NOT write a prose title; running `gh pr create` directly does NOT exempt you from the conventional-commit rule. Verify the title against the regex before AND after creation.** (Prose titles the coordinator wrote directly — bypassing pr-preparer — are exactly how non-conventional titles have slipped onto `main`.)
 
-**Review and CI steps** (Copilot review, CodeRabbit review, CI monitoring, feedback resolution) → **Handle these DIRECTLY as the coordinator.** These are lightweight skill/command invocations that must not be delegated. **Pass the STEP 0 Scope Brief into every reviewer invocation that accepts one, and apply it when triaging every reviewer that does not** (Copilot and the CodeRabbit GitHub App accept nothing). A finding covered by the brief's out-of-scope list is recorded as deferred with the covering exclusion — never silently fixed, never silently dropped, and never a reason to widen a teammate's PR. Use each reviewer's waiter or read-only inspection first, classify and deduplicate findings under `dev` Step 2.5, then invoke feedback resolvers only for the classified disposition. Never let a resolver implement unclassified feedback or modify task trackers for deferred feedback.
+**Review and CI steps** (Copilot review, CodeRabbit review, CI monitoring, feedback resolution) → **Own these as the coordinator: you read the output, you classify, you decide.** They are lightweight skill/command invocations, and the judgment in them is never delegated. On a host whose long waits require a waiter child (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits — Codex), that child does one mechanical thing, running the script and reporting its `STATUS=` line, and it does not classify anything; ownership stays here. **Pass the STEP 0 Scope Brief into every reviewer invocation that accepts one, and apply it when triaging every reviewer that does not** (Copilot and the CodeRabbit GitHub App accept nothing). A finding covered by the brief's out-of-scope list is recorded as deferred with the covering exclusion — never silently fixed, never silently dropped, and never a reason to widen a teammate's PR. Use each reviewer's waiter or read-only inspection first, classify and deduplicate findings under `dev` Step 2.5, then invoke feedback resolvers only for the classified disposition. Never let a resolver implement unclassified feedback or modify task trackers for deferred feedback.
 
 **⛔ NEVER `sleep` or poll waiting for anything.** Every wait — Copilot, CodeRabbit, CI — runs as a long-running wait script (host-adapters.md, op 6), never in a foreground call and never as a chain of sleeps, and never as `gh pr checks --watch`. How its completion reaches you, and whether waiting on a teammate is forbidden or mandatory, is host-specific — see **Waiting and reconciliation** below before you decide to idle. This is the single largest source of wasted coordinator turns and it is non-negotiable.
 
@@ -342,7 +342,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 
 > **Codex runs LOCALLY first — and it is the ONLY local reviewer.** Implementing sub-agents run local Codex via the `codex-review` skill during pre-PR self-review, passing the Scope Brief. **Not `codex review --base main`** — that CLI rejects `--base` together with a prompt, so the promptless form cannot carry the brief and reports the work the change deliberately did not do. Prefer it **converged** (`[SKILLS_DIR]/dev/references/scope-contract.md` § Convergence — no blocking finding left unresolved, not zero output). **There is no local CodeRabbit pass; the `cr` CLI is not used.** Gate 2b is the PR-level CodeRabbit review, which applies only when the GitHub App is configured — its waiter reports `STATUS=NOT_CONFIGURED` otherwise, which is terminal and expected for most repos. If CodeRabbit rate-limits, resolve findings already received, record `skipped (rate-limited)`, and continue; never wait for its cooldown.
 
-**As coordinator, YOU handle reviewer waits directly, and you never spend turns polling them.** Launch every configured reviewer's waiter concurrently — on Claude Code that means one message with every call backgrounded, each redirecting to its own log, and a completion notification per reviewer; on a host without those notifications, keep the handles and collect them per **Waiting and reconciliation**. No sub-agents are involved and there is no execution mode to pick.
+**As coordinator, YOU own reviewer waits, and you never spend turns polling them.** Launch every configured reviewer's waiter concurrently, in the shape your host's row prescribes (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits): on Claude Code, one message with every call backgrounded to its own log, woken by a completion notification per reviewer, and no sub-agent involved; on Codex, one small-tier waiter child per reviewer that you `wait_agent` on. There is no execution mode to pick — read your host's row and follow it.
 
 ```
 # ALL in one message, every one run_in_background: true.
@@ -447,7 +447,7 @@ When all tasks are complete and all PRs merged:
 
 ## Coordinator Rules (NON-NEGOTIABLE)
 
-- **ALWAYS pass `name` to EVERY `Agent` call** — coder, verify, fix, anything. `name` is what makes the teammate addressable via `SendMessage` and visible in `members[]`; omitting it produces an anonymous worker you can't steer by name. No exceptions.
+- **ALWAYS pass a handle to EVERY spawn** — coder, verify, fix, anything; `name` on Claude Code, `task_name` on Codex. The handle is what makes the teammate addressable for a correction and identifiable in its report; omitting it produces an anonymous worker you can't steer by name. No exceptions.
 - **NEVER provision or tear down a team.** On Claude Code that means never passing `team_name` (accepted-but-ignored) and never calling `TeamCreate`/`TeamDelete` (removed) — the team is implicit, session-scoped, and cleaned up on exit. On any host: there is nothing to create, so an attempt to create it is a bug.
 - **NEVER rely on `isolation: "worktree"` for a teammate** — a teammate runs as a full session in the lead's working directory, so the flag is a no-op. For any coders that run concurrently, pre-create real worktrees under `[AGENT_DIR]/worktrees/` and pin each via the prompt preamble (STEP 2.5). If you don't, run coders strictly one-at-a-time. Always tear the worktrees down in STEP 4.
 - **NEVER write code yourself** — all implementation goes through coder agents
@@ -459,8 +459,8 @@ When all tasks are complete and all PRs merged:
 - **ALWAYS attempt CodeRabbit when configured, but never block on its rate limits** — invoke `coderabbit-review`; resolve feedback already received, then record `skipped (rate-limited)` and continue immediately if throttled.
 - **NEVER `sleep` or poll on a wait.** Every reviewer and CI wait is a long-running script whose result you reconcile once, on the wake your host provides (notification on Claude Code, a returning `wait_agent` on Codex — **Waiting and reconciliation**). On Claude Code a foreground waiter is killed at the Bash tool's 600 s cap anyway, and the only timer permitted in a run is one long `ScheduleWakeup` silence backstop.
 - **NEVER mark a teammate's PR as ready** until you've inspected it
-- **ALWAYS handle Copilot review and CI monitoring directly** — these are coordinator responsibilities, not sub-agent responsibilities. Launch their waiters backgrounded, all in one message.
-- **ALWAYS pass a deliberate `model` size to every `Agent` call** — see the size table in STEP 3. Coders are `large`; never downgrade them.
+- **ALWAYS own Copilot review and CI monitoring** — reading the result and classifying it are coordinator responsibilities, never a sub-agent's. Launch their waiters concurrently in your host's shape (§ Long waits); where that shape is a waiter child, it reports `STATUS=` and nothing more.
+- **ALWAYS pass a deliberate tier to every spawn** — see the size table in STEP 3. Coders are `large`; never downgrade them. On Codex that also requires `fork_turns: "none"`, or the override is rejected and the teammate silently inherits your model.
 - **ALWAYS use `project-management`** to verify task tracking
 - **ALWAYS run the full merge gate checklist** even for "trivial" or "follow-up" PRs
 - **NEVER merge without browser verification** — spawn a verify agent if needed. CI alone does NOT catch runtime errors.
