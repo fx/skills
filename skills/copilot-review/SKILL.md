@@ -160,11 +160,11 @@ class halfway spends a full Copilot wait to be told about the other half.
 
 This skill can run **in parallel** with `coderabbit-review` and any future automated-reviewer skills.
 
-**There is no mode selection.** Every waiter is backgrounded, so reviewers run
-concurrently in every context — root session, `team` coordinator, or
-sub-agent alike. Launch each reviewer's waiter in the same message and handle
-whichever completion notification arrives first. No sub-agents are involved, so the
-old "can I spawn?" branch no longer applies.
+**There is no mode selection.** Reviewers run concurrently in every context — root
+session, `team` coordinator, or sub-agent alike. Launch each reviewer's waiter in
+the shape your host's row prescribes
+(`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits) and handle whichever
+wake arrives first; the old "can I spawn?" branch no longer applies.
 
 Do not budget for Copilot being quick. Observed delivery ranges from **85 s to
 12 m 42 s** (D3), which is why the wait budget is a single 900 s run; CodeRabbit is
@@ -200,18 +200,19 @@ an empty `requested_reviewers` as "the request did not land", and never treat a
 
 ### Step 2: Wait for a Review of the Current Head
 
-**⛔ Run the waiter in the BACKGROUND** (`run_in_background: true`), redirecting
-stdout and stderr to a log file, then read that file when the completion
-notification arrives:
+**⛔ Run the waiter as a long wait** (`[SKILLS_DIR]/dev/references/host-adapters.md`
+§ Long waits), redirecting stdout and stderr to a log file and reading that file on
+the wake. On Claude Code that is `run_in_background: true` plus its completion
+notification:
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> \
   > [AGENT_DIR]/team/waits/copilot-<PR_NUMBER>.log 2>&1
 ```
 
-**Do NOT run it in the foreground.** The Bash tool caps a foreground `timeout` at
-600 000 ms, which is below the script's 900 s budget — a foreground call is
-guaranteed to be killed mid-poll, printing no STATUS and no exit code. That kill is
+**Do NOT run it in a call that cannot outlive it.** On Claude Code the Bash tool
+caps a foreground `timeout` at 600 000 ms, below the script's 900 s budget — such a
+call is killed mid-poll, printing no STATUS and no exit code. That kill is
 what previously made the re-run protocol unreachable and forced blind retries.
 Backgrounded processes are not subject to the cap, which is why the budget can now
 cover the worst observed delivery time (12 m 42 s) in **one run**.

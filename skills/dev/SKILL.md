@@ -637,7 +637,7 @@ Agent tool:
 
 ##### Run every waiter in the background — there is no mode selection
 
-**⛔ Launch each configured reviewer's wait script concurrently, each redirecting to its own log file** — on Claude Code, that is one message with every call `run_in_background: true`, and a completion notification then wakes you per reviewer; on a host without those notifications, hold the handles and collect each script's log when it exits (host-adapters.md, ops 3 and 6). This works identically in every context — root session, `team` coordinator, or sub-agent — so there is nothing to choose and no "can I spawn sub-agents?" branch. **Do not spawn sub-agents for reviewer waits; they buy nothing here.**
+**⛔ Launch each configured reviewer's wait script concurrently, each redirecting to its own log file.** Take the shape of the wait from `references/host-adapters.md` § Long waits — on Claude Code it is one message with every call `run_in_background: true`, woken per reviewer by its completion notification, and spawning sub-agents for the wait buys nothing; on Codex the same table says to delegate each waiter to a teammate and `wait_agent` on it. Either way the concurrency is the same and there is no "can I spawn sub-agents?" branch to agonise over: root session, `team` coordinator, and sub-agent all follow their host's row.
 ```bash
 # Both in ONE message, both run_in_background: true
 mkdir -p [AGENT_DIR]/team/waits && \
@@ -649,9 +649,9 @@ bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NU
      > [AGENT_DIR]/team/waits/rabbit-[PR_NUMBER].log 2>&1
 ```
 
-**Never run a waiter in the foreground.** The Bash tool caps a foreground `timeout` at 600 000 ms, which is below every waiter's 900 s budget — a foreground call is guaranteed to be killed mid-poll, printing no STATUS and no exit code, and the caller then re-runs it blindly. Backgrounded processes are not subject to that cap. **Never background one without the redirect**: the cycle is driven by what the script prints.
+**Never run a waiter in a call that cannot outlive it.** On Claude Code that means never in the foreground: the Bash tool caps a foreground `timeout` at 600 000 ms, below every waiter's 900 s budget, so the call is killed mid-poll, printing no STATUS and no exit code, and the caller then re-runs it blindly. Every host has some equivalent ceiling — Codex yields `exec_command` after 30 s — which is why `references/host-adapters.md` § Long waits gives each one a shape that survives the budget. **Never launch one without the redirect**: the cycle is driven by what the script prints.
 
-###### Then, per reviewer, on its notification
+###### Then, per reviewer, on its wake
 
 1. Read the log and branch on its `STATUS=` line (each reviewer skill documents its own table; the five states are shared):
    - `TERMINAL_PASS` / `TERMINAL_FAIL` — settled. Do **not** re-run for a better answer.
@@ -689,7 +689,7 @@ transition to manage in this workflow.
 
 #### 7.1 Wait for CI Checks to Start and Complete
 
-**⛔ Run the bundled CI check script in the BACKGROUND** (`run_in_background: true`), redirecting to a log file, then read that log when the completion notification arrives:
+**⛔ Run the bundled CI check script as a long wait** — `references/host-adapters.md` § Long waits — redirecting to a log file and reading that log on the wake. On Claude Code that is `run_in_background: true` plus the completion notification:
 
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
@@ -697,7 +697,7 @@ bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh [PR_NUMBER] \
      > [AGENT_DIR]/team/waits/ci-[PR_NUMBER].log 2>&1
 ```
 
-**Do NOT run it in the foreground.** The Bash tool caps a foreground `timeout` at 600 000 ms, which is below the script's 900 s budget — a foreground call is guaranteed to be killed mid-poll, losing the output entirely. Backgrounded processes are not subject to that cap. **Never background it without the redirect**: the workflow reacts to what the script prints.
+**Do NOT run it in a call that cannot outlive it.** On Claude Code the Bash tool caps a foreground `timeout` at 600 000 ms, below the script's 900 s budget, so a foreground call is killed mid-poll and the output is lost; backgrounded processes are not subject to that cap. **Never launch it without the redirect**: the workflow reacts to what the script prints.
 
 Script behavior:
 - Phase 1 (discovery): waits up to 90 s for any check to appear.

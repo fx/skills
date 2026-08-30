@@ -191,10 +191,12 @@ the fastest way to confirm the MCP flag set is complete.
 The script picks the current branch, diffs it against its base, and prints the
 review (highest-risk first) to stdout. It never modifies your working tree.
 
-**⛔ Run it in the BACKGROUND (`run_in_background: true`) and let the completion
-notification wake you.** A review of a real branch takes many minutes and `codex`
-buffers, so the capture file stays empty until it finishes — polling it teaches you
-nothing and costs a full context read every time. Do not chain sleeps waiting on it.
+**⛔ Run it as a long wait** (`[SKILLS_DIR]/dev/references/host-adapters.md`
+§ Long waits) — on Claude Code, `run_in_background: true` and let the completion
+notification wake you. A review of a real branch takes many minutes and `codex`
+buffers, so the capture file stays empty until it finishes — reading it early
+teaches you nothing and costs a full context read every time. Do not chain sleeps
+waiting on it.
 
 The script has **no timeout**: Codex is one-shot and its runtime is its own. It
 exits 3 on a usage error (missing or empty scope prompt, `codex` not on PATH) —

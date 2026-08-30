@@ -52,7 +52,7 @@ Capabilities that shape orchestration here:
 | Wait | `wait_agent` (explicit, takes `timeout_ms`); `list_agents` for a status snapshot |
 | Message | `send_message` (delivers without triggering a turn), `followup_task` (delivers and triggers one), `interrupt_agent` to stop one |
 | Ask the user | A normal user turn — or structured user input where the host exposes it |
-| Run long, concurrently | A persistent command session, polled via its stdin/stdout handle |
+| Run long, concurrently | `exec_command`, which returns a `session_id` when its `yield_time_ms` elapses (**max 30 000 ms**, verified) and leaves the command running; re-read that session to collect the rest. See § Long waits below — a 900 s waiter needs a different shape here |
 | Scratch space | `.agents/team/` (`[AGENT_DIR]` = `.agents`), or the host's own agent working directory |
 
 Capabilities that shape orchestration here — all of the following verified against codex-cli 0.145.0 **and re-verified unchanged on 0.151.0**, on 2026-08-30, by reading the session's own developer instructions and by running spawn tests:
@@ -67,6 +67,17 @@ Capabilities that shape orchestration here — all of the following verified aga
 - **No isolation flag exists, and all agents share one filesystem and one working directory.** Edits by one are immediately visible to the others. Worktree pinning by prompt preamble (`team` STEP 2.5) is the only isolation there is.
 - **There is no three-model ladder to map the tiers onto.** Codex currently exposes two general-purpose coding models, so resolve the tier with the effort dial as well: `large` = the stronger model at `high`, `medium` = the same model at `medium`, `small` = the faster model at `low`. Do not report the tier as unmappable and silently default the spawn — that puts every teammate at the coordinator's model.
 - **Collaboration tools are not callable from inside `functions.exec`.** They are deliberately absent from the `tools.*` namespace, so a spawn attempted inside a code-mode batch does not happen. Call them as direct tool calls (`to=functions.collaboration.spawn_agent`).
+
+### Long waits: the 900 s waiter scripts, per host
+
+Every reviewer and CI waiter in this catalog runs to a 900 s budget and prints a `STATUS=` line on exit. The workflow skills forbid polling because on Claude Code polling is pure waste — but *how you learn the script finished* is an operation (op 6 plus op 3), and it does not have the same answer everywhere. Take the shape from this table, not from the example syntax in a skill:
+
+| Host | Shape |
+|---|---|
+| Claude Code | `Bash` with `run_in_background: true` and a redirect to a log; the completion notification wakes you; read the log then. A foreground call is capped at 600 000 ms — below the 900 s budget — so it is killed mid-poll. **Do not delegate the wait to a sub-agent: it buys nothing over the notification.** |
+| Codex | There is no completion notification and `exec_command` yields after at most 30 s, so a single call cannot span the budget. **Delegate the waiter to a teammate** — `spawn_agent` a small-tier child whose only job is to run the script and report its `STATUS=` line, then `wait_agent` on that child with a `timeout_ms` of minutes. That converts ~30 collection reads at full coordinator context into one blocking wait, and the child pays the context cost. Re-reading the `exec_command` session yourself is the fallback when delegation is unavailable, and it is the only case in this catalog where a bounded re-read is the correct behaviour rather than the forbidden one. |
+
+The rule the skills state — *never spend coordinator turns on a timer* — is unchanged by either row. What changes is which mechanism satisfies it.
 
 ### `[AGENT_DIR]` — the in-repo agent directory
 
