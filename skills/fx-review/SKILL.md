@@ -195,10 +195,10 @@ the only thing that stops the false positive recurring, and its commit is expect
 
 - **Never** create or edit `.github/copilot-instructions.md`. It is obsolete.
 - If `REVIEW.md` does not exist, create just that file, with a `# PR Review`
-  heading and the rule under it. **Do not run `setup` or `fx-upgrade`
+  heading and the rule under it. **Do not run `fx-setup` or `fx-upgrade`
   from a review** — they scaffold `docs/`, `AGENTS.md` and `.coderabbit.yaml`, and
   burying one review rule in a large unrelated diff is not an acceptable change.
-  Mention that `/setup` completes the layout later.
+  Mention that `/fx-setup` completes the layout later.
 - **Keep the top section under 4000 characters.** Copilot reads roughly the first
   4000 when reviewing, and `REVIEW.md` is pasted verbatim into Claude Code
   Review's prompt, where length dilutes the rules that matter. Put the most

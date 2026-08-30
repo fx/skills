@@ -1,5 +1,5 @@
 ---
-name: setup
+name: fx-setup
 description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Creates the default docs and instruction-file layout as a prerequisite of an explicitly invoked documentation workflow."
 ---
 
@@ -7,11 +7,11 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 
 This skill scaffolds the `docs/` folder structure required for spec-driven development and creates the standard AI instruction files (`AGENTS.md`, `REVIEW.md`, plus the `CLAUDE.md` pointer and `.coderabbit.yaml`) so that task tracking defers to the `/project-management` skill. It is called automatically by `/spec-writer` and `/project-management` as a prerequisite.
 
-## ⛔ setup creates. It does not migrate.
+## ⛔ fx-setup creates. It does not migrate.
 
-**setup runs unattended on every `/spec-writer` and `/project-management` invocation.** It must never make a change the user would want to review first.
+**fx-setup runs unattended on every `/spec-writer` and `/project-management` invocation.** It must never make a change the user would want to review first.
 
-| setup MAY | setup MUST NOT |
+| fx-setup MAY | fx-setup MUST NOT |
 |---|---|
 | Create a missing file or directory | Move or rename a file |
 | Add a missing key to a config | Change a config value that is already set |
@@ -126,7 +126,7 @@ Only if it doesn't exist. **Use these exact column names — table schema is str
 
 ### Step 5.5: Legacy-Layout Detection (DETECT ONLY — never migrate)
 
-**setup creates defaults. It never moves, merges, overwrites, or deletes anything.** It runs automatically on every `/spec-writer` and `/project-management` invocation, so it must never make a change a user would want to review first. Migration is `fx-upgrade`'s job.
+**fx-setup creates defaults. It never moves, merges, overwrites, or deletes anything.** It runs automatically on every `/spec-writer` and `/project-management` invocation, so it must never make a change a user would want to review first. Migration is `fx-upgrade`'s job.
 
 ```bash
 # -e follows symlinks, so a DANGLING link reads as absent. Always pair it with -L.
@@ -169,7 +169,7 @@ for line in txt[m.end():].splitlines():
 print('no')
 EOF
 )
-  [ "$cg_disabled" = "yes" ] && { echo "LEGACY: .coderabbit.yaml sets code_guidelines.enabled: false — setup will not flip it"; legacy_rabbit=1; }
+  [ "$cg_disabled" = "yes" ] && { echo "LEGACY: .coderabbit.yaml sets code_guidelines.enabled: false — fx-setup will not flip it"; legacy_rabbit=1; }
   [ "$cg_disabled" = "unknown" ] && { echo "LEGACY: could not parse .coderabbit.yaml — read it yourself before writing"; legacy_rabbit=1; }
 fi
 
@@ -182,7 +182,7 @@ Each flag gates the steps that would **write** the affected file:
 |---|---|---|
 | `legacy_agents` | **Step 6 and Step 8.3** | Both write `AGENTS.md`. 8.3 appends the Codex pointer — on its own that would create a stub `AGENTS.md` holding only review rules while the real conventions sit in `CLAUDE.md`, which is worse than not creating it at all |
 | `legacy_review` | **Step 8** | `REVIEW.md` must absorb the obsolete file's rules first, and that is a merge |
-| `legacy_rabbit` | **Step 9** | Writing through a symlink edits its target, possibly outside the repo; and an explicit `enabled: false` is not setup's to reverse |
+| `legacy_rabbit` | **Step 9** | Writing through a symlink edits its target, possibly outside the repo; and an explicit `enabled: false` is not fx-setup's to reverse |
 
 Steps not listed still run — a legacy `CLAUDE.md` does not stop `docs/` from being scaffolded.
 
@@ -194,7 +194,7 @@ Steps not listed still run — a legacy `CLAUDE.md` does not stop `docs/` from b
 Legacy instruction-file layout detected:
   - <the specific findings>
 
-setup does not migrate — run /fx-upgrade to move this content
+fx-setup does not migrate — run /fx-upgrade to move this content
 into AGENTS.md / REVIEW.md. Skipped: <steps not run>.
 ```
 
@@ -229,9 +229,9 @@ Search `AGENTS.md` for the exact string `/project-management`. This is the only 
 
 #### 6.3 Handle stale or missing language
 
-**Append** the block below to the end of `AGENTS.md`. That is the only write setup makes to this file.
+**Append** the block below to the end of `AGENTS.md`. That is the only write fx-setup makes to this file.
 
-**If stale task-tracking language exists** (anything referencing `PROJECT.md`, `docs/specs/` for tasks, `- [x]`, `mark.*done`, or task-tracking rules that don't mention `/project-management`) → **do not remove it.** Append the new block anyway so the current rule is present, and report the stale section so the user can run `/fx-upgrade` to clear it. Deleting a section from someone's file is not setup's call.
+**If stale task-tracking language exists** (anything referencing `PROJECT.md`, `docs/specs/` for tasks, `- [x]`, `mark.*done`, or task-tracking rules that don't mention `/project-management`) → **do not remove it.** Append the new block anyway so the current rule is present, and report the stale section so the user can run `/fx-upgrade` to clear it. Deleting a section from someone's file is not fx-setup's call.
 
 **The EXACT block to insert (do NOT add to, modify, or expand this):**
 
@@ -310,19 +310,19 @@ Search `REVIEW.md` for the exact string `docs/changes/`.
 Cross-reference every PR against task lists in `docs/changes/` and `docs/tasks.md`. If the PR completes work tracked in those files, the task checkboxes MUST be updated in this same PR. Request changes if missing.
 ```
 
-**⛔ FORBIDDEN: Do NOT add ANY of the following to REVIEW.md at setup time:**
+**⛔ FORBIDDEN: Do NOT add ANY of the following to REVIEW.md when fx-setup runs:**
 - Detailed rules about `- [x]` format, PR numbers, or status fields
 - Explanations of the spec/change/task system
 - Instructions about where tasks should be placed
 - Anything beyond the exact block above
 
-Feedback resolvers add convention rules to `REVIEW.md` later — setup only seeds it.
+Feedback resolvers add convention rules to `REVIEW.md` later — fx-setup only seeds it.
 
 **`REVIEW.md` is pasted verbatim into the reviewer's prompt.** `@` imports are not expanded and referenced files are not read. Never write `See docs/foo.md` in it.
 
 #### 8.3 Point Codex at `REVIEW.md`
 
-**Skip this step if `legacy_agents=1` OR `REVIEW.md` does not exist** (which includes `legacy_review=1`, since that blocks Step 8 from creating it). The pointer's whole content is "read `REVIEW.md`" — writing it while that file is absent hands Codex a dangling instruction, and unattended setup would leave it there until someone runs upgrade.
+**Skip this step if `legacy_agents=1` OR `REVIEW.md` does not exist** (which includes `legacy_review=1`, since that blocks Step 8 from creating it). The pointer's whole content is "read `REVIEW.md`" — writing it while that file is absent hands Codex a dangling instruction, and unattended fx-setup would leave it there until someone runs `/fx-upgrade`.
 
 It writes `AGENTS.md`, and appending here when `AGENTS.md` does not yet exist would create a stub holding only review rules while the project's real conventions sit in `CLAUDE.md` — every non-Claude agent would then read that stub as the whole truth. Report it instead; `/fx-upgrade` adds this pointer as M1.4, after the content is moved.
 
@@ -348,8 +348,8 @@ This is the one review-related section allowed in `AGENTS.md`, and it is a point
 CodeRabbit's default `filePatterns` cover `**/AGENTS.md` and `**/CLAUDE.md` but **not** `**/REVIEW.md`. **This step is mandatory** — it is the only thing that gets the review conventions to CodeRabbit.
 
 - **No `.coderabbit.yaml`** → create it with the config below.
-- **Exists with `knowledge_base.code_guidelines.enabled: false`** → **do not change it.** Someone disabled this deliberately, and setup runs unattended during unrelated spec and task work — silently opting the project back into CodeRabbit guidelines is exactly the kind of change that needs a human. Report it and defer to `/fx-upgrade`.
-- **Exists with `enabled` true or absent** → add `"**/REVIEW.md"` to `filePatterns` if missing. Custom patterns append to the defaults; they do not replace them. This is additive, so it stays within setup's contract.
+- **Exists with `knowledge_base.code_guidelines.enabled: false`** → **do not change it.** Someone disabled this deliberately, and fx-setup runs unattended during unrelated spec and task work — silently opting the project back into CodeRabbit guidelines is exactly the kind of change that needs a human. Report it and defer to `/fx-upgrade`.
+- **Exists with `enabled` true or absent** → add `"**/REVIEW.md"` to `filePatterns` if missing. Custom patterns append to the defaults; they do not replace them. This is additive, so it stays within fx-setup's contract.
 
 ```yaml
 knowledge_base:
@@ -370,18 +370,18 @@ repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 test -d "$repo_root/.duvet" && echo "duvet: adopted" || echo "duvet: not adopted"
 ```
 
-The gate is the **repository root**, so resolve it explicitly — a bare `test -d .duvet` is cwd-relative and would offer adoption to a duvet repo whenever setup runs from a subdirectory.
+The gate is the **repository root**, so resolve it explicitly — a bare `test -d .duvet` is cwd-relative and would offer adoption to a duvet repo whenever fx-setup runs from a subdirectory.
 
 - **`duvet: adopted`** → do nothing and say nothing. Never re-offer, never nag.
 - **`duvet: not adopted`** → offer adoption once per session, and on acceptance follow **`references/duvet-adoption.md`**. That file is the canonical procedure — read it before offering, and do not restate or reinvent any of its steps here.
 
-One clarification against setup's "never delete" rule: the procedure's revert paths remove `.duvet/` and undo the edits **adoption itself made in this same run**, with the user choosing that at a prompt. That is not setup deleting the user's content — the blanket prohibition still holds for everything setup did not just create.
+One clarification against fx-setup's "never delete" rule: the procedure's revert paths remove `.duvet/` and undo the edits **adoption itself made in this same run**, with the user choosing that at a prompt. That is not fx-setup deleting the user's content — the blanket prohibition still holds for everything fx-setup did not just create.
 
-**This stays inside setup's create-only contract**: nothing is written until the user has approved adoption at that prompt, and a decline changes nothing at all. The contract is satisfied by *approval before every write*, not by question count — on acceptance the procedure asks one or more further questions (install method, `[[source]]` patterns, and keep-or-revert when the repo has no GitHub Actions), because each is a decision setup may not make on the user's behalf. What it must never do is write first and ask after.
+**This stays inside fx-setup's create-only contract**: nothing is written until the user has approved adoption at that prompt, and a decline changes nothing at all. The contract is satisfied by *approval before every write*, not by question count — on acceptance the procedure asks one or more further questions (install method, `[[source]]` patterns, and keep-or-revert when the repo has no GitHub Actions), because each is a decision fx-setup may not make on the user's behalf. What it must never do is write first and ask after.
 
-Because setup runs automatically on every `/spec-writer` and `/project-management` invocation, the reference's offer rule applies at **session** scope here — once the user has declined, skip this step silently for the rest of the session. A decline persists no further than that: it writes nothing, so the offer returns in the next session. That is the documented trade, not a bug — see the reference's "The offer" and "Open questions".
+Because fx-setup runs automatically on every `/spec-writer` and `/project-management` invocation, the reference's offer rule applies at **session** scope here — once the user has declined, skip this step silently for the rest of the session. A decline persists no further than that: it writes nothing, so the offer returns in the next session. That is the documented trade, not a bug — see the reference's "The offer" and "Open questions".
 
-Adoption creates `.duvet/`, which is what flips `spec-writer` into duvet mode, so a failure part-way through is not a silent no-op. Any failure is an ERROR: report it, name what was written, and do not report setup as clean over it. The procedure file spells out the ordering that keeps that safe.
+Adoption creates `.duvet/`, which is what flips `spec-writer` into duvet mode, so a failure part-way through is not a silent no-op. Any failure is an ERROR: report it, name what was written, and do not report fx-setup as clean over it. The procedure file spells out the ordering that keeps that safe.
 
 ---
 
@@ -414,7 +414,7 @@ Instruction files:
 
 If everything in `docs/` and the instruction files was already current **and Step 9.5 wrote nothing**, report briefly: "Docs structure and instruction files verified — no changes needed."
 
-**That short-circuit is forbidden whenever Step 9.5 adopted duvet.** An already-current repo is the common case — setup runs on every `/spec-writer` and `/project-management` call, so `docs/` will usually need no changes — which is exactly when "no changes needed" would print verbatim over an adoption that just created `.duvet/config.toml`, `.duvet/snapshot.txt`, a `.gitignore` edit, a mise edit, and a CI workflow. Five new files reported as zero changes is the worst possible report: the user has no idea there is anything to review. Check what Step 9.5 did before choosing which report to emit.
+**That short-circuit is forbidden whenever Step 9.5 adopted duvet.** An already-current repo is the common case — fx-setup runs on every `/spec-writer` and `/project-management` call, so `docs/` will usually need no changes — which is exactly when "no changes needed" would print verbatim over an adoption that just created `.duvet/config.toml`, `.duvet/snapshot.txt`, a `.gitignore` edit, a mise edit, and a CI workflow. Five new files reported as zero changes is the worst possible report: the user has no idea there is anything to review. Check what Step 9.5 did before choosing which report to emit.
 
 If Step 5.5 found a legacy layout, always end the report with the specific findings and `Run /fx-upgrade to migrate.` Never report success over a skipped file.
 
@@ -423,7 +423,7 @@ If Step 5.5 found a legacy layout, always end the report with the specific findi
 - **Never overwrite** existing files — only create what's missing
 - **Never migrate** — no moves, merges, deletions, or symlink resolution. Detect and defer to `/fx-upgrade`
 - **Never flip an existing config value** — an explicit `enabled: false` is someone's decision. Adding a missing key is creation; changing a set one is not
-- **Never delete convention content** — setup deletes nothing, ever
+- **Never delete convention content** — fx-setup deletes nothing, ever
 - **Duvet is offered, never assumed** — if `.duvet/` is absent, ask once per session (Step 9.5); if it exists, stay silent. Once adopted the offer never returns; a decline is not persisted, so it returns next session. The procedure lives only in `references/duvet-adoption.md`
 - **Offer migration** if PROJECT.md exists
 - **Keep it minimal** — bare templates, not example content

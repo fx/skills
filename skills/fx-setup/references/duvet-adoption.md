@@ -1,6 +1,6 @@
 # Duvet Adoption
 
-**This file is the single owner of the duvet adoption procedure.** `setup`
+**This file is the single owner of the duvet adoption procedure.** `fx-setup`
 and `fx-upgrade` each offer adoption and defer here for every detail. Neither
 skill restates the steps, and nothing else in this catalog may describe how to adopt
 duvet — a second copy is a second thing to drift.
@@ -61,7 +61,7 @@ If the user declines, **proceed with the rest of the calling skill normally and
 do not raise duvet again during that run.** Nothing is written on a decline —
 not a marker file, not a TODO, not a note in `AGENTS.md`.
 
-A caller that runs many times in one session — `setup`, invoked by every
+A caller that runs many times in one session — `fx-setup`, invoked by every
 `/spec-writer` and `/project-management` call — must widen "that run" to the
 whole session: once declined, skip the offer silently for the rest of it. An
 optional tool asked about repeatedly within one session is nagging, and nagging
@@ -76,14 +76,14 @@ asked at most once **per session**, indefinitely.
 That is a deliberate trade, not an oversight. A decline costs one keystroke and
 leaves the repo byte-identical; the alternative — a persisted `.duvet-declined`
 marker or an opt-out key in some config — is a new file or a new schema invented
-here, in a procedure `setup` runs unattended, and inventing config the
+here, in a procedure `fx-setup` runs unattended, and inventing config the
 user never asked for is exactly the change its create-only contract exists to
 prevent. If per-session recurrence turns out to be too much, the fix is a durable
 opt-out designed on purpose. See **Open questions** at the end of this file; do
 not improvise one mid-adoption.
 
 Every write below happens only after this approval. That is what keeps adoption
-inside `setup`'s create-only contract: the user reviewed the change at the
+inside `fx-setup`'s create-only contract: the user reviewed the change at the
 prompt, so it is not a change made behind their back.
 
 ## On acceptance — in this order
@@ -194,8 +194,8 @@ so adoption would break every unrelated tool the project pins. Verified.
 - **If `rust` is already pinned, leave it exactly as it is** and add only
   `"cargo:duvet"`. A second `rust` key in the same table is the same
   duplicate-key parse error, and *overwriting* the existing pin is a change to a
-  config value that is already set — forbidden by `setup`'s create-only
-  contract (see its "setup MAY / MUST NOT" table). Any cargo toolchain builds
+  config value that is already set — forbidden by `fx-setup`'s create-only
+  contract (see its "fx-setup MAY / MUST NOT" table). Any cargo toolchain builds
   duvet; the repo's own pin is not adoption's to relitigate.
 - **If `"cargo:duvet"` is already pinned, leave that pin exactly as it is too and
   continue adoption** — identical rule, identical reasoning. The repo's own duvet
@@ -513,7 +513,7 @@ ignored snapshot makes `--ci` fail on every fresh checkout.
 
 **If `<root>/.github/workflows/` exists**, add the job below. Prefer creating a
 new `.github/workflows/duvet.yml` over editing an existing workflow — creation
-stays inside `setup`'s contract, and a standalone job is easier to name
+stays inside `fx-setup`'s contract, and a standalone job is easier to name
 as a required check. If the repo has one obvious checks workflow and the user
 wants the job there instead, adding it there is equally correct, but say in the
 report that an existing workflow was modified.
@@ -686,6 +686,6 @@ Tracked here deliberately rather than improvised mid-adoption:
   session (see "The offer"), so the question recurs once per session forever. A
   fix needs a persisted signal, and every candidate — a `.duvet-declined` marker,
   a key in `.coderabbit.yaml`, a new config file for this catalog — is either a file
-  `setup` may not invent unattended or a schema shared with other skills.
-  It needs designing across `setup`, `fx-upgrade`, and
+  `fx-setup` may not invent unattended or a schema shared with other skills.
+  It needs designing across `fx-setup`, `fx-upgrade`, and
   `spec-writer` at once. Until then the honest description above stands.

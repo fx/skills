@@ -238,10 +238,10 @@ Per RFC 2119, these keywords indicate requirement levels:
 
 ### Phase 0: Setup
 
-**Every time this skill is invoked**, run the setup skill first to ensure docs structure and instruction files are in place:
+**Every time this skill is invoked**, run the fx-setup skill first to ensure docs structure and instruction files are in place:
 
 ```
-Skill tool: skill="setup"
+Skill tool: skill="fx-setup"
 ```
 
 This is fast and idempotent — it checks what exists and only creates/modifies what's missing. It handles:
@@ -249,7 +249,7 @@ This is fast and idempotent — it checks what exists and only creates/modifies 
 - `AGENTS.md` task-tracking instructions (+ the `CLAUDE.md` → `@AGENTS.md` pointer)
 - `REVIEW.md` PR review instructions (+ `.coderabbit.yaml` pointing CodeRabbit at it)
 
-Wait for setup to complete before proceeding.
+Wait for fx-setup to complete before proceeding.
 
 #### 0.1 Detect duvet mode
 
@@ -261,7 +261,7 @@ The gate is defined at the **repository root**, so the check MUST resolve the ro
 
 If `.duvet/` exists, **every rule in "Duvet Mode — Requirements Traceability" above applies for the rest of this run** — REQ IDs for newly created requirements only, one self-contained statement per requirement section, RFC 2119 keywords confined to requirement sections, the extraction check, and the registration and snapshot items you REPORT rather than apply. Record this in your working notes so it is not forgotten by Phase 6.
 
-If it does not exist, proceed normally and do not raise duvet at all. Adopting duvet is `setup`'s and `fx-upgrade`'s decision to offer — both entry points do — not this skill's.
+If it does not exist, proceed normally and do not raise duvet at all. Adopting duvet is `fx-setup`'s and `fx-upgrade`'s decision to offer — both entry points do — not this skill's.
 
 ---
 
@@ -383,7 +383,7 @@ A single spec MUST:
 
 **Spec organization for a new project:**
 
-1. **Architecture/setup spec** (optional) — Covers project-level concerns: tech stack, directory structure, deployment topology, dev workflow. Does NOT contain feature requirements.
+1. **Architecture/fx-setup spec** (optional) — Covers project-level concerns: tech stack, directory structure, deployment topology, dev workflow. Does NOT contain feature requirements.
 2. **Feature specs** (one per major feature) — Each covers a distinct capability of the system. Change documents reference the feature spec they implement.
 
 **Example:** For a file hosting app, create separate specs:

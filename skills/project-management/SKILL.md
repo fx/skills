@@ -124,9 +124,9 @@ When instructed to break down tasks for a change document or spec:
 
 When `docs/tasks.md` doesn't exist:
 
-1. **Invoke the setup skill:**
+1. **Invoke the fx-setup skill:**
    ```
-   Skill tool: skill="setup"
+   Skill tool: skill="fx-setup"
    ```
 2. **Ask about tracking preferences** via AskUserQuestion:
    - "Use docs/tasks.md + docs/changes/ (default)"
@@ -148,10 +148,10 @@ When `docs/tasks.md` doesn't exist:
 
 ## Pre-Flight: Run Setup
 
-**Every time this skill is invoked**, run the setup skill first to ensure docs structure and instruction files are in place:
+**Every time this skill is invoked**, run the fx-setup skill first to ensure docs structure and instruction files are in place:
 
 ```
-Skill tool: skill="setup"
+Skill tool: skill="fx-setup"
 ```
 
 This is fast and idempotent — it checks what exists and only creates/modifies what's missing. It handles:

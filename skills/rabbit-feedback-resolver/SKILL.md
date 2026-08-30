@@ -87,13 +87,13 @@ the disposition comes from the coordinator, or from the filters you run yourself
 
 **Before processing feedback, ensure CodeRabbit is configured to read `REVIEW.md` and `AGENTS.md`.**
 
-`REVIEW.md` (repo root) is the canonical review-conventions file for every automated reviewer; `AGENTS.md` holds project conventions. CodeRabbit's `knowledge_base.code_guidelines` feature reads instruction files to understand both. Its defaults cover `**/AGENTS.md` and `**/CLAUDE.md` — but **not** `**/REVIEW.md`, so the config below is what gets the review conventions to CodeRabbit. See `setup` → `references/instruction-files.md` for the full standard.
+`REVIEW.md` (repo root) is the canonical review-conventions file for every automated reviewer; `AGENTS.md` holds project conventions. CodeRabbit's `knowledge_base.code_guidelines` feature reads instruction files to understand both. Its defaults cover `**/AGENTS.md` and `**/CLAUDE.md` — but **not** `**/REVIEW.md`, so the config below is what gets the review conventions to CodeRabbit. See `fx-setup` → `references/instruction-files.md` for the full standard.
 
 #### Check Configuration
 
 ```bash
 # Canonical files present?
-test -f REVIEW.md && echo "REVIEW.md exists" || echo "REVIEW.md MISSING - run setup"
+test -f REVIEW.md && echo "REVIEW.md exists" || echo "REVIEW.md MISSING - run /fx-setup"
 
 # Check if .coderabbit.yaml exists
 if [ -f ".coderabbit.yaml" ]; then
@@ -103,7 +103,7 @@ else
 fi
 ```
 
-If `REVIEW.md` is missing, create it directly — just the file, with a `# PR Review` heading. **Do NOT run `setup` or `fx-upgrade` from here:** setup also scaffolds `docs/`, `AGENTS.md`, `CLAUDE.md`, and `.coderabbit.yaml`, and this skill pushes to an open PR, so that would bury one review rule in a large unrelated diff. Mention that `/setup` will complete the layout later.
+If `REVIEW.md` is missing, create it directly — just the file, with a `# PR Review` heading. **Do NOT run `fx-setup` or `fx-upgrade` from here:** fx-setup also scaffolds `docs/`, `AGENTS.md`, `CLAUDE.md`, and `.coderabbit.yaml`, and this skill pushes to an open PR, so that would bury one review rule in a large unrelated diff. Mention that `/fx-setup` will complete the layout later.
 
 #### Configuration States
 

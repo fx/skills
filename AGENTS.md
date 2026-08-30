@@ -27,9 +27,14 @@ Flat only. The [`skills`](https://github.com/vercel-labs/skills) CLI supports ca
 
 Format: `[a-z0-9-]+`, 1–64 chars, no leading/trailing hyphen, no `--`. That satisfies the spec, Codex (≤64 chars), and Pi (which warns but still loads on violation).
 
-**Names are bare by default.** `dev`, `coder`, `planner`, `github` — no vanity prefix, because the prefix costs a keystroke on every invocation and buys nothing when the name is already distinctive.
+**Names are bare by default.** `dev`, `coder`, `planner`, `github` — no vanity prefix, because it costs a keystroke on every invocation and buys nothing when the name is already distinctive.
 
-**Prefix `fx-` only on a collision with a host agent's built-in.** That is the entire rule: `review` → `fx-review`, `upgrade` → `fx-upgrade`. Do not prefix a name that is merely generic-sounding, and do not rename an existing bare skill unless a host agent starts reserving its name.
+**Prefix `fx-` when a collision is real or likely.** Two triggers, in order:
+
+1. **The name is reserved by a host agent** — mandatory. `review` → `fx-review`, `upgrade` → `fx-upgrade`.
+2. **The name is a bare common noun another catalog would plausibly claim** — judgement, applied sparingly. `setup` → `fx-setup`. The flat namespace has no tiebreak, so the loser of a collision is whichever skill the host happens to load second.
+
+Everything else stays bare. Do not prefix a name that is already distinctive (`pr-preparer`, `tech-scout`, `coderabbit-review`), and do not rename an existing bare skill without one of the two triggers above — a rename breaks every cross-reference and every user's muscle memory.
 
 ### Reserved names
 

@@ -47,10 +47,10 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `issue-updater` | Updates GitHub issues with planning, status, and implementation progress within an active workflow. |
 | `project-management` | Manages project tracking through `docs/tasks.md`, `docs/changes/`, or an explicitly selected external tracker. |
 | `spec-writer` | Writes and maintains living specs and proposed change documents within an explicitly requested documentation lifecycle. |
-| `setup` | Creates the default docs and instruction-file layout as a prerequisite of an explicitly invoked documentation workflow. |
+| `fx-setup` | Creates the default docs and instruction-file layout as a prerequisite of an explicitly invoked documentation workflow. |
 | `fx-upgrade` | Migrates repository instruction files to the current conventions after explicit request and confirmation. |
 | `verify-web-change` | Verifies specified web changes using the real application and Playwright. |
-| `upstream-contrib` | Runs the explicitly requested workflow for contributing consumer changes upstream to `fx/ui`. |
+| `upstream-contrib` | Contributes a local change in a consumer repository upstream to the dependency it belongs in, then rewires the consumer onto it. |
 | `tech-scout` | Researches and recommends technologies or libraries when explicitly requested by name. |
 | `learn` | Updates this catalog from an explicit `/learn` request and leaves changes uncommitted for review. |
 
@@ -72,7 +72,15 @@ For sibling scripts to resolve, install the skills that reference each other int
 
 Skills install flat: `skills/<name>/` becomes `<agent>/skills/<name>/`, and the directory name is what you invoke. There is no namespace, so a name matching a host agent's built-in silently shadows it.
 
-Names here are therefore **bare by default, `fx-`-prefixed only on a collision.** Two currently need it — `fx-review` (Claude Code reserves `review`) and `fx-upgrade` (reserves `upgrade`). Everything else keeps its plain name. `AGENTS.md` has the avoid-list and the check.
+Names here are therefore **bare by default, `fx-`-prefixed where a collision is real or likely.** Three currently are:
+
+| Skill | Why |
+|---|---|
+| `fx-review` | Claude Code reserves `review` |
+| `fx-upgrade` | Claude Code reserves `upgrade` |
+| `fx-setup` | Not reserved, but `setup` is generic enough that another catalog will claim it |
+
+Everything else keeps its plain name. `AGENTS.md` has the avoid-list and the check.
 
 ## Requirements
 

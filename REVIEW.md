@@ -22,7 +22,7 @@ reference another file.
 
 - A skill's directory name is what agents invoke, and the frontmatter `name` must match it exactly. Flag any mismatch.
 - Flag any new skill whose name collides with a Claude Code built-in slash command or bundled skill — the collision silently shadows the built-in. The avoid-list and its source are in `AGENTS.md`.
-- Names are bare by default and take an `fx-` prefix **only** on a collision with a host agent built-in. Flag a new skill that adds the prefix without a collision, and flag one that omits it despite having a collision. `fx-review` and `fx-upgrade` are the two current cases — do not suggest shortening them.
+- Names are bare by default and take an `fx-` prefix only when a collision is real (reserved by a host agent) or likely (a bare common noun another catalog would claim). Flag a prefix added to an already-distinctive name, and flag a reserved name left unprefixed. `fx-review`, `fx-upgrade`, and `fx-setup` are the current cases — do not suggest shortening them.
 - A renamed skill must have every cross-reference updated. Flag a rename whose old name still appears anywhere under `skills/` or `docs/`.
 
 ### Cross-Skill Paths

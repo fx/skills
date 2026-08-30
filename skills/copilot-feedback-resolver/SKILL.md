@@ -28,7 +28,7 @@ From `fx-review`, and not restated here:
   is authoritative.
 - **Step 6** — the `REVIEW.md` entry for an incorrect finding, its 4000-character
   constraint, and the rule against writing `.github/copilot-instructions.md` or
-  running `setup` from here.
+  running `fx-setup` from here.
 
 ## ⛔ PR Comments Prohibition (CRITICAL)
 

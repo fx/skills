@@ -5,23 +5,23 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 
 # Upgrade Instruction Files
 
-Migrates a repository to the **current** these conventions. Unlike `setup`,
+Migrates a repository to the **current** these conventions. Unlike `fx-setup`,
 this skill is **intentionally intrusive**: it moves content between files,
 rewrites files in place, resolves symlinks, and deletes obsolete paths.
 
-## Relationship to `setup`
+## Relationship to `fx-setup`
 
 The two skills split along one line: **who is allowed to destroy something.**
 
-| | `setup` | `fx-upgrade` |
+| | `fx-setup` | `fx-upgrade` |
 |---|---|---|
 | Invocation | **Automatic**, on every `/spec-writer` and `/project-management` call | **Explicit only** — a human or a skill asks for it by name |
-| May create missing files | yes | yes (via setup) |
+| May create missing files | yes | yes (via fx-setup) |
 | May append a missing marker block | yes | yes |
 | May move, merge, overwrite, or delete | **never** | yes, that is the point |
 | On finding a legacy layout | reports it and stops | migrates it |
 
-`setup` runs unattended dozens of times a day, so it must never make a change a
+`fx-setup` runs unattended dozens of times a day, so it must never make a change a
 user would want to review. `fx-upgrade` runs when asked, once, and every change it
 makes is reviewable in `git diff`.
 
@@ -33,7 +33,7 @@ a legacy layout, it reports and recommends — it does not migrate.
 **This skill migrates instruction files only.** A bare "upgrade" is ambiguous — "upgrade React", "upgrade the database", "upgrade to Node 24" are ordinary code work and belong to `dev`. If the request does not clearly concern AI instruction files or these conventions, **ask before assuming**; this skill rewrites files.
 
 - User says "migrate conventions", "update instruction files", "upgrade instruction-file conventions", "migrate to AGENTS.md"
-- `setup` reported a legacy layout and told the user to run this
+- `fx-setup` reported a legacy layout and told the user to run this
 - After pulling a catalog update that changed a convention
 - User says "adopt duvet" or asks for requirements traceability — Step 6 offers it, and it runs even when there is nothing to migrate, so this skill is a valid entry point for adoption alone
 
@@ -190,9 +190,9 @@ reviews it with `git diff` and commits it themselves.
 Create whatever the migration left absent, **limited to the instruction-file
 layout**: `AGENTS.md`, `REVIEW.md`, the `CLAUDE.md` pointer, the `## Code Review
 Rules` section, `.coderabbit.yaml`. Use the exact seed blocks from
-`setup` Steps 6.3, 7, 8.2, 8.3 and 9.
+`fx-setup` Steps 6.3, 7, 8.2, 8.3 and 9.
 
-**Do NOT invoke `setup` here.** It also scaffolds `docs/specs`,
+**Do NOT invoke `fx-setup` here.** It also scaffolds `docs/specs`,
 `docs/changes`, `tasks.md`, and the index files. This skill migrates instruction
 files; **silently** adding a documentation system the user never asked for is a
 different change, and it would land in the same diff.
@@ -203,7 +203,7 @@ an explicit prompt the user can decline. Nothing here may add anything the user
 did not ask for and was not asked about.
 
 If the repo has no `docs/` structure and looks like it wants one, say so in the
-Step 7 report and let the user run `/setup` themselves.
+Step 7 report and let the user run `/fx-setup` themselves.
 
 ### Step 6: Offer duvet adoption (only if not already adopted)
 
@@ -230,8 +230,8 @@ whenever upgrade runs from a subdirectory.
 
 - **`duvet: adopted`** → do nothing and say nothing. Never re-offer, never nag.
 - **`duvet: not adopted`** → offer adoption once, and on acceptance follow
-  **`setup` → `references/duvet-adoption.md`**. That file is the canonical
-  procedure, shared with setup: read it before offering, and do not restate or
+  **`fx-setup` → `references/duvet-adoption.md`**. That file is the canonical
+  procedure, shared with fx-setup: read it before offering, and do not restate or
   reinvent any of its steps here.
 
 Adoption is **not** part of M1 and not an instruction-file migration, so it never
@@ -298,7 +298,7 @@ file — never report a clean upgrade over a partial one.
 
 ## M1: Instruction files → `AGENTS.md` / `REVIEW.md`
 
-The canonical layout is defined in `setup` → `references/instruction-files.md`.
+The canonical layout is defined in `fx-setup` → `references/instruction-files.md`.
 Read it before applying this migration.
 
 Target state:
@@ -312,7 +312,7 @@ CLAUDE.md         -> a single `@AGENTS.md` line
 
 ### M1.0 Missing canonical files
 
-If `AGENTS.md` or `REVIEW.md` is simply absent — no legacy file to migrate from — there is nothing to move, but the repo is still not current. Do not report "already current": let the migration apply so **Step 5 seeds the missing file** from the seed blocks. Step 5 does this directly and must not invoke `setup`, which would also scaffold `docs/`.
+If `AGENTS.md` or `REVIEW.md` is simply absent — no legacy file to migrate from — there is nothing to move, but the repo is still not current. Do not report "already current": let the migration apply so **Step 5 seeds the missing file** from the seed blocks. Step 5 does this directly and must not invoke `fx-setup`, which would also scaffold `docs/`.
 
 ### M1.1 `CLAUDE.md` → `AGENTS.md`
 
@@ -413,7 +413,7 @@ If a section is mixed, edit the lines and leave the heading. If you cannot tell 
 
 Then let Step 5 insert the current `/project-management` block.
 
-Section deletion is the reason this lives here and not in setup: removing anything from a user's file must be reviewed.
+Section deletion is the reason this lives here and not in fx-setup: removing anything from a user's file must be reviewed.
 
 ## Rules
 
@@ -422,6 +422,6 @@ Section deletion is the reason this lives here and not in setup: removing anythi
 - **Never delete convention content** — move it, or report it as dropped
 - **Never copy from a symlink that escapes the repo** — privacy boundary, no exceptions
 - **Never commit** — leave changes in the working tree for review
-- **Duvet is offered, never assumed** — if `.duvet/` is absent, ask (Step 6); if it exists, stay silent. The procedure lives only in `setup` → `references/duvet-adoption.md`
+- **Duvet is offered, never assumed** — if `.duvet/` is absent, ask (Step 6); if it exists, stay silent. The procedure lives only in `fx-setup` → `references/duvet-adoption.md`
 - **Migrations are idempotent** — a second run on a migrated repo finds no migration to apply and changes nothing under M1. **This does not extend to Step 6:** the duvet offer runs on every invocation, so a rerun on a repo that has no `.duvet/` will offer adoption again and, if accepted, write files. That is not a broken invariant, it is a different one — M1 is idempotent, the duvet *offer* is unconditional, and acceptance is a new decision each time. Once `.duvet/` exists the offer goes silent and the whole run is a no-op again. Never describe a rerun as "changes nothing" without checking whether Step 6 wrote anything
 - **Partial is reported** — if a migration could not complete, name the file and say so
