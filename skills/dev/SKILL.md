@@ -635,11 +635,12 @@ Agent tool:
 | GitHub Copilot | `copilot-review` | Auto-reviews; we explicitly request via API as a defensive belt. Does NOT re-review on push by default. |
 | CodeRabbit | `coderabbit-review` | PR-level only — there is no local pass. Applies when the GitHub App auto-reviews PRs: re-reviews after pushes and exposes state via the `CodeRabbit` check. Classify new feedback in the shared ledger and settle its threads within the bounds below. `STATUS=NOT_CONFIGURED` means the App is absent — report once and skip. |
 
-##### Run every waiter in the background — there is no mode selection
+##### Run every waiter concurrently — there is no mode selection
 
 **⛔ Launch each configured reviewer's wait script concurrently, each redirecting to its own log file.** Take the shape of the wait from `references/host-adapters.md` § Long waits — on Claude Code it is one message with every call `run_in_background: true`, woken per reviewer by its completion notification, and spawning sub-agents for the wait buys nothing; on Codex the same table says to delegate each waiter to a teammate and `wait_agent` on it. Either way the concurrency is the same and there is no "can I spawn sub-agents?" branch to agonise over: root session, `team` coordinator, and sub-agent all follow their host's row. **Where the row makes each waiter a child, those children spend the host's concurrency slots** — Codex has three for teammates, so two reviewers plus the Step 7 CI wait already fill a wave. Launch them in batches of at most three and reconcile between batches; a spawn past the limit queues, and a queued waiter looks exactly like a hung one.
 ```bash
-# Both in ONE message, both run_in_background: true
+# Claude Code spelling: both in ONE message, both run_in_background: true.
+# On another host, same two waiters, that host's shape (§ Long waits).
 mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh [PR_NUMBER] \
      > [AGENT_DIR]/team/waits/copilot-[PR_NUMBER].log 2>&1

@@ -347,7 +347,9 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 **Where waiters are children, they spend the same concurrency slots your coders do.** Codex allows three live teammates, so two reviewers plus CI already fill the wave: land the coders first, or run the waiters in batches of at most three and reconcile between them. A fourth child does not fail — it queues, and a queued waiter is indistinguishable from a hung one.
 
 ```
-# ALL in one message, every one run_in_background: true.
+# Claude Code spelling: ALL in one message, every one run_in_background: true.
+# On another host, same waiters, that host's shape (host-adapters.md § Long waits) —
+# on Codex, one small-tier waiter child per script that you wait_agent on.
 # Each command creates the log dir itself: if it does not exist the REDIRECT fails
 # before the waiter ever starts, so you get no STATUS line at all — the one failure
 # the whole protocol exists to prevent. `mkdir -p` is idempotent; never rely on an
@@ -359,8 +361,9 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/coderabbit-review/scr
 Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> \
         > [AGENT_DIR]/team/waits/ci-<PR_NUMBER>.log 2>&1
 
-# On each notification: read the log, branch on its STATUS= line, classify
-# findings in the ledger, THEN invoke that reviewer's resolver skill.
+# On each wake — a notification, or the wait_agent that returns: read the log,
+# branch on its STATUS= line, classify findings in the ledger, THEN invoke that
+# reviewer's resolver skill.
 ```
 
 **Never run a waiter in a call that cannot outlive it** — on Claude Code the Bash tool caps a foreground `timeout` at 600 000 ms, below every waiter's 900 s budget, so a foreground call is killed mid-poll with no STATUS and no exit code and the caller re-runs it blindly. Each host's surviving shape is in `[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits; on Codex it is a teammate running the script that you `wait_agent` on. **Never launch one without the redirect**: the cycle is driven by what the script prints.

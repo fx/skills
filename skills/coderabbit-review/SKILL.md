@@ -88,12 +88,12 @@ bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh <PR_NU
   > [AGENT_DIR]/team/waits/rabbit-<PR_NUMBER>.log 2>&1
 ```
 
-**Do NOT run it in the foreground.** The Bash tool caps a foreground `timeout` at
-600 000 ms, which is below the script's 900 s budget — a foreground call is
-guaranteed to be killed mid-poll, printing no STATUS and no exit code, which is
-exactly what used to force blind re-runs. Backgrounded processes are not subject to
-that cap. Never background it *without* the redirect: the cycle is driven by what
-the script prints.
+**Do NOT run it in a call that cannot outlive it.** On Claude Code the Bash tool
+caps a foreground `timeout` at 600 000 ms, below the script's 900 s budget — such
+a call is killed mid-poll, printing no STATUS and no exit code, which is exactly
+what used to force blind re-runs; backgrounded processes are not subject to that
+cap. Never launch it *without* the redirect: the cycle is driven by what the
+script prints.
 
 ### Read the `STATUS=` line
 
