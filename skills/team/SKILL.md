@@ -301,13 +301,13 @@ When **any** wake arrives — a notification where the host sends one, or a `wai
 
 The only case reconcile-on-wake misses is *everything* going quiet at once. Guard it with a single long-interval `ScheduleWakeup` (~30 minutes) — **not** a `sleep`, which holds a turn open. This applies only where the host both schedules wakeups and keeps teammates alive across an idle coordinator; on a host where ending the turn ends the run (Codex), there is no idle to guard — the `wait_agent` you are already inside *is* the backstop, so give it a generous `timeout_ms` instead.
 
-Every waiter has its own 900 s budget and always exits, so it will notify you well inside that window. The backstop should essentially never fire. **Do not shorten it**: a short interval is polling at full coordinator context wearing a different hat.
+Every waiter has its own 900 s budget and always exits, so its wake — a notification, or the `wait_agent` on its waiter child — arrives well inside that window. The backstop should essentially never fire. **Do not shorten it**: a short interval is polling at full coordinator context wearing a different hat.
 
 #### Re-launching a `PENDING` waiter
 
-`STATUS=PENDING` means the reviewer or check is still running — not a verdict, not a failure. Relaunch it (backgrounded) if you still need that gate.
+`STATUS=PENDING` means the reviewer or check is still running — not a verdict, not a failure. Relaunch it if you still need that gate, in the same shape as the first launch (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits): backgrounded on Claude Code, a fresh waiter child on Codex.
 
-**Prefer to have other work in flight while it runs.** If you have other PRs to advance, do that and let the relaunched waiter notify you; that is strictly cheapest. Only when you have nothing else to do is it worth relaunching immediately and waiting on it alone.
+**Prefer to have other work in flight while it runs.** If you have other PRs to advance, do that and pick the relaunched waiter up on its wake; that is strictly cheapest. Only when you have nothing else to do is it worth relaunching immediately and waiting on it alone. On a host where waiter children occupy concurrency slots, count the relaunch against the limit below before starting it.
 
 ---
 
@@ -343,6 +343,8 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 > **Codex runs LOCALLY first — and it is the ONLY local reviewer.** Implementing sub-agents run local Codex via the `codex-review` skill during pre-PR self-review, passing the Scope Brief. **Not `codex review --base main`** — that CLI rejects `--base` together with a prompt, so the promptless form cannot carry the brief and reports the work the change deliberately did not do. Prefer it **converged** (`[SKILLS_DIR]/dev/references/scope-contract.md` § Convergence — no blocking finding left unresolved, not zero output). **There is no local CodeRabbit pass; the `cr` CLI is not used.** Gate 2b is the PR-level CodeRabbit review, which applies only when the GitHub App is configured — its waiter reports `STATUS=NOT_CONFIGURED` otherwise, which is terminal and expected for most repos. If CodeRabbit rate-limits, resolve findings already received, record `skipped (rate-limited)`, and continue; never wait for its cooldown.
 
 **As coordinator, YOU own reviewer waits, and you never spend turns polling them.** Launch every configured reviewer's waiter concurrently, in the shape your host's row prescribes (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits): on Claude Code, one message with every call backgrounded to its own log, woken by a completion notification per reviewer, and no sub-agent involved; on Codex, one small-tier waiter child per reviewer that you `wait_agent` on. There is no execution mode to pick — read your host's row and follow it.
+
+**Where waiters are children, they spend the same concurrency slots your coders do.** Codex allows three live teammates, so two reviewers plus CI already fill the wave: land the coders first, or run the waiters in batches of at most three and reconcile between them. A fourth child does not fail — it queues, and a queued waiter is indistinguishable from a hung one.
 
 ```
 # ALL in one message, every one run_in_background: true.
