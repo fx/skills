@@ -204,13 +204,15 @@ The `name` should be specific and human-readable so it's useful in logs and `Sen
 
 ### Pick an agent SIZE for every spawn
 
-Choose by the **shape of the task**, not by how important it feels. Sizes are named so this table survives model releases — map the size to whatever the `Agent` tool's `model` parameter currently offers.
+Choose by the **shape of the task**, not by how important it feels.
 
-| Size | `model` | Use for |
-|---|---|---|
-| **large** | `opus` | Coder agents doing implementation. Fix agents on an **undiagnosed** bug. Anything requiring design judgment. |
-| **medium** | `sonnet` | PR preparer. Browser verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
-| **small** | `haiku` | The worktree isolation probe (STEP 2.5.2). Pure inspection or summarisation with no judgment call. |
+| Size | Use for |
+|---|---|
+| **large** | Coder agents doing implementation. Fix agents on an **undiagnosed** bug. Anything requiring design judgment. |
+| **medium** | PR preparer. Browser verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
+| **small** | The worktree isolation probe (STEP 2.5.2). Pure inspection or summarisation with no judgment call. |
+
+**Request the tier, not a model name.** "Spawn a large-model sub-agent" resolves to whatever the host currently offers at that tier, so this table does not go stale every time a model ships — and a hardcoded name silently becomes wrong rather than failing loudly. Where the host requires an explicit model, map the tier to its general-purpose **coding** models and nothing else; a model specialised for another domain is the wrong choice at every tier regardless of its size. In Claude Code that means the three coding tiers only — **never select `fable`.**
 
 **Coders stay `large`. Do not "optimise" them downward.** Implementation is judgment-heavy, and a weaker coder that needs more iterations costs *more* than a stronger one that needs fewer — turn count, not per-turn price, is what dominates. A downgrade that adds two review rounds is a large net loss that looks like a saving.
 
@@ -341,7 +343,7 @@ For tasks with UI changes, spawn a dedicated verify agent:
 ```
 Agent tool:
   name: "verify-<pr-number>"            # REQUIRED — addressable handle (do NOT pass team_name; it's ignored)
-  model: "sonnet"                       # size: medium — verification is mechanical
+  model:     "<medium — see the size table>"  # verification is mechanical
   prompt: "Load the verify-web-change skill (Skill tool: skill='verify-web-change').
            Verify PR #<NUMBER> on branch <branch-name>.
            Check out the branch, start the dev server, and confirm the app loads without errors.

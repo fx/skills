@@ -275,14 +275,14 @@ When users refer to repositories, recognize the `owner/repo` shorthand format an
 
 ### Shorthand Format
 
-The pattern `owner/repo` (e.g., `fx/dotfiles`, `anthropics/claude-code`) refers to a GitHub repository. Always expand this to a full URL.
+The pattern `owner/repo` (e.g., `fx/dotfiles`, `cli/cli`) refers to a GitHub repository. Always expand this to a full URL.
 
 ### Examples
 
 | User says | Interpretation |
 |-----------|----------------|
 | "clone fx/dotfiles" | Clone `git@github.com:fx/dotfiles.git` |
-| "look at anthropics/claude-code" | Repository at `github.com/anthropics/claude-code` |
+| "look at cli/cli" | Repository at `github.com/cli/cli` |
 | "fork vercel/next.js" | Fork from `github.com/vercel/next.js` |
 
 ### Clone Priority

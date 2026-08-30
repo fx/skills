@@ -39,13 +39,15 @@ Agent tool:
 
 #### Pick an agent SIZE for every spawn
 
-Choose by the **shape of the task**, not by how important it feels. Sizes are named so this table survives model releases — map the size to whatever the `Agent` tool's `model` parameter currently offers. Every Agent template in this document omits `model` for brevity; supply it from here on every call.
+Choose by the **shape of the task**, not by how important it feels. Every Agent template in this document omits the model for brevity; supply it from here on every call.
 
-| Size | `model` | Use for |
-|---|---|---|
-| **large** | `opus` | Implementation (Step 4). Planning (Step 3). Requirements analysis (Step 2). Independent review. Fix agents on an **undiagnosed** failure. Anything requiring design judgment. |
-| **medium** | `sonnet` | PR preparation. Browser/test-plan verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
-| **small** | `haiku` | Pure inspection or summarisation with no judgment call. |
+| Size | Use for |
+|---|---|
+| **large** | Implementation (Step 4). Planning (Step 3). Requirements analysis (Step 2). Independent review. Fix agents on an **undiagnosed** failure. Anything requiring design judgment. |
+| **medium** | PR preparation. Browser/test-plan verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
+| **small** | Pure inspection or summarisation with no judgment call. |
+
+**Request the tier, not a model name.** "Spawn a large-model sub-agent" resolves to whatever the host currently offers at that tier, so this table does not go stale every time a model ships — and a hardcoded name silently becomes wrong rather than failing loudly. Where the host requires an explicit model, map the tier to its general-purpose **coding** models and nothing else; a model specialised for another domain is the wrong choice at every tier regardless of its size. In Claude Code that means the three coding tiers only — **never select `fable`.**
 
 **Never downgrade an implementation or review agent.** Those are judgment-heavy, and a weaker agent that needs more iterations costs *more* than a stronger one that needs fewer — turn count, not per-turn price, dominates. A downgrade that adds two review rounds is a large net loss that looks like a saving.
 
