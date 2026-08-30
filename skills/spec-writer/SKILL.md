@@ -271,7 +271,7 @@ This phase MUST be thorough. Insufficient research leads to inaccurate specs.
 
 #### 1.1 Local Codebase Exploration
 
-Launch `Explore` sub-agents (subagent_type: `Explore`) to deeply understand the relevant parts of the codebase:
+Launch read-only exploration sub-agents to deeply understand the relevant parts of the codebase (in Claude Code: `subagent_type: Explore`; elsewhere, any delegate told to read and report without editing):
 
 - Map all files, modules, and data models the feature touches
 - Identify existing patterns, abstractions, and conventions

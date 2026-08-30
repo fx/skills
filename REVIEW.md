@@ -14,16 +14,21 @@ reference another file.
 
 ### Security and Privacy
 
-- **Do not allow private information leaks**: Flag any use of private repository names, internal URLs, API keys, credentials, or company-specific identifiers in code, documentation, or examples.
-- **Require generic placeholders**: Examples should use generic placeholders like `owner/repo`, `example.com`, `your-org`, etc.
-- **Check all files**: This applies to documentation (README.md, AGENTS.md, REVIEW.md), code examples, skill references, test cases, and commit messages.
+- **No private information leaks**: flag private repository names, internal URLs, API keys, credentials, or company-specific identifiers anywhere — docs, examples, skill references, fixtures, commit messages.
+- **Require generic placeholders**: `owner/repo`, `example.com`, `your-org`.
 
 ### Skill Naming
 
 - A skill's directory name is what agents invoke, and the frontmatter `name` must match it exactly. Flag any mismatch.
-- Flag any new skill whose name collides with a Claude Code built-in slash command or bundled skill — the collision silently shadows the built-in. The avoid-list and its source are in `AGENTS.md`.
-- Names are bare by default and take an `fx-` prefix only when a collision is real (reserved by a host agent) or likely (a bare common noun another catalog would claim). Flag a prefix added to an already-distinctive name, and flag a reserved name left unprefixed. `fx-review`, `fx-upgrade`, and `fx-setup` are the current cases — do not suggest shortening them.
+- Flag a name colliding with a Claude Code built-in command or bundled skill — the collision silently shadows it. Avoid-list in `AGENTS.md`.
+- Names are bare by default; `fx-` only where a collision is real or likely. Flag a prefix on an already-distinctive name, and a reserved name left unprefixed. `fx-review`, `fx-upgrade`, `fx-setup` are the current cases — do not suggest shortening them.
 - A renamed skill must have every cross-reference updated. Flag a rename whose old name still appears anywhere under `skills/` or `docs/`.
+
+### Host Portability
+
+- Flag a host limitation stated as a universal. "Sub-agents cannot spawn sub-agents" is Claude Code's constraint, not Codex's — it belongs in a host-notes block, not an architectural rule. A rule holding on every host must say so, and why.
+- Concrete `Agent tool:` / `Skill tool:` syntax is fine as illustration. Flag it only where presented as the sole spelling, or where a host-coupled operation has no entry in `skills/dev/references/host-adapters.md`.
+- Flag hardcoded model names; tiers (`large`/`medium`/`small`) are resolved by the host.
 
 ### Cross-Skill Paths
 

@@ -72,6 +72,17 @@ A workflow's instructions apply only to the request that invoked it and end at i
 
 Internal delegation stays valid — `dev` may name `coder`, `planner`, and the reviewer skills as part of its active lifecycle. That does not authorize those skills to load themselves for unrelated requests.
 
+## Host portability
+
+The orchestration skills are written against **seven operations** — delegate, load a skill, wait, message, ask the user, run long concurrently, scratch space — mapped per host in `skills/dev/references/host-adapters.md`. Adding a host means adding a column there, not editing the skills.
+
+Two rules keep that honest:
+
+- **Never state a host's limitation as a universal.** "Sub-agents cannot spawn sub-agents" is true of Claude Code and false of Codex; written flatly it becomes a false architectural law that a reader on another host will either obey pointlessly or dismiss along with the rules around it. Put the limit in the host-notes block and keep the *rule* separate from the *reason* — a rule that survives on every host should say so, and say why.
+- **Concrete syntax is an example, not the contract.** Showing a Claude Code `Agent tool:` block is fine and keeps the skills readable; writing every call twice is not, because the copies drift. Say once, near the first use, that the syntax is illustrative and point at the adapter.
+
+Model names are never hardcoded — request a tier (`large`/`medium`/`small`) and let the host resolve it. See the size tables in `dev` and `team`.
+
 ## Cross-skill paths
 
 A skill referencing a sibling's bundled script writes it as:

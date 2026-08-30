@@ -19,11 +19,15 @@ Spawn a coordinated sub-agent team to implement a spec or multi-task feature. Th
 
 ## ⛔ Critical Architecture Rule: Coordinator Owns the SDLC
 
-**Sub-agents CANNOT spawn their own sub-agents.** If you tell a teammate to "run the full SDLC," it will try to do implementation inline (instead of delegating to a coder sub-agent), bloat its context window, and skip later steps like Copilot review. This has been observed in production.
+**YOU (the coordinator) orchestrate each SDLC step per task.** You spawn focused, single-purpose agents for each step and handle cross-cutting concerns (reviewer passes, CI, merge gates) directly.
 
-**Therefore: YOU (the coordinator) orchestrate each SDLC step per task.** You spawn focused, single-purpose agents for each step and handle cross-cutting concerns (Copilot review, CI, merge gates) directly.
+**Never tell an agent to "load the dev skill and follow all steps." Instead, give each agent ONE focused job.** An agent handed a whole lifecycle inlines the implementation instead of delegating it, fills its context, and skips the later stages — observed in production, repeatedly.
 
-**Never tell an agent to "load the dev skill and follow all steps." Instead, give each agent ONE focused job.**
+That failure is about **prompt scope, not host capability**, which is why the rule holds everywhere. On a host whose delegates cannot themselves delegate (Claude Code) the platform also enforces it; on one where they can (Codex) it is a deliberate design constraint and still binding. Do not read a host that permits nesting as permission to hand one agent the lifecycle.
+
+What nesting *does* buy, where the host supports it: a delegate may spawn helpers **inside its own single focused job** — a coder fanning out reads across a large tree. That is not delegating the lifecycle, and this rule does not forbid it.
+
+See `[SKILLS_DIR]/dev/references/host-adapters.md` for the operations this skill assumes and their mapping on your host.
 
 ---
 
@@ -92,16 +96,16 @@ When that happens, finish every task that IS covered, then report what is blocke
 
 This rule and the "do NOT pause to confirm scope" rule above are the same rule seen from two sides: **the user's scope is authoritative — execute all of it without asking, and none of what lies outside it without asking.**
 
-## STEP 1: The Team Is Implicit — Do NOT Create One
+## STEP 1: Do NOT Provision a Team
 
-**As of Claude Code v2.1.178 there is no team-creation step, and the `TeamCreate`/`TeamDelete` tools no longer exist.** A session has exactly **one implicit team**, scoped to that session, and it forms automatically the moment you spawn your first teammate via the `Agent` tool (you, the main session, are permanently the lead). There is nothing to name, nothing to provision, and nothing to tear down — cleanup is automatic when the session ends (see STEP 4).
+**There is nothing to create.** The set of delegates is whatever you have spawned; it needs no name, no manifest, and no teardown. Skip straight to STEP 2 and start defining tasks — the team exists the moment you spawn the first coder in STEP 3.
 
-- **Do NOT call `TeamCreate`** — it was removed. Calling it (or waiting for it) is a bug.
-- **Prerequisite:** agent teams are experimental and gated behind `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (in `settings.json` `env` or the environment). If teammates never appear when you spawn them, this is almost certainly unset — report it to the user rather than retrying.
-- **One team per session, no nested teams:** you cannot create additional named teams or share a team across sessions, and teammates **cannot spawn their own teammates** (only the lead manages the team). This is an official platform limitation, and it is exactly why the coordinator owns the whole SDLC (see the Critical Architecture Rule above).
-- The team config and shared task list live under a **session-derived** name — the literal string `session-` followed by the first 8 chars of the session ID, e.g. `session-1a2b3c4d` — at `~/.claude/teams/{session-team-name}/config.json` and `~/.claude/tasks/{session-team-name}/`. Claude Code writes and updates these automatically — never edit or pre-author them.
+Treat any urge to "set up the team" first as a bug in your plan. If your host has a provisioning call, you still do not need it here; if it does not, nothing is missing.
 
-Skip straight to STEP 2 and start defining tasks; the team springs into existence when you spawn the first coder in STEP 3.
+**Host notes** — check these against `[SKILLS_DIR]/dev/references/host-adapters.md` for your host before assuming a failure is yours:
+
+- **Claude Code:** the team is implicit and session-scoped, forming on the first `Agent` spawn with the main session permanently the lead. `TeamCreate`/`TeamDelete` no longer exist — calling one, or waiting on it, is a bug, and `team_name` is accepted-but-ignored. Teams are gated behind `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (in `settings.json` `env` or the environment); if teammates never appear when you spawn them, that is almost certainly unset — report it rather than retrying. Config and the shared task list live at `~/.claude/teams/session-<first 8 chars of session id>/` and `~/.claude/tasks/<same>/`, written automatically — never edit or pre-author them.
+- **Codex:** delegates form a tree rather than a flat roster, and concurrency is bounded per session. Read the limit instead of assuming it is unbounded; a spawn that silently queues looks exactly like one that hung.
 
 ## STEP 2: Create and Organize Tasks
 
@@ -185,12 +189,12 @@ For each task (or group of parallel tasks), walk through the dev skill's SDLC st
 
 **Every single `Agent` tool call you make as the team coordinator — coder, verify, fix, anything — MUST pass `name`.** `name` is what makes a teammate addressable via `SendMessage` and visible in the team config's `members[]` array; omitting it produces an effectively anonymous worker you can't message or steer by name, defeating the point of `/team`.
 
-**Do NOT pass `team_name`.** As of v2.1.178 the `team_name` input on the `Agent` tool is **accepted but ignored** (and the `team_name` field in hook payloads is deprecated). There is one implicit, session-scoped team; every `Agent` spawn joins it automatically. Passing `team_name` does nothing — drop it.
+**Do not try to name or route the team.** Every delegate joins the coordinator's set automatically; there is no roster to address. On Claude Code specifically, the `team_name` input is accepted but ignored (and deprecated in hook payloads) — passing it does nothing, so drop it.
 
 ```
 Agent tool:
   name:      "<short-descriptive-handle>"    # ← REQUIRED, NO EXCEPTIONS
-  subagent_type: "general-purpose"
+  subagent_type: "general-purpose"            # Claude Code; a skill is never an agent type
   model:     "<per the size table below>"     # ← pick deliberately, do not default
   isolation: "worktree"                      # NO-OP for teammates — see STEP 2.5; pre-create real worktrees instead
   mode: "bypassPermissions"
@@ -199,6 +203,8 @@ Agent tool:
 ```
 
 The `name` should be specific and human-readable so it's useful in logs and `SendMessage` (e.g., `coder-0105A`, `verify-pr-371`, `fix-0106-types`). One-shot generic names like `agent1` are bad.
+
+Paths under `.claude/team/` in this document are **scratch space** (host-adapters.md, op 7) — coordination artifacts, never part of a change. Substitute your host's equivalent if it is not a Claude Code session.
 
 **Self-check before EVERY Agent call:** "Did I pass `name`? Did I pick a `model` size?" If either is missing, fix the call before sending it. This rule is non-negotiable.
 
@@ -218,8 +224,8 @@ Choose by the **shape of the task**, not by how important it feels.
 
 Two constraints worth knowing rather than rediscovering:
 
-- **The `Agent` tool has no reasoning-effort parameter.** Effort is inherited from the session (`effortLevel` / `CLAUDE_EFFORT`) and cannot be set per spawn. Size selects the model; it does not select how much the agent thinks.
-- **`small` carries a 200k context ceiling.** For read-heavy roles that is a feature — it bounds context growth for free.
+- **Tier and reasoning effort are different dials, and not every host exposes both.** Where effort is settable per spawn (Codex), raise it too for the judgment-heavy roles, not just the tier. Where it is not (Claude Code, which inherits it from the session), the tier is the only lever you have — do not expect a `large` delegate to think harder merely because the task is hard.
+- **The smallest tier may carry a reduced context ceiling.** For read-heavy roles that is a feature: it bounds context growth for free. Check your host's limit in `[SKILLS_DIR]/dev/references/host-adapters.md` rather than assuming.
 
 ### Key orchestration principles
 
@@ -342,7 +348,7 @@ For tasks with UI changes, spawn a dedicated verify agent:
 
 ```
 Agent tool:
-  name: "verify-<pr-number>"            # REQUIRED — addressable handle (do NOT pass team_name; it's ignored)
+  name: "verify-<pr-number>"            # REQUIRED — addressable handle
   model:     "<medium — see the size table>"  # verification is mechanical
   prompt: "Load the verify-web-change skill (Skill tool: skill='verify-web-change').
            Verify PR #<NUMBER> on branch <branch-name>.
@@ -409,7 +415,7 @@ When all tasks are complete and all PRs merged:
    git worktree prune
    git branch -D <branch>   # only if unmerged/abandoned
    ```
-5. **Do NOT call `TeamDelete`** — it was removed in v2.1.178. The team config directory is cleaned up automatically when the session ends; there is no manual teardown step. (The shared task list directory persists locally by design so resumed sessions keep their tasks — that's expected, not a leak.) Your only manual cleanup is the worktrees in step 4.
+5. **There is no teardown step.** Do not look for one, and on Claude Code do not call `TeamDelete` — it no longer exists. Session-scoped team state is cleaned up automatically on exit; a shared task list that persists locally does so by design, so resumed sessions keep their tasks. That is expected, not a leak. Your only manual cleanup is the worktrees in step 4.
 6. Report final summary to user
 
 ---
@@ -417,11 +423,11 @@ When all tasks are complete and all PRs merged:
 ## Coordinator Rules (NON-NEGOTIABLE)
 
 - **ALWAYS pass `name` to EVERY `Agent` call** — coder, verify, fix, anything. `name` is what makes the teammate addressable via `SendMessage` and visible in `members[]`; omitting it produces an anonymous worker you can't steer by name. No exceptions.
-- **NEVER pass `team_name` and NEVER call `TeamCreate`/`TeamDelete`** — all three were removed/deprecated in v2.1.178. The team is implicit and session-scoped: it forms on the first `Agent` spawn and is cleaned up automatically on session exit. `team_name` on the `Agent` tool is accepted-but-ignored.
+- **NEVER provision or tear down a team.** On Claude Code that means never passing `team_name` (accepted-but-ignored) and never calling `TeamCreate`/`TeamDelete` (removed) — the team is implicit, session-scoped, and cleaned up on exit. On any host: there is nothing to create, so an attempt to create it is a bug.
 - **NEVER rely on `isolation: "worktree"` for a teammate** — a teammate runs as a full session in the lead's working directory, so the flag is a no-op. For any coders that run concurrently, pre-create real worktrees under `.claude/worktrees/` and pin each via the prompt preamble (STEP 2.5). If you don't, run coders strictly one-at-a-time. Always tear the worktrees down in STEP 4.
 - **NEVER write code yourself** — all implementation goes through coder agents
 - **NEVER create branches or commits** — coder agents handle this
-- **NEVER delegate the full SDLC to a single agent** — agents cannot spawn sub-agents, so they will inline everything and skip later steps
+- **NEVER delegate the full SDLC to a single agent** — it inlines everything and skips the later steps. True on every host: the failure is prompt scope, not whether delegates can nest
 - **NEVER skip PR inspection** — every PR gets reviewed before marking ready
 - **NEVER merge without completing the MERGE GATE CHECKLIST** — every gate must pass, every time, for every PR
 - **NEVER merge without Copilot review** — always invoke `copilot-review` yourself. No exceptions.

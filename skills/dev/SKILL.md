@@ -21,11 +21,20 @@ This skill defines the **mandatory** workflow for one explicitly invoked `/dev` 
 
 ## CRITICAL RULES
 
-**Use the Agent tool for the substantive delegated roles owned by the active lifecycle: requirements analysis, planning, implementation, and independent review. Each such sub-agent loads the appropriate skill via the Skill tool. Do not spawn a sub-agent for a mechanical operation the coordinator can perform directly.**
+**Delegate the substantive roles this lifecycle owns — requirements analysis, planning, implementation, and independent review — each to its own sub-agent that loads the matching skill. Do not delegate a mechanical operation the coordinator can perform directly.**
 
 ### How to Launch Sub-Agents with Skills
 
-Skills are NOT agent types. Launch a general-purpose sub-agent and instruct it to load the skill:
+A delegate is defined by four things, whatever your host calls them:
+
+| Field | Value |
+|---|---|
+| handle | A short addressable name, so it can be messaged and its report attributed |
+| tier | `large` / `medium` / `small`, per the size table below |
+| skill | The skill it loads **before** doing anything else |
+| prompt | The task, plus the Scope Brief verbatim |
+
+In Claude Code that renders as:
 
 ```
 Agent tool:
@@ -35,7 +44,9 @@ Agent tool:
   model: "[per the size table below]"
 ```
 
-**Do NOT use `subagent_type` for skills.** The `subagent_type` parameter is reserved for built-in agent types (Explore, Plan, etc.). Skills are loaded inside the sub-agent via the Skill tool.
+Every example in this document uses that syntax. **Read it as the operation, not the only spelling** — `[SKILLS_DIR]/dev/references/host-adapters.md` maps all seven operations this skill assumes onto Claude Code and Codex, and is where a new host gets added.
+
+**A skill is not an agent type.** Delegates are general-purpose; the skill is loaded *inside* the delegate, by its prompt. In Claude Code specifically, do not put a skill name in `subagent_type` — that parameter selects built-in agent types (`Explore`, `Plan`) and will not find a skill.
 
 #### Pick an agent SIZE for every spawn
 
@@ -53,14 +64,14 @@ Choose by the **shape of the task**, not by how important it feels. Every Agent 
 
 Two constraints worth knowing rather than rediscovering:
 
-- **The `Agent` tool has no reasoning-effort parameter.** Effort is inherited from the session (`effortLevel` / `CLAUDE_EFFORT`) and cannot be set per spawn. Size selects the model; it does not select how much the agent thinks.
-- **`small` carries a 200k context ceiling.** For read-heavy roles that is a feature — it bounds context growth for free.
+- **Tier and reasoning effort are different dials, and not every host exposes both.** Where effort is settable per spawn (Codex), raise it too for the judgment-heavy roles, not just the tier. Where it is not (Claude Code, which inherits it from the session), the tier is the only lever you have — do not expect a `large` delegate to think harder merely because the task is hard.
+- **The smallest tier may carry a reduced context ceiling.** For read-heavy roles that is a feature: it bounds context growth for free. Check your host's limit in `[SKILLS_DIR]/dev/references/host-adapters.md` rather than assuming.
 
 `team` carries the same table for its coordinator spawns; keep the two in step.
 
 ### Coder Task Reporting (Sub-Agent Restriction)
 
-**Sub-agents MUST NEVER send "idle" or "complete" states via `mcp__coder__coder_report_task`.** Only the main agent session (root conversation) is allowed to report "idle" or "complete". Sub-agents spawned via the Agent tool may only report `"state": "working"`. This prevents sub-agents from overwriting the coordinator's dashboard status and falsely signaling task completion.
+**Where a task-reporting integration is configured** — e.g. the Coder dashboard's `mcp__coder__coder_report_task` — **sub-agents MUST NEVER send "idle" or "complete".** Only the root session reports those; a delegate may report `"state": "working"` and nothing else. Skip this entirely if no such integration exists. This prevents sub-agents from overwriting the coordinator's dashboard status and falsely signaling task completion.
 
 <!--
 duvet= docs/specs/fx-dev-authority/index.md#the-dev-coordinator-delegates-implementation-writes
@@ -71,7 +82,7 @@ duvet# During an explicitly invoked `dev` lifecycle, the coordinator MUST delega
 - ❌ NEVER author repository implementation code or documentation yourself
 - ❌ NEVER create implementation commits yourself
 - ❌ NEVER skip tests (`test.skip`, `it.skip`, `describe.skip` are FORBIDDEN)
-- ❌ NEVER use `subagent_type` for skills — use `Skill tool` inside the sub-agent
+- ❌ NEVER select a skill as an agent type — the delegate loads it from its prompt (in Claude Code: not via `subagent_type`)
 - ✅ ALWAYS delegate requirements analysis, planning, implementation, and independent review roles
 - ✅ ALWAYS instruct delegated role agents to load their named skills via the Skill tool
 - ✅ ALWAYS perform straightforward status checks, branch synchronization, PR metadata updates, and an explicitly approved merge directly when delegation adds no independent judgment
