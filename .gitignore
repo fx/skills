@@ -5,3 +5,7 @@
 
 node_modules/
 .DS_Store
+
+# Scratch space the review and coordination skills write into while they run —
+# waiter logs, worktree state. Never part of a change.
+.claude/team/
