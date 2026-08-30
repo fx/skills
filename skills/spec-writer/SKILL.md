@@ -261,7 +261,7 @@ The gate is defined at the **repository root**, so the check MUST resolve the ro
 
 If `.duvet/` exists, **every rule in "Duvet Mode — Requirements Traceability" above applies for the rest of this run** — REQ IDs for newly created requirements only, one self-contained statement per requirement section, RFC 2119 keywords confined to requirement sections, the extraction check, and the registration and snapshot items you REPORT rather than apply. Record this in your working notes so it is not forgotten by Phase 6.
 
-If it does not exist, proceed normally and do not raise duvet at all. Adopting duvet is `setup`'s and `upgrade-instructions`'s decision to offer — both entry points do — not this skill's.
+If it does not exist, proceed normally and do not raise duvet at all. Adopting duvet is `setup`'s and `fx-upgrade`'s decision to offer — both entry points do — not this skill's.
 
 ---
 

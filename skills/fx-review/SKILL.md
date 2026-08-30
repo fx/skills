@@ -1,9 +1,9 @@
 ---
-name: review-rules
+name: fx-review
 description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Provides the canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows."
 ---
 
-# Review
+# Review — Shared Reviewer Procedure
 
 > **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
@@ -195,7 +195,7 @@ the only thing that stops the false positive recurring, and its commit is expect
 
 - **Never** create or edit `.github/copilot-instructions.md`. It is obsolete.
 - If `REVIEW.md` does not exist, create just that file, with a `# PR Review`
-  heading and the rule under it. **Do not run `setup` or `upgrade-instructions`
+  heading and the rule under it. **Do not run `setup` or `fx-upgrade`
   from a review** — they scaffold `docs/`, `AGENTS.md` and `.coderabbit.yaml`, and
   burying one review rule in a large unrelated diff is not an acceptable change.
   Mention that `/setup` completes the layout later.
@@ -306,7 +306,7 @@ prompt.** It cannot follow a link, so it needs the rules inlined — the one cas
 Codex adapter sends this text rather than writing its own.
 
 (Copilot and the CodeRabbit GitHub App accept no prompt at all, so the brief
-reaches them only at triage — see `review-rules` Step 8.)
+reaches them only at triage — see `fx-review` Step 8.)
 
 > **This block is a MIRROR** of `[SKILLS_DIR]/dev/references/scope-contract.md`
 > § Blocking, § Reporting a class, and § Three things that are not findings. Keep

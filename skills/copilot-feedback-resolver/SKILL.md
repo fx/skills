@@ -9,13 +9,13 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
 
-**⛔ Load `review-rules` first** (Skill tool: `skill="review-rules"`). It is the
+**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure. This skill is the **Copilot thread adapter**: the
 GraphQL calls that fetch, reply to and resolve Copilot's review threads, and the
 category table that maps a Copilot comment onto a disposition. Where the two
-appear to disagree, `review-rules` wins.
+appear to disagree, `fx-review` wins.
 
-From `review-rules`, and not restated here:
+From `fx-review`, and not restated here:
 
 - **Step 1** — the Scope Brief. If a coordinator handed you one, it is binding. If
   this skill was invoked directly, reconstruct one before you can run the scope
@@ -104,12 +104,12 @@ query {
 
 ### 2. Categorize Each Comment
 
-Triage per `review-rules` Steps 2–3. This table is the Copilot-specific mapping
+Triage per `fx-review` Steps 2–3. This table is the Copilot-specific mapping
 from what a comment looks like onto the disposition that triage produces — it is
 not a shortcut around the filters.
 
 **A coordinator's disposition wins over this table**, which classifies from
-comment text alone (`review-rules` Step 5). Use the table only for threads it did
+comment text alone (`fx-review` Step 5). Use the table only for threads it did
 not cover, and for a standalone run.
 | Category | Indicator | Action |
 |----------|-----------|--------|
@@ -162,7 +162,7 @@ mutation {
 `gh pr comment`, or any interaction with a human reviewer's thread.
 
 Every disposition ends with a reply and a resolve; what differs is only the reply
-and whether anything was changed (`review-rules` Step 5). Phrasing that works:
+and whether anything was changed (`fx-review` Step 5). Phrasing that works:
 
 - **Nitpick / immaterial** — what the observation is, and why it is below the bar.
   The reply is required, not an optional acknowledgment: a silently closed thread
@@ -171,7 +171,7 @@ and whether anything was changed (`review-rules` Step 5). Phrasing that works:
   issue is no longer applicable."
 - **Incorrect** — "This conflicts with our [convention name] convention. [Brief
   explanation]. Documented in REVIEW.md so future reviews pick it up." The
-  `REVIEW.md` entry is required work (`review-rules` Step 6), and Copilot reads
+  `REVIEW.md` entry is required work (`fx-review` Step 6), and Copilot reads
   that file from the head branch, so it takes effect on this PR's next review.
 - **Blocking** — delegate to a coder sub-agent with the PR number and title, the
   file and line, the comment text, and the thread ID for resolution after the fix.

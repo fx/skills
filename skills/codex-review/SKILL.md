@@ -9,11 +9,11 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
 
-**⛔ Load `review-rules` first** (Skill tool: `skill="review-rules"`). It is the
+**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure — carrying the Scope Brief, triaging in filter order,
 sweeping a class, converging, reporting. This skill is the **Codex adapter**: how
 to drive the `codex` CLI, and nothing else. Where the two appear to disagree,
-`review-rules` wins.
+`fx-review` wins.
 
 Codex is a **local, one-shot** reviewer against the current branch, and it is the
 **only** local reviewer in this SDLC. Run it during pre-PR self-review, after
@@ -34,11 +34,11 @@ Before the first run in a repo:
 ```bash
 grep -q "## Code Review Rules" AGENTS.md 2>/dev/null \
   && echo "Codex pointer present" \
-  || echo "MISSING - run setup (new repo) or upgrade-instructions (legacy layout)"
+  || echo "MISSING - run setup (new repo) or fx-upgrade (legacy layout)"
 ```
 
 If it is missing, **report it and continue reviewing on defaults** — do NOT run
-`setup` or `upgrade-instructions` from here (`review-rules` Step 6 explains
+`setup` or `fx-upgrade` from here (`fx-review` Step 6 explains
 why). Tell the user to run it separately.
 
 If Codex flags something `REVIEW.md` explicitly permits, the pointer is not
@@ -47,7 +47,7 @@ landing — say so rather than silently applying the finding.
 ## The prompt IS the Scope Brief
 
 `codex review` takes a prompt, so unlike Copilot or the CodeRabbit App, Codex can
-receive the brief directly. Build it per `review-rules` Step 1 and pass it as the
+receive the brief directly. Build it per `fx-review` Step 1 and pass it as the
 prompt, in this order:
 
 1. **Verbatim user request** — the user's own words, quoted, not paraphrased.
@@ -58,7 +58,7 @@ prompt, in this order:
 4. **IN SCOPE** — the dimensions worth reviewing for this deliverable.
 5. **Established facts** — anything verified this session, so Codex does not
    relitigate it.
-6. **`review-rules` § The external-reviewer block, verbatim** — Part 2 (the bar)
+6. **`fx-review` § The external-reviewer block, verbatim** — Part 2 (the bar)
    on pass 1 as well as every re-run; Part 1 (the convergence prefix) on top of
    it from pass 2 only.
 
@@ -82,7 +82,7 @@ IN SCOPE — review for:
 Established this session and not to be relitigated:
 - <verified fact>
 
-<review-rules § The external-reviewer block, Part 2 — verbatim, on pass 1 too.
+<fx-review § The external-reviewer block, Part 2 — verbatim, on pass 1 too.
  On a re-run, Part 1 goes above this.>
 PROMPT
 ```
@@ -262,7 +262,7 @@ moment the models change.
 
 ## The BLOCKING block — carried in every prompt
 
-Send **`review-rules` § The external-reviewer block, verbatim**, as the last part
+Send **`fx-review` § The external-reviewer block, verbatim**, as the last part
 of every prompt — the first pass as well as every re-run. That block is the single
 mirror both external reviewers use; this skill does not keep its own copy, and
 must not paraphrase it.
@@ -275,7 +275,7 @@ asks the reviewer to honour a list of prior findings that does not exist.
 
 ## Codex-specific triage notes
 
-Everything general is in `review-rules` Steps 2–5. Two things are peculiar to a
+Everything general is in `fx-review` Steps 2–5. Two things are peculiar to a
 local run:
 
 - **There are no threads to resolve.** Resolution here means the code is fixed, or

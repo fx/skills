@@ -1,7 +1,7 @@
 # Duvet Adoption
 
 **This file is the single owner of the duvet adoption procedure.** `setup`
-and `upgrade-instructions` each offer adoption and defer here for every detail. Neither
+and `fx-upgrade` each offer adoption and defer here for every detail. Neither
 skill restates the steps, and nothing else in this catalog may describe how to adopt
 duvet — a second copy is a second thing to drift.
 
@@ -619,7 +619,7 @@ precisely which files were written and which were not, so the user can either
 finish or revert with `git status` in hand.
 
 **Do not commit.** Leave every file in the working tree for the user to review,
-the same way `upgrade-instructions` leaves its migrations.
+the same way `fx-upgrade` leaves its migrations.
 
 ## The half-adoption hazard — say this out loud
 
@@ -687,5 +687,5 @@ Tracked here deliberately rather than improvised mid-adoption:
   fix needs a persisted signal, and every candidate — a `.duvet-declined` marker,
   a key in `.coderabbit.yaml`, a new config file for this catalog — is either a file
   `setup` may not invent unattended or a schema shared with other skills.
-  It needs designing across `setup`, `upgrade-instructions`, and
+  It needs designing across `setup`, `fx-upgrade`, and
   `spec-writer` at once. Until then the honest description above stands.

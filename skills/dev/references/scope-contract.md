@@ -2,7 +2,7 @@
 
 Canonical definition of the **Scope Brief**, the **materiality bar**, and the **sprawl stop rule**. All three are mandatory across the workflow and review skills in this catalog.
 
-This document holds the **definitions**. The **procedure** that applies them — how a reviewer carries the brief, triages, sweeps a class, converges and reports — is the `review-rules` skill, which every reviewer and feedback resolver loads first. Neither restates the other.
+This document holds the **definitions**. The **procedure** that applies them — how a reviewer carries the brief, triages, sweeps a class, converges and reports — is the `fx-review` skill, which every reviewer and feedback resolver loads first. Neither restates the other.
 
 Three failures motivate this document:
 
@@ -47,7 +47,7 @@ Build it **once**, as early as possible — the first skill to act on a user req
 
 ## Injecting the brief into reviews
 
-**Every review invocation MUST carry the Scope Brief.** This applies to `review-rules` and every adapter over it — `codex-review`, `coderabbit-review`, `copilot-review`, `pr-reviewer`, `resolve-pr-feedback` and the two feedback resolvers — as well as `/code-review`, `/simplify`, and any sub-agent asked to evaluate work.
+**Every review invocation MUST carry the Scope Brief.** This applies to `fx-review` and every adapter over it — `codex-review`, `coderabbit-review`, `copilot-review`, `pr-reviewer`, `resolve-pr-feedback` and the two feedback resolvers — as well as `/code-review`, `/simplify`, and any sub-agent asked to evaluate work.
 
 - **Skills that accept arguments** — pass the brief as the argument.
 - **CLI reviewers that accept a prompt** — pass an OUT OF SCOPE / IN SCOPE prompt built from the brief.

@@ -85,7 +85,7 @@ PROMPT_SRC="${1:-}"
 if [[ -z "$PROMPT_SRC" ]]; then
     echo "Usage: $0 <SCOPE_PROMPT_FILE>|-" >&2
     echo "" >&2
-    echo "The scope prompt is MANDATORY. Build it per review-rules Step 1." >&2
+    echo "The scope prompt is MANDATORY. Build it per fx-review Step 1." >&2
     echo "A Codex run without one is an incomplete pass — rerun it with a prompt" >&2
     echo "rather than filtering its output by hand." >&2
     exit 3
@@ -115,13 +115,13 @@ fi
 # ── Project-conventions bridge ───────────────────────────────────────────────
 # Codex reads AGENTS.md. It does NOT read REVIEW.md or CLAUDE.md — it is the one
 # reviewer that needs a pointer. Report a missing bridge and continue on defaults;
-# do NOT run setup or upgrade-instructions from here.
+# do NOT run setup or fx-upgrade from here.
 if grep -q "## Code Review Rules" AGENTS.md 2>/dev/null; then
     echo "AGENTS.md -> REVIEW.md pointer: present"
 else
     echo "WARNING: no '## Code Review Rules' section in AGENTS.md."
     echo "         Codex cannot see REVIEW.md, so it will review on defaults."
-    echo "         Fix separately with setup (new repo) or upgrade-instructions"
+    echo "         Fix separately with setup (new repo) or fx-upgrade"
     echo "         (legacy layout) — not from this review."
     echo "         If Codex flags something REVIEW.md explicitly permits, this is why:"
     echo "         say so rather than silently applying the finding."

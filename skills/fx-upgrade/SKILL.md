@@ -1,9 +1,9 @@
 ---
-name: upgrade-instructions
+name: fx-upgrade
 description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Migrates repository instruction files to the current conventions after explicit request and confirmation."
 ---
 
-# Upgrade
+# Upgrade Instruction Files
 
 Migrates a repository to the **current** these conventions. Unlike `setup`,
 this skill is **intentionally intrusive**: it moves content between files,
@@ -13,7 +13,7 @@ rewrites files in place, resolves symlinks, and deletes obsolete paths.
 
 The two skills split along one line: **who is allowed to destroy something.**
 
-| | `setup` | `upgrade-instructions` |
+| | `setup` | `fx-upgrade` |
 |---|---|---|
 | Invocation | **Automatic**, on every `/spec-writer` and `/project-management` call | **Explicit only** — a human or a skill asks for it by name |
 | May create missing files | yes | yes (via setup) |
@@ -22,10 +22,10 @@ The two skills split along one line: **who is allowed to destroy something.**
 | On finding a legacy layout | reports it and stops | migrates it |
 
 `setup` runs unattended dozens of times a day, so it must never make a change a
-user would want to review. `upgrade-instructions` runs when asked, once, and every change it
+user would want to review. `fx-upgrade` runs when asked, once, and every change it
 makes is reviewable in `git diff`.
 
-**Never invoke `upgrade-instructions` automatically from another skill.** If a skill detects
+**Never invoke `fx-upgrade` automatically from another skill.** If a skill detects
 a legacy layout, it reports and recommends — it does not migrate.
 
 ## When to Use
@@ -40,7 +40,7 @@ a legacy layout, it reports and recommends — it does not migrate.
 ## Migration Registry
 
 Each migration is independent, self-detecting, and idempotent — running
-`upgrade-instructions` on an already-current repo finds no migration to apply and changes
+`fx-upgrade` on an already-current repo finds no migration to apply and changes
 nothing here. Add new migrations here as conventions change.
 
 The duvet offer (Step 6) is **not** a migration and is not in this registry: it

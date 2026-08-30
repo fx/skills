@@ -19,7 +19,7 @@ This skill scaffolds the `docs/` folder structure required for spec-driven devel
 | Report a legacy layout it found | Merge two files together |
 | | Resolve or delete a symlink |
 
-When it finds anything needing those — a `CLAUDE.md` full of conventions, an obsolete `.github/copilot-instructions.md`, a symlinked canonical file — it **reports and defers to `upgrade-instructions`**. It does not act.
+When it finds anything needing those — a `CLAUDE.md` full of conventions, an obsolete `.github/copilot-instructions.md`, a symlinked canonical file — it **reports and defers to `fx-upgrade`**. It does not act.
 
 **Read `references/instruction-files.md` before touching any instruction file.** It defines the canonical layout and which tool reads which file. Do not invent alternative file names or locations.
 
@@ -126,7 +126,7 @@ Only if it doesn't exist. **Use these exact column names — table schema is str
 
 ### Step 5.5: Legacy-Layout Detection (DETECT ONLY — never migrate)
 
-**setup creates defaults. It never moves, merges, overwrites, or deletes anything.** It runs automatically on every `/spec-writer` and `/project-management` invocation, so it must never make a change a user would want to review first. Migration is `upgrade-instructions`'s job.
+**setup creates defaults. It never moves, merges, overwrites, or deletes anything.** It runs automatically on every `/spec-writer` and `/project-management` invocation, so it must never make a change a user would want to review first. Migration is `fx-upgrade`'s job.
 
 ```bash
 # -e follows symlinks, so a DANGLING link reads as absent. Always pair it with -L.
@@ -194,7 +194,7 @@ Steps not listed still run — a legacy `CLAUDE.md` does not stop `docs/` from b
 Legacy instruction-file layout detected:
   - <the specific findings>
 
-setup does not migrate — run /upgrade-instructions to move this content
+setup does not migrate — run /fx-upgrade to move this content
 into AGENTS.md / REVIEW.md. Skipped: <steps not run>.
 ```
 
@@ -212,7 +212,7 @@ The dangerous case is `AGENTS.md` missing while `CLAUDE.md` holds real conventio
 
 - **`AGENTS.md` exists** → go to 6.2.
 - **`AGENTS.md` missing, and no `CLAUDE.md` with content** → create it containing only the block from 6.3.
-- **`AGENTS.md` missing, but `CLAUDE.md` has content** → **stop.** This needs `/upgrade-instructions`. Creating a stub here would split conventions across two files.
+- **`AGENTS.md` missing, but `CLAUDE.md` has content** → **stop.** This needs `/fx-upgrade`. Creating a stub here would split conventions across two files.
 
 #### 6.2 Check for CURRENT language
 
@@ -224,14 +224,14 @@ Search `AGENTS.md` for the exact string `/project-management`. This is the only 
   grep -nEi 'PROJECT\.md|- \[x\]|mark.*(done|complete)|tasks?.*(in|under|go).*docs/specs' AGENTS.md
   ```
 
-  Any hit means the file carries both the current rule and a conflicting older one. **Do not remove it** — report it as a legacy finding recommending `/upgrade-instructions` (M1.6), then continue to Step 7.
+  Any hit means the file carries both the current rule and a conflicting older one. **Do not remove it** — report it as a legacy finding recommending `/fx-upgrade` (M1.6), then continue to Step 7.
 - **If NOT found** → missing. Proceed to 6.3.
 
 #### 6.3 Handle stale or missing language
 
 **Append** the block below to the end of `AGENTS.md`. That is the only write setup makes to this file.
 
-**If stale task-tracking language exists** (anything referencing `PROJECT.md`, `docs/specs/` for tasks, `- [x]`, `mark.*done`, or task-tracking rules that don't mention `/project-management`) → **do not remove it.** Append the new block anyway so the current rule is present, and report the stale section so the user can run `/upgrade-instructions` to clear it. Deleting a section from someone's file is not setup's call.
+**If stale task-tracking language exists** (anything referencing `PROJECT.md`, `docs/specs/` for tasks, `- [x]`, `mark.*done`, or task-tracking rules that don't mention `/project-management`) → **do not remove it.** Append the new block anyway so the current rule is present, and report the stale section so the user can run `/fx-upgrade` to clear it. Deleting a section from someone's file is not setup's call.
 
 **The EXACT block to insert (do NOT add to, modify, or expand this):**
 
@@ -263,7 +263,7 @@ Otherwise `CLAUDE.md` is a plain in-repo file or absent:
 
 - **If `CLAUDE.md` does not exist** → create it with the block below.
 - **If `CLAUDE.md` already contains `@AGENTS.md`** → current, skip to Step 8.
-- **If `CLAUDE.md` exists with other content** → Step 5.5 already flagged this as legacy. **Do not modify it** — run `/upgrade-instructions`.
+- **If `CLAUDE.md` exists with other content** → Step 5.5 already flagged this as legacy. **Do not modify it** — run `/fx-upgrade`.
 
 **The EXACT block for a fresh `CLAUDE.md`:**
 
@@ -281,11 +281,11 @@ That single line is the whole file. Claude Code expands the import at load time,
 
 #### 8.1 Preconditions
 
-**If `legacy_review=1`, skip 8.1 and 8.2** — `REVIEW.md` needs a merge, which is `/upgrade-instructions`'s job. Step 8.3 is gated separately on `legacy_agents`.
+**If `legacy_review=1`, skip 8.1 and 8.2** — `REVIEW.md` needs a merge, which is `/fx-upgrade`'s job. Step 8.3 is gated separately on `legacy_agents`.
 
 `.github/copilot-instructions.md` is obsolete — Copilot reads `REVIEW.md` directly ([changelog, 2026-07-17](https://github.blog/changelog/2026-07-17-copilot-code-review-customization-and-configurability-improvements/)). **Never create one, and never symlink it to `REVIEW.md`.**
 
-If Step 5.5 found one, do not touch it and do not create `REVIEW.md` from it — report and defer to `/upgrade-instructions`, which folds its rules into `REVIEW.md`.
+If Step 5.5 found one, do not touch it and do not create `REVIEW.md` from it — report and defer to `/fx-upgrade`, which folds its rules into `REVIEW.md`.
 
 ```bash
 test -f REVIEW.md && echo "REVIEW.md exists" || echo "REVIEW.md missing — will create"
@@ -296,7 +296,7 @@ test -f REVIEW.md && echo "REVIEW.md exists" || echo "REVIEW.md missing — will
 Search `REVIEW.md` for the exact string `docs/changes/`.
 
 - **If `docs/changes/` is found** → current. Skip to 8.3.
-- **If NOT found** → prepend the block below at the TOP, followed by `---` and a blank line. This is additive; **remove nothing.** If a stale section references `PROJECT.md` or `docs/specs/` for tasks, report it for `/upgrade-instructions` rather than deleting it.
+- **If NOT found** → prepend the block below at the TOP, followed by `---` and a blank line. This is additive; **remove nothing.** If a stale section references `PROJECT.md` or `docs/specs/` for tasks, report it for `/fx-upgrade` rather than deleting it.
 
 **If `REVIEW.md` does not exist at all**, create it with exactly this block.
 
@@ -324,7 +324,7 @@ Feedback resolvers add convention rules to `REVIEW.md` later — setup only seed
 
 **Skip this step if `legacy_agents=1` OR `REVIEW.md` does not exist** (which includes `legacy_review=1`, since that blocks Step 8 from creating it). The pointer's whole content is "read `REVIEW.md`" — writing it while that file is absent hands Codex a dangling instruction, and unattended setup would leave it there until someone runs upgrade.
 
-It writes `AGENTS.md`, and appending here when `AGENTS.md` does not yet exist would create a stub holding only review rules while the project's real conventions sit in `CLAUDE.md` — every non-Claude agent would then read that stub as the whole truth. Report it instead; `/upgrade-instructions` adds this pointer as M1.4, after the content is moved.
+It writes `AGENTS.md`, and appending here when `AGENTS.md` does not yet exist would create a stub holding only review rules while the project's real conventions sit in `CLAUDE.md` — every non-Claude agent would then read that stub as the whole truth. Report it instead; `/fx-upgrade` adds this pointer as M1.4, after the content is moved.
 
 Codex reads only `AGENTS.md` — never `REVIEW.md`. Its convention is a `## Code Review Rules` section, so `AGENTS.md` needs a pointer.
 
@@ -348,7 +348,7 @@ This is the one review-related section allowed in `AGENTS.md`, and it is a point
 CodeRabbit's default `filePatterns` cover `**/AGENTS.md` and `**/CLAUDE.md` but **not** `**/REVIEW.md`. **This step is mandatory** — it is the only thing that gets the review conventions to CodeRabbit.
 
 - **No `.coderabbit.yaml`** → create it with the config below.
-- **Exists with `knowledge_base.code_guidelines.enabled: false`** → **do not change it.** Someone disabled this deliberately, and setup runs unattended during unrelated spec and task work — silently opting the project back into CodeRabbit guidelines is exactly the kind of change that needs a human. Report it and defer to `/upgrade-instructions`.
+- **Exists with `knowledge_base.code_guidelines.enabled: false`** → **do not change it.** Someone disabled this deliberately, and setup runs unattended during unrelated spec and task work — silently opting the project back into CodeRabbit guidelines is exactly the kind of change that needs a human. Report it and defer to `/fx-upgrade`.
 - **Exists with `enabled` true or absent** → add `"**/REVIEW.md"` to `filePatterns` if missing. Custom patterns append to the defaults; they do not replace them. This is additive, so it stays within setup's contract.
 
 ```yaml
@@ -416,12 +416,12 @@ If everything in `docs/` and the instruction files was already current **and Ste
 
 **That short-circuit is forbidden whenever Step 9.5 adopted duvet.** An already-current repo is the common case — setup runs on every `/spec-writer` and `/project-management` call, so `docs/` will usually need no changes — which is exactly when "no changes needed" would print verbatim over an adoption that just created `.duvet/config.toml`, `.duvet/snapshot.txt`, a `.gitignore` edit, a mise edit, and a CI workflow. Five new files reported as zero changes is the worst possible report: the user has no idea there is anything to review. Check what Step 9.5 did before choosing which report to emit.
 
-If Step 5.5 found a legacy layout, always end the report with the specific findings and `Run /upgrade-instructions to migrate.` Never report success over a skipped file.
+If Step 5.5 found a legacy layout, always end the report with the specific findings and `Run /fx-upgrade to migrate.` Never report success over a skipped file.
 
 ## Rules
 
 - **Never overwrite** existing files — only create what's missing
-- **Never migrate** — no moves, merges, deletions, or symlink resolution. Detect and defer to `/upgrade-instructions`
+- **Never migrate** — no moves, merges, deletions, or symlink resolution. Detect and defer to `/fx-upgrade`
 - **Never flip an existing config value** — an explicit `enabled: false` is someone's decision. Adding a missing key is creation; changing a set one is not
 - **Never delete convention content** — setup deletes nothing, ever
 - **Duvet is offered, never assumed** — if `.duvet/` is absent, ask once per session (Step 9.5); if it exists, stay silent. Once adopted the offer never returns; a decline is not persisted, so it returns next session. The procedure lives only in `references/duvet-adoption.md`
@@ -429,7 +429,7 @@ If Step 5.5 found a legacy layout, always end the report with the specific findi
 - **Keep it minimal** — bare templates, not example content
 - **Idempotent** — safe to run multiple times; repeated runs MUST NOT duplicate content
 - **Exact marker checks** — AGENTS.md checks for `/project-management`, REVIEW.md checks for `docs/changes/`, CLAUDE.md checks for `@AGENTS.md`
-- **Report stale language, do not replace it** — if old-style references exist (`PROJECT.md`, `docs/specs/` for tasks), append the current block and report the stale section for `/upgrade-instructions`
+- **Report stale language, do not replace it** — if old-style references exist (`PROJECT.md`, `docs/specs/` for tasks), append the current block and report the stale section for `/fx-upgrade`
 - **Insert ONLY the exact blocks specified** — do NOT expand, embellish, or add detail to the AGENTS.md, REVIEW.md, or CLAUDE.md content. The blocks above are the complete content. Adding anything extra violates the design
 - **Prepend for REVIEW.md** — review rules go at the TOP so they're seen first
 - **Append for AGENTS.md** — task tracking section is appended to not disrupt existing structure

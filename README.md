@@ -11,7 +11,7 @@ Installable into Claude Code, Codex, Cursor, OpenCode, and 70+ other agents via 
 npx skills add fx/skills --skill '*' -g
 
 # Just the lifecycle
-npx skills add fx/skills --skill dev --skill coder --skill planner --skill review-rules
+npx skills add fx/skills --skill dev --skill coder --skill planner --skill fx-review
 
 # List first
 npx skills add fx/skills --list
@@ -30,7 +30,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `requirements-analyzer` | Analyzes supplied implementation requirements, repository context, and acceptance criteria. |
 | `planner` | Creates a detailed implementation plan from supplied requirements and scope. |
 | `coder` | Implements code changes while following the supplied scope and project conventions; PR creation remains a separate lifecycle stage. |
-| `review-rules` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows. |
+| `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows. |
 | `pr-reviewer` | Reviews code or a pull request under the shared Scope Brief and materiality rules. |
 | `codex-review` | Runs a scoped one-shot Codex CLI branch review as an external review adapter. |
 | `copilot-review` | Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review. |
@@ -48,7 +48,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `project-management` | Manages project tracking through `docs/tasks.md`, `docs/changes/`, or an explicitly selected external tracker. |
 | `spec-writer` | Writes and maintains living specs and proposed change documents within an explicitly requested documentation lifecycle. |
 | `setup` | Creates the default docs and instruction-file layout as a prerequisite of an explicitly invoked documentation workflow. |
-| `upgrade-instructions` | Migrates repository instruction files to the current conventions after explicit request and confirmation. |
+| `fx-upgrade` | Migrates repository instruction files to the current conventions after explicit request and confirmation. |
 | `verify-web-change` | Verifies specified web changes using the real application and Playwright. |
 | `upstream-contrib` | Runs the explicitly requested workflow for contributing consumer changes upstream to `fx/ui`. |
 | `tech-scout` | Researches and recommends technologies or libraries when explicitly requested by name. |
@@ -70,9 +70,9 @@ For sibling scripts to resolve, install the skills that reference each other int
 
 ## Naming
 
-Skills install flat: `skills/<name>/` becomes `<agent>/skills/<name>/`, and the directory name is what you invoke. There is no namespace, so names are checked against host-agent built-ins before being used here — see `AGENTS.md`.
+Skills install flat: `skills/<name>/` becomes `<agent>/skills/<name>/`, and the directory name is what you invoke. There is no namespace, so a name matching a host agent's built-in silently shadows it.
 
-Two skills are named around that constraint: `review-rules` (Claude Code reserves `review`) and `upgrade-instructions` (Claude Code reserves `upgrade`).
+Names here are therefore **bare by default, `fx-`-prefixed only on a collision.** Two currently need it — `fx-review` (Claude Code reserves `review`) and `fx-upgrade` (reserves `upgrade`). Everything else keeps its plain name. `AGENTS.md` has the avoid-list and the check.
 
 ## Requirements
 

@@ -93,7 +93,7 @@ Patterns are **case-sensitive**: `review.md` does not match `**/REVIEW.md`.
 
 ## Migration from a pre-existing repo
 
-**`upgrade-instructions` performs this migration** — it is intentionally intrusive and asks for confirmation first. `setup` only creates what is missing and will refuse to touch a legacy layout. The table below is what upgrade applies.
+**`fx-upgrade` performs this migration** — it is intentionally intrusive and asks for confirmation first. `setup` only creates what is missing and will refuse to touch a legacy layout. The table below is what upgrade applies.
 
 | Found | Do |
 |-------|-----|

@@ -27,9 +27,13 @@ Flat only. The [`skills`](https://github.com/vercel-labs/skills) CLI supports ca
 
 Format: `[a-z0-9-]+`, 1–64 chars, no leading/trailing hyphen, no `--`. That satisfies the spec, Codex (≤64 chars), and Pi (which warns but still loads on violation).
 
+**Names are bare by default.** `dev`, `coder`, `planner`, `github` — no vanity prefix, because the prefix costs a keystroke on every invocation and buys nothing when the name is already distinctive.
+
+**Prefix `fx-` only on a collision with a host agent's built-in.** That is the entire rule: `review` → `fx-review`, `upgrade` → `fx-upgrade`. Do not prefix a name that is merely generic-sounding, and do not rename an existing bare skill unless a host agent starts reserving its name.
+
 ### Reserved names
 
-Skills install into a flat shared directory, so a name that matches a host agent's built-in **silently shadows it** — no warning, no error, the built-in just stops working. Check any new name before using it.
+Skills install into a flat shared directory, so a name that matches a host agent's built-in **silently shadows it** — no warning, no error, the built-in just stops working. Check any new name before using it, and if it collides, add the `fx-` prefix rather than inventing a descriptive substitute.
 
 **Claude Code** reserves the names of all built-in slash commands and bundled skills, *including when those are disabled in the session*. Overriding is silent (docs: "A skill at any of these levels also overrides a bundled skill with the same name"). Verify against the current [commands reference](https://code.claude.com/docs/en/commands) rather than a stale copy; the list has ~127 entries and grows. Names this catalog specifically avoids: `review`, `upgrade`, `code-review`, `run`, `init`, `verify`, `debug`, `doctor`, `simplify`, `loop`, `schedule`, `security-review`, `plan`, `team-onboarding`, `workflows`, `workflow-authoring`. The directory name `synced` is reserved outright.
 
@@ -94,7 +98,7 @@ This applies to skill bodies, references, scripts, test fixtures, and commit mes
 
 - **Imperative.** "Do X", "Never do Y" — not "you should consider".
 - **Explain non-obvious rules.** A rule whose reason is missing gets relaxed by the next editor who cannot see the failure it prevents.
-- **One source of truth.** Shared review procedure lives in `review-rules`; adapters describe only their own tool's mechanics. A copied rule is a rule that will drift, and the stale copy is reliably the narrower one.
+- **One source of truth.** Shared review procedure lives in `fx-review`; adapters describe only their own tool's mechanics. A copied rule is a rule that will drift, and the stale copy is reliably the narrower one.
 - **Prefer `references/`** over inflating `SKILL.md`. The body is always in context; references are read on demand.
 
 ## Specs and duvet

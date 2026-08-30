@@ -9,11 +9,11 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
 
-**⛔ Load `review-rules` first** (Skill tool: `skill="review-rules"`). It is the
+**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure — carrying the Scope Brief, triaging in filter order,
 sweeping a class, converging, reporting. This skill is the **CodeRabbit adapter**:
 the GitHub App's check and threads, and the rate-limit exception. Where the two
-appear to disagree, `review-rules` wins.
+appear to disagree, `fx-review` wins.
 
 **CodeRabbit is PR-level only, and optional.** It applies when the repo's CodeRabbit
 GitHub App auto-reviews pull requests, which exposes a `CodeRabbit` check. Most
@@ -32,9 +32,9 @@ reason to wait or retry.
 ## How the brief reaches CodeRabbit — it does not
 
 **The GitHub App cannot be addressed**, so the brief is applied **entirely at
-triage** (`review-rules` Steps 1–2). Judge a run on triage coverage, not on how few
+triage** (`fx-review` Steps 1–2). Judge a run on triage coverage, not on how few
 out-of-scope findings it produced — that signal does not exist for a reviewer that
-never saw the brief (`review-rules` Step 8).
+never saw the brief (`fx-review` Step 8).
 
 CodeRabbit's `🟠 Major` / `🟡 Minor` / `🧹 Nitpick` labels are an **input** to
 triage, never a verdict.
@@ -110,7 +110,7 @@ the script fails closed on it. Verify the threads yourself before any merge gate
 
 **The waiter emits a count, not the threads**, and Step 2 hands the resolver a
 disposition per thread — a count cannot be triaged. Fetch the bodies, then run
-`review-rules` Steps 2–3 over them.
+`fx-review` Steps 2–3 over them.
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
@@ -136,7 +136,7 @@ Assign one of `blocking`, `immaterial`, or `deferred` to each thread **that
 carries a finding**. Yours is authoritative — you hold the Scope Brief; the
 resolver does not. A thread whose premise fails gets **no** disposition; list it
 with the reason so the resolver's outdated/incorrect handler takes it
-(`review-rules` Step 3).
+(`fx-review` Step 3).
 
 ## Step 2: Hand it to the resolver
 
@@ -154,7 +154,7 @@ rejected to the outdated/incorrect path instead of a re-triage that loses the
 ## Step 3: Loop until settled
 
 CodeRabbit re-reviews after every push, so once Step 2 pushes fixes the check goes
-pending again — go back to Step 1. Per `review-rules` Step 7, repeat Steps
+pending again — go back to Step 1. Per `fx-review` Step 7, repeat Steps
 1 → 1b → 2 until **all three** hold:
 
 1. The most-recent `CodeRabbit` check is terminal with conclusion `success` (or

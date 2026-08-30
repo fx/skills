@@ -305,8 +305,8 @@ git diff main --stat
 
 **MANDATORY: Run one complete local review matrix before creating the PR.** Run each available pass once in order against the current `HEAD`, record the revision that each channel reviewed, and classify its findings before accepting fixes. If `/simplify` edits directly, retain only changes that satisfy the contract classification and record the resulting revision before starting the next pass.
 
-**Every pass below follows `review-rules`** — the canonical review procedure
-(Skill tool: `skill="review-rules"`), which each reviewer skill loads first. This
+**Every pass below follows `fx-review`** — the canonical review procedure
+(Skill tool: `skill="fx-review"`), which each reviewer skill loads first. This
 step does not restate it. In particular: **every pass MUST receive the Step 2.5
 Scope Brief verbatim**, and a pass run without it is incomplete — rerun it with
 the brief rather than filtering its output.

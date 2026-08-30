@@ -9,14 +9,14 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
 
-**⛔ Load `review-rules` first** (Skill tool: `skill="review-rules"`). It is the
+**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure — carrying the Scope Brief, triaging in filter order,
 reporting a class, converging, reporting the trend. This skill is the **agent
 adapter**: you *are* the reviewer, so there is no CLI or bot to drive. What it
 adds is the project-rule pass every review in this catalog starts from, and the output
-format. Where the two appear to disagree, `review-rules` wins.
+format. Where the two appear to disagree, `fx-review` wins.
 
-Follow `review-rules` Steps 1–4 in full: establish the brief (reconstruct it from
+Follow `fx-review` Steps 1–4 in full: establish the brief (reconstruct it from
 the conversation and PR description if you were not handed one, and say so),
 triage scope → contract → materiality, verify each premise before reporting it,
 and report a class as one finding rather than one per site.
@@ -45,7 +45,7 @@ Two things this skill is responsible for, on top of that procedure:
 
    `AGENTS.md` is how the code should be **written**; `REVIEW.md` is how it should be **reviewed**. When they conflict on a review decision, `REVIEW.md` wins.
 
-   Legacy repos may still keep conventions in `CLAUDE.md` or the obsolete `.github/copilot-instructions.md`. Read those only if the canonical files are missing, and suggest running `upgrade-instructions` to migrate.
+   Legacy repos may still keep conventions in `CLAUDE.md` or the obsolete `.github/copilot-instructions.md`. Read those only if the canonical files are missing, and suggest running `fx-upgrade` to migrate.
 
 2. **Apply project rules as BLOCKING issues.** These files define project-specific requirements that override general best practices. Violations are BLOCKING, not suggestions.
 

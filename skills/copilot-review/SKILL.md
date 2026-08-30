@@ -9,12 +9,12 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
 
-**⛔ Load `review-rules` first** (Skill tool: `skill="review-rules"`). It is the
+**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure — carrying the Scope Brief, triaging in filter order,
 sweeping a class, converging, reporting. This skill is the **Copilot adapter**:
 requesting a review, waiting for one that covers the right commit, and the API
 behaviour that makes both harder than they look. Where the two appear to
-disagree, `review-rules` wins.
+disagree, `fx-review` wins.
 
 Request, wait for, and resolve GitHub Copilot's PR review on a pull request.
 
@@ -40,7 +40,7 @@ read, and it decides whether there is any work to do at all:
 |---|---|
 | **Approval recommended** | **PASS** — provided there are no non-suppressed comments |
 | **Needs a closer look** | **PASS** — provided there are no non-suppressed comments. It is a request for human attention on a large or subtle change, not a finding. Do not treat it as one, do not manufacture work to answer it, and do not loop |
-| **Changes recommended** | **Handle normally** — triage its comments per `review-rules`, fix what blocks, reply-and-resolve the rest |
+| **Changes recommended** | **Handle normally** — triage its comments per `fx-review`, fix what blocks, reply-and-resolve the rest |
 
 "Non-suppressed comments" means review threads Copilot actually opened. Those are
 the findings. A verdict headline on its own is never a finding.
@@ -129,7 +129,7 @@ it.
 
 Copilot accepts no prompt, so scope cannot be injected into its review — it will
 report work that was deliberately not done. Apply the Scope Brief entirely at
-**triage** (`review-rules` Steps 1–2), and reconstruct one if you were not handed
+**triage** (`fx-review` Steps 1–2), and reconstruct one if you were not handed
 it. Copilot's `[nitpick]` prefix is an input to that judgment, never a verdict.
 
 **Two things bite harder here than with any other reviewer:**
@@ -138,11 +138,11 @@ it. Copilot's `[nitpick]` prefix is an input to that judgment, never a verdict.
 (Step 5), so editing for an immaterial finding costs a full wait cycle *and*
 produces a fresh commit for it to comment on. Push fixes for blocking findings;
 reply-and-resolve the rest without a commit. The one exception is the `REVIEW.md`
-entry for a misread convention (`review-rules` Step 6) — required work, and its
+entry for a misread convention (`fx-review` Step 6) — required work, and its
 commit is expected.
 
 **A half-closed class costs a wait cycle per sibling.** The class sweep in
-`review-rules` Step 4 pays for itself more here than anywhere else: closing a
+`fx-review` Step 4 pays for itself more here than anywhere else: closing a
 class halfway spends a full Copilot wait to be told about the other half.
 
 ## When to Use
@@ -168,7 +168,7 @@ Do not budget for Copilot being quick. Observed delivery ranges from **85 s to
 
 ## Arguments
 
-This skill expects a PR number **and the Scope Brief**: `skill='copilot-review', args='<PR_NUMBER> — <Scope Brief verbatim>'`. Copilot cannot be handed the brief itself, but this skill triages its output and dispatches a resolver, and both need it (`review-rules` Step 1). A bare PR number makes the whole chain re-derive the exclusions from the PR description.
+This skill expects a PR number **and the Scope Brief**: `skill='copilot-review', args='<PR_NUMBER> — <Scope Brief verbatim>'`. Copilot cannot be handed the brief itself, but this skill triages its output and dispatches a resolver, and both need it (`fx-review` Step 1). A bare PR number makes the whole chain re-derive the exclusions from the PR description.
 
 ## Workflow
 
@@ -342,7 +342,7 @@ Resolving feedback usually means pushing commits. Those commits are **unreviewed
 
 **If the head SHA changed** since the review in Step 2, go back to **Step 1** —
 nudge, wait (Step 2), read the verdict (Step 2b), resolve. The loop, its bound and
-its escalation triggers are `review-rules` Step 7; every iteration here costs a
+its escalation triggers are `fx-review` Step 7; every iteration here costs a
 full Copilot wait cycle, so fix causes rather than instances.
 
 **If it did not change, do not restart.** Resolving an immaterial thread by reply

@@ -9,11 +9,11 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
 
-**⛔ Load `review-rules` first** (Skill tool: `skill="review-rules"`). It is the
+**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure. This skill is the **coordinator adapter**: it finds
 every unresolved automated finding on a PR, triages it, and dispatches the right
 resolver with the brief and a disposition per thread. Where the two appear to
-disagree, `review-rules` wins.
+disagree, `fx-review` wins.
 
 You are the coordinator here, so three of its steps are specifically yours:
 
@@ -42,7 +42,7 @@ You are the coordinator here, so three of its steps are specifically yours:
 
 ## Parallel resolvers MUST NOT write `REVIEW.md` concurrently
 
-`review-rules` Step 6 states the rule; this is the coordinator's half of it.
+`fx-review` Step 6 states the rule; this is the coordinator's half of it.
 Re-reading before writing is **not** locking — two sub-agents can read the same
 revision and the second write silently discards the first's rule.
 
@@ -241,7 +241,7 @@ After invoking resolver skills, re-query to confirm all threads are resolved AND
 3. Re-run **Step 2's full query** — `id`, `path`, `line` and comment bodies — and re-triage every unresolved thread, including the ones the last cycle's push created. The breakdown query below counts threads by reviewer; it cannot feed step 4, which refuses a resolver invocation without a disposition per thread, and a disposition cannot be assigned to a name and a number. Every iteration repeats the fetch and the triage, not just the first.
 4. If the breakdown array is non-empty, re-invoke the relevant resolver(s) with the dispositions from step 3.
 5. **If fixes were pushed**, restart at step 1 — the push created unreviewed commits. If this cycle produced no push, do not restart: go to step 6 and judge convergence on the review already delivered for this head.
-6. Stop when the loop has **converged** per `review-rules` Step 7 — no blocking
+6. Stop when the loop has **converged** per `fx-review` Step 7 — no blocking
    finding left unresolved, ledger-wide — **and** two PR-level conditions hold
    that the ledger test alone does not cover:
    - the state holds on a head SHA that was **actually reviewed** (verify: the
@@ -254,7 +254,7 @@ After invoking resolver skills, re-query to confirm all threads are resolved AND
 
    Immaterial findings resolved by reply satisfy all of this: they produce no
    push, so they are not "new feedback" owing another cycle. The bound and the
-   escalation triggers are `review-rules` Step 7 and are not restated here.
+   escalation triggers are `fx-review` Step 7 and are not restated here.
 
 **⛔ Zero new threads is not convergence unless a Copilot review has been RECEIVED for the current head SHA.** "Received for the current head" is the *only* condition — do **not** phrase it as "was requested", and do not try to verify that a request happened: `requested_reviewers` is empirically always empty, so whether a review was requested is not a determinable fact (see `copilot-review` **D1**/**D3**). Issue the nudge because it sometimes helps, then judge convergence solely on the delivered review. Absence of feedback is not evidence of quality.
 

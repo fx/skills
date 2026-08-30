@@ -9,13 +9,13 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
 
-**⛔ Load `review-rules` first** (Skill tool: `skill="review-rules"`). It is the
+**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure. This skill is the **CodeRabbit thread adapter**: the
 shape of a CodeRabbit comment, the `.coderabbit.yaml` configuration it needs, the
 GraphQL calls that fetch/reply/resolve, and the category table that maps a comment
-onto a disposition. Where the two appear to disagree, `review-rules` wins.
+onto a disposition. Where the two appear to disagree, `fx-review` wins.
 
-From `review-rules`, and not restated here:
+From `fx-review`, and not restated here:
 
 - **Step 1** — the Scope Brief. A coordinator's is binding; invoked directly,
   reconstruct one before you can run the scope filter at all, and say that you did.
@@ -103,14 +103,14 @@ else
 fi
 ```
 
-If `REVIEW.md` is missing, create it directly — just the file, with a `# PR Review` heading. **Do NOT run `setup` or `upgrade-instructions` from here:** setup also scaffolds `docs/`, `AGENTS.md`, `CLAUDE.md`, and `.coderabbit.yaml`, and this skill pushes to an open PR, so that would bury one review rule in a large unrelated diff. Mention that `/setup` will complete the layout later.
+If `REVIEW.md` is missing, create it directly — just the file, with a `# PR Review` heading. **Do NOT run `setup` or `fx-upgrade` from here:** setup also scaffolds `docs/`, `AGENTS.md`, `CLAUDE.md`, and `.coderabbit.yaml`, and this skill pushes to an open PR, so that would bury one review rule in a large unrelated diff. Mention that `/setup` will complete the layout later.
 
 #### Configuration States
 
 | State | Action |
 |-------|--------|
 | No `.coderabbit.yaml` exists | **Create it** with the config below |
-| Exists, `knowledge_base.code_guidelines.enabled: false` | **Do not flip it.** Someone disabled code guidelines deliberately, and this skill is mid-PR — silently re-enabling it commits an unrelated behavioural change. Report it, note that CodeRabbit will keep reviewing without the project's conventions, and let the user decide (`/upgrade-instructions` handles it with confirmation) |
+| Exists, `knowledge_base.code_guidelines.enabled: false` | **Do not flip it.** Someone disabled code guidelines deliberately, and this skill is mid-PR — silently re-enabling it commits an unrelated behavioural change. Report it, note that CodeRabbit will keep reviewing without the project's conventions, and let the user decide (`/fx-upgrade` handles it with confirmation) |
 | Exists, `enabled: true`, no `**/REVIEW.md` in `filePatterns` | **Add** `"**/REVIEW.md"` — including when `filePatterns` is absent entirely, since the defaults do not cover it |
 | Exists, `enabled: true`, `**/REVIEW.md` already present | No action needed |
 
@@ -177,10 +177,10 @@ query {
 
 ### 2. Categorize Each Comment
 
-Triage per `review-rules` Steps 2–3. This table is the CodeRabbit-specific
+Triage per `fx-review` Steps 2–3. This table is the CodeRabbit-specific
 mapping from what a comment looks like onto the disposition triage produces — not
 a shortcut around the filters. **A coordinator's disposition wins over it**
-(`review-rules` Step 5); use the table for threads it did not cover, and for a
+(`fx-review` Step 5); use the table for threads it did not cover, and for a
 standalone run.
 
 | Category | Indicator | Action |
@@ -195,7 +195,7 @@ standalone run.
 
 **The last two rows take a thread whose premise does not hold** — either one the
 coordinator left undisposed *with a stated reason*, or one you checked yourself
-and rejected (`review-rules` Step 3). A thread with no disposition and no reason
+and rejected (`fx-review` Step 3). A thread with no disposition and no reason
 is **untriaged, not rejected**: run the filters over it, including the premise
 check, rather than reading a bare omission as a rejection — that closes a real
 blocker with a reply and no fix.
@@ -207,7 +207,7 @@ to and resolved with no edit like any other. Check the disposition first.
 ### 3. Process Each Category
 
 Every disposition ends with a reply and a resolve; what differs is the reply and
-whether anything changed (`review-rules` Step 5). Three handlers have CodeRabbit
+whether anything changed (`fx-review` Step 5). Three handlers have CodeRabbit
 mechanics worth spelling out.
 
 #### Actionable with AI Prompt (PREFERRED)
@@ -219,10 +219,10 @@ mechanics worth spelling out.
 2. **Verify the premise before acting.** If it does not hold and the `blocking`
    disposition is the coordinator's, return the thread with the evidence for
    reclassification and leave it open — do not close it on your own reading
-   (`review-rules` Step 3). If you assigned the disposition yourself, the thread
+   (`fx-review` Step 3). If you assigned the disposition yourself, the thread
    is a false positive: route it through the **Outdated** or **Incorrect** row,
    which is a reply *plus*, where a deliberate convention was misread, the
-   `REVIEW.md` entry (`review-rules` Step 6). Replying and resolving without that
+   `REVIEW.md` entry (`fx-review` Step 6). Replying and resolving without that
    entry loses the only thing that stops the finding coming back
 3. Pass the extracted instructions to the coder sub-agent **verbatim**
 4. Resolve the thread once the fix is implemented
