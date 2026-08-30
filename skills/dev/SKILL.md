@@ -8,6 +8,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
+>
+> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
+> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
+> Substitute it; never write a literal `.claude/` path on another host.
 
 This skill defines the **mandatory** workflow for one explicitly invoked `/dev` lifecycle. Follow its steps in order for that lifecycle; do not infer or auto-start it from an ordinary coding request.
 
@@ -633,16 +637,16 @@ Agent tool:
 
 ##### Run every waiter in the background — there is no mode selection
 
-**⛔ Launch each configured reviewer's wait script in the SAME message with `run_in_background: true`, each redirecting to its own log file.** They then run concurrently, and a completion notification wakes you per reviewer. This works identically in every context — root session, `team` coordinator, or sub-agent — so there is nothing to choose and no "can I spawn sub-agents?" branch. **Do not spawn sub-agents for reviewer waits; they buy nothing here.**
+**⛔ Launch each configured reviewer's wait script concurrently, each redirecting to its own log file** — on Claude Code, that is one message with every call `run_in_background: true`, and a completion notification then wakes you per reviewer; on a host without those notifications, hold the handles and collect each script's log when it exits (host-adapters.md, ops 3 and 6). This works identically in every context — root session, `team` coordinator, or sub-agent — so there is nothing to choose and no "can I spawn sub-agents?" branch. **Do not spawn sub-agents for reviewer waits; they buy nothing here.**
 ```bash
 # Both in ONE message, both run_in_background: true
-mkdir -p .claude/team/waits && \
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh [PR_NUMBER] \
-     > .claude/team/waits/copilot-[PR_NUMBER].log 2>&1
+     > [AGENT_DIR]/team/waits/copilot-[PR_NUMBER].log 2>&1
 
-mkdir -p .claude/team/waits && \
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NUMBER] \
-     > .claude/team/waits/rabbit-[PR_NUMBER].log 2>&1
+     > [AGENT_DIR]/team/waits/rabbit-[PR_NUMBER].log 2>&1
 ```
 
 **Never run a waiter in the foreground.** The Bash tool caps a foreground `timeout` at 600 000 ms, which is below every waiter's 900 s budget — a foreground call is guaranteed to be killed mid-poll, printing no STATUS and no exit code, and the caller then re-runs it blindly. Backgrounded processes are not subject to that cap. **Never background one without the redirect**: the cycle is driven by what the script prints.
@@ -688,9 +692,9 @@ transition to manage in this workflow.
 **⛔ Run the bundled CI check script in the BACKGROUND** (`run_in_background: true`), redirecting to a log file, then read that log when the completion notification arrives:
 
 ```bash
-mkdir -p .claude/team/waits && \
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh [PR_NUMBER] \
-     > .claude/team/waits/ci-[PR_NUMBER].log 2>&1
+     > [AGENT_DIR]/team/waits/ci-[PR_NUMBER].log 2>&1
 ```
 
 **Do NOT run it in the foreground.** The Bash tool caps a foreground `timeout` at 600 000 ms, which is below the script's 900 s budget — a foreground call is guaranteed to be killed mid-poll, losing the output entirely. Backgrounded processes are not subject to that cap. **Never background it without the redirect**: the workflow reacts to what the script prints.

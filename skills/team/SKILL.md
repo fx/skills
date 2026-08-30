@@ -8,6 +8,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
+>
+> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
+> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
+> Substitute it; never write a literal `.claude/` path on another host.
 
 <!--
 duvet= docs/specs/fx-dev-authority/index.md#the-team-coordinator-delegates-all-implementation
@@ -105,11 +109,13 @@ Treat any urge to "set up the team" first as a bug in your plan. If your host ha
 **Host notes** — check these against `[SKILLS_DIR]/dev/references/host-adapters.md` for your host before assuming a failure is yours:
 
 - **Claude Code:** the team is implicit and session-scoped, forming on the first `Agent` spawn with the main session permanently the lead. `TeamCreate`/`TeamDelete` no longer exist — calling one, or waiting on it, is a bug, and `team_name` is accepted-but-ignored. Teams are gated behind `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (in `settings.json` `env` or the environment); if teammates never appear when you spawn them, that is almost certainly unset — report it rather than retrying. Config and the shared task list live at `~/.claude/teams/session-<first 8 chars of session id>/` and `~/.claude/tasks/<same>/`, written automatically — never edit or pre-author them.
-- **Codex:** delegates form a tree rather than a flat roster, and concurrency is bounded per session. Read the limit instead of assuming it is unbounded; a spawn that silently queues looks exactly like one that hung.
+- **Codex:** delegates form a tree rather than a flat roster, and concurrency is bounded per session — four slots *including you* on 0.145.0, so three live teammates. A spawn past the limit queues silently and looks exactly like one that hung. Three further facts decide whether a team forms at all, all detailed in the adapter file: spawn with `fork_turns: "none"` or you cannot set a teammate's tier; **`wait_agent` before your turn ends or the run terminates and takes every live teammate with it**; and delegation only happens because a skill explicitly asked for it — the session-level `<multi_agent_mode>` instruction suppresses sub-agents otherwise, which is why this skill says "spawn sub-agents" in those words and why a teammate that should fan out must be told to in its `message`.
 
 ## STEP 2: Create and Organize Tasks
 
 Use `TaskCreate` for every task identified in Step 0. Set up dependencies with `TaskUpdate` (`addBlockedBy`/`addBlocks`) so work proceeds in the correct order.
+
+**Where the host has no shared task list** (Codex has none), keep the same information in the ledger under `[AGENT_DIR]/team/` — one row per task, with its dependencies and state. Do not skip the step and do not invent a tool: the dependency order is what decides which teammates may run in the same wave.
 
 **Task descriptions MUST include:**
 - Exactly what to implement (files, components, endpoints)
@@ -124,23 +130,23 @@ Use `TaskCreate` for every task identified in Step 0. Set up dependencies with `
 
 ### 2.5.1 Create one worktree per concurrent coder
 
-Worktrees **MUST** live under the repo's own `.claude/worktrees/` directory — this matches Claude Code's native worktree convention, keeps them inside the (writable) repo, and survives a read-only parent filesystem. **NEVER** put them in `/tmp`, `$HOME`, or a sibling path outside the repo.
+Worktrees **MUST** live under the repo's own `[AGENT_DIR]/worktrees/` directory — that is Claude Code's native worktree convention and the same shape works on any host, it keeps them inside the (writable) repo, and it survives a read-only parent filesystem. **NEVER** put them in `/tmp`, `$HOME`, or a sibling path outside the repo.
 
 ```bash
 cd <REPO_ROOT>
 git fetch origin --quiet
-mkdir -p .claude/worktrees
+mkdir -p [AGENT_DIR]/worktrees
 # one per coder — name the worktree after the task/change, branch off origin/main
-git worktree add .claude/worktrees/<slug> -b <branch> origin/main
-# e.g. git worktree add .claude/worktrees/0004 -b refactor/0004-unified-config-service origin/main
+git worktree add [AGENT_DIR]/worktrees/<slug> -b <branch> origin/main
+# e.g. git worktree add [AGENT_DIR]/worktrees/0004 -b refactor/0004-unified-config-service origin/main
 ```
 
-**Ensure `.claude/worktrees/` is ignored** before creating any (most projects already ignore `.claude/`, but verify — this one may not). A nested worktree dir otherwise shows up as untracked in the main repo and can get swept into a coder's `git add`. Use the repo-local, **untracked** `.git/info/exclude` so this scaffolding never dirties the coordinator's working tree or risks landing in a feature PR — do NOT append to the tracked `.gitignore`:
+**Ensure `[AGENT_DIR]/worktrees/` is ignored** before creating any (most projects already ignore their agent directory, but verify — this one may not). A nested worktree dir otherwise shows up as untracked in the main repo and can get swept into a coder's `git add`. Use the repo-local, **untracked** `.git/info/exclude` so this scaffolding never dirties the coordinator's working tree or risks landing in a feature PR — do NOT append to the tracked `.gitignore`:
 
 ```bash
-git check-ignore .claude/worktrees/x >/dev/null 2>&1 || \
-  printf '\n# Claude Code team scaffolding (local only)\n.claude/worktrees/\n.claude/team/\n' >> .git/info/exclude
-mkdir -p .claude/team/waits
+git check-ignore [AGENT_DIR]/worktrees/x >/dev/null 2>&1 || \
+  printf '\n# team scaffolding (local only)\n[AGENT_DIR]/worktrees/\n[AGENT_DIR]/team/\n' >> .git/info/exclude
+mkdir -p [AGENT_DIR]/team/waits
 ```
 
 `.git/info/exclude` is never committed, so there is nothing to clean up later and `git status` stays clean.
@@ -148,7 +154,7 @@ mkdir -p .claude/team/waits
 **Symlink `node_modules`** (and any other gitignored, install-only dir the toolchain needs) into each worktree so `vitest`/`biome`/`tsc` resolve — a fresh worktree has no `node_modules`:
 
 ```bash
-ln -s <REPO_ROOT>/node_modules <REPO_ROOT>/.claude/worktrees/<slug>/node_modules
+ln -s <REPO_ROOT>/node_modules <REPO_ROOT>/[AGENT_DIR]/worktrees/<slug>/node_modules
 ```
 
 ### 2.5.2 Smoke-test isolation BEFORE spawning real coders
@@ -187,7 +193,7 @@ For each task (or group of parallel tasks), walk through the dev skill's SDLC st
 
 ### ⛔ ALL Agent spawns MUST pass `name` (BLOCKING)
 
-**Every single `Agent` tool call you make as the team coordinator — coder, verify, fix, anything — MUST pass `name`.** `name` is what makes a teammate addressable via `SendMessage` and visible in the team config's `members[]` array; omitting it produces an effectively anonymous worker you can't message or steer by name, defeating the point of `/team`.
+**Every spawn you make as the team coordinator — coder, verify, fix, anything — MUST carry a handle** (`name` on Claude Code, `task_name` on Codex). The handle is what makes a teammate addressable for a mid-flight correction and identifiable in its own report — on Claude Code it is also what puts it in the team config's `members[]`, and on Codex it becomes the canonical `/root/<task_name>` that `list_agents` and `wait_agent` speak. Omitting it produces an effectively anonymous worker you can't message or steer by name, defeating the point of `/team`.
 
 **Do not try to name or route the team.** Every delegate joins the coordinator's set automatically; there is no roster to address. On Claude Code specifically, the `team_name` input is accepted but ignored (and deprecated in hook payloads) — passing it does nothing, so drop it.
 
@@ -202,9 +208,22 @@ Agent tool:
   run_in_background: true                    # usually
 ```
 
-The `name` should be specific and human-readable so it's useful in logs and `SendMessage` (e.g., `coder-0105A`, `verify-pr-371`, `fix-0106-types`). One-shot generic names like `agent1` are bad.
+That block is Claude Code syntax, shown as an example of the delegate operation (host-adapters.md, op 1). The same spawn on Codex:
 
-Paths under `.claude/team/` in this document are **scratch space** (host-adapters.md, op 7) — coordination artifacts, never part of a change. Substitute your host's equivalent if it is not a Claude Code session.
+```
+spawn_agent:
+  task_name:        "<short-descriptive-handle>"   # ← the handle; becomes /root/<task_name>
+  fork_turns:       "none"                         # ← REQUIRED to set model/effort at all — see below
+  model:            "<per the size table below>"
+  reasoning_effort: "<raise it for judgment-heavy roles>"
+  message:          "..."                          # the ONLY context the child gets under "none"
+```
+
+**On Codex, `fork_turns` is not optional bookkeeping.** Omitting it (or passing `"all"`) makes the child a full-history fork that inherits the coordinator's entire context *and* its model and effort, and the host then **rejects** a `model`/`reasoning_effort` override outright — so the size table below becomes unreachable and every teammate silently runs at the coordinator's tier. Pass `"none"` and put the whole job, including the Scope Brief verbatim, in `message`.
+
+The handle should be specific and human-readable so it's useful in logs and when messaging a teammate (e.g., `coder-0105A`, `verify-pr-371`, `fix-0106-types`). One-shot generic names like `agent1` are bad. **Codex accepts only lowercase letters, digits, and underscores in `task_name`** and rejects the spawn outright otherwise, so spell those handles `coder_0105a`, `verify_pr_371`, `fix_0106_types` there.
+
+Paths under `[AGENT_DIR]/team/` in this document are **scratch space** (host-adapters.md, op 7) — coordination artifacts, never part of a change. `[AGENT_DIR]` is your host's in-repo agent directory, per the Path note above.
 
 **Self-check before EVERY Agent call:** "Did I pass `name`? Did I pick a `model` size?" If either is missing, fix the call before sending it. This rule is non-negotiable.
 
@@ -237,7 +256,7 @@ When you spawn the coder for the FINAL piece of a change, your prompt MUST inclu
 
 **Review and CI steps** (Copilot review, CodeRabbit review, CI monitoring, feedback resolution) → **Handle these DIRECTLY as the coordinator.** These are lightweight skill/command invocations that must not be delegated. **Pass the STEP 0 Scope Brief into every reviewer invocation that accepts one, and apply it when triaging every reviewer that does not** (Copilot and the CodeRabbit GitHub App accept nothing). A finding covered by the brief's out-of-scope list is recorded as deferred with the covering exclusion — never silently fixed, never silently dropped, and never a reason to widen a teammate's PR. Use each reviewer's waiter or read-only inspection first, classify and deduplicate findings under `dev` Step 2.5, then invoke feedback resolvers only for the classified disposition. Never let a resolver implement unclassified feedback or modify task trackers for deferred feedback.
 
-**⛔ NEVER `sleep`, poll, or block waiting for anything.** Every wait — Copilot, CodeRabbit, CI — runs as a **backgrounded** wait script that notifies you on exit. Never run `gh pr checks --watch`, never chain sleeps, and never sit in a foreground wait. See **Waiting and reconciliation** below; this is the single largest source of wasted coordinator turns and it is non-negotiable.
+**⛔ NEVER `sleep` or poll waiting for anything.** Every wait — Copilot, CodeRabbit, CI — runs as a long-running wait script (host-adapters.md, op 6), never in a foreground call and never as a chain of sleeps, and never as `gh pr checks --watch`. How its completion reaches you, and whether waiting on a teammate is forbidden or mandatory, is host-specific — see **Waiting and reconciliation** below before you decide to idle. This is the single largest source of wasted coordinator turns and it is non-negotiable.
 
 **Merge gates** → Always handle directly. See MANDATORY MERGE GATE CHECKLIST below.
 
@@ -245,6 +264,7 @@ When you spawn the coder for the FINAL piece of a change, your prompt MUST inclu
 
 ### Parallelization
 
+- **Size every wave to your host's concurrency limit, and read the limit rather than assuming it.** Codex 0.145.0 gives four slots *including the coordinator* — three live teammates, and a fourth spawn queues silently, which is indistinguishable from a hung one. Claude Code does not publish a fixed number; treat a wave beyond a handful as its own risk.
 - Spawn multiple coder agents simultaneously for independent tasks — but ONLY after giving each its own **pre-created worktree** per STEP 2.5 (the `isolation: "worktree"` flag does NOT work for teammates). Each coder works in its own worktree on its own branch.
 - For dependent tasks, wait until the blocking task's PR is merged before spawning the next coder
 - After merging, repeat for newly-unblocked tasks
@@ -252,17 +272,22 @@ When you spawn the coder for the FINAL piece of a change, your prompt MUST inclu
 
 ### Waiting and reconciliation (NON-NEGOTIABLE)
 
-**⛔ You never `sleep`. You never poll. You never block.** Every wake costs a full read of your entire context, and your context is the largest in the team — a poll loop is the single most expensive thing you can do, and it gets more expensive with every turn you add.
+**⛔ The rule: never burn coordinator turns on a timer.** No `sleep` loops, no `gh pr checks --watch`, no re-reading state every 30 seconds to see whether anything moved. Every wake costs a full read of your entire context, and your context is the largest in the team — a poll loop is the single most expensive thing you can do, and it gets more expensive with every turn you add.
 
-**Everything you wait on is backgrounded and notifies you.** Reviewer waiters, CI waiters, and teammate agents all wake you on completion. That is your only scheduling mechanism.
+**The mechanism that replaces polling is host-specific, and getting it backwards ends the run.** Check `[SKILLS_DIR]/dev/references/host-adapters.md` (op 3) for your host:
+
+- **Claude Code — completion notifies you.** Reviewer waiters, CI waiters, and teammate agents all wake you on exit; that is your only scheduling mechanism, and blocking on one is the bug. Teammates keep running while you are idle.
+- **⛔ Codex — nothing notifies you, and ending your turn kills every live teammate.** A child's `FINAL_ANSWER` is delivered with `trigger_turn: false`: it sits in your context until your *next* turn rather than waking you, and if you stop before it lands, the run terminates and the teammate is interrupted mid-task. So you **must** `wait_agent` on your outstanding teammates before your turn ends — that is not polling, it is the host's blocking primitive, and it costs one turn rather than one per check. Give it a `timeout_ms` measured in minutes; Codex asks for long waits precisely so the primitive does not degrade into busy polling. Use `list_agents` for a status snapshot inside the same turn.
+
+A coordinator that reads the Claude Code line on Codex spawns one teammate, declines to "block", ends its turn, and takes the teammate down with it — which looks exactly like a team that never formed.
 
 #### The ledger
 
-Keep `.claude/team/waits/ledger.json` — one row per tracked teammate and per tracked PR, recording its last known state and what you are waiting on for it. It exists so a wake is a cheap diff instead of a re-derivation of the whole run.
+Keep `[AGENT_DIR]/team/waits/ledger.json` — one row per tracked teammate and per tracked PR, recording its last known state and what you are waiting on for it. It exists so a wake is a cheap diff instead of a re-derivation of the whole run.
 
 #### Reconcile on wake, never on a timer
 
-When **any** notification arrives — a waiter finished, a teammate finished, anything — do **one batched pass**:
+When **any** wake arrives — a notification where the host sends one, or a `wait_agent` returning where it does not — do **one batched pass**:
 
 1. Read the ledger.
 2. Read every log whose waiter has completed since the last pass.
@@ -274,7 +299,7 @@ When **any** notification arrives — a waiter finished, a teammate finished, an
 
 #### The silence backstop
 
-The only case reconcile-on-wake misses is *everything* going quiet at once. Guard it with a single long-interval `ScheduleWakeup` (~30 minutes) — **not** a `sleep`, which holds a turn open.
+The only case reconcile-on-wake misses is *everything* going quiet at once. Guard it with a single long-interval `ScheduleWakeup` (~30 minutes) — **not** a `sleep`, which holds a turn open. This applies only where the host both schedules wakeups and keeps teammates alive across an idle coordinator; on a host where ending the turn ends the run (Codex), there is no idle to guard — the `wait_agent` you are already inside *is* the backstop, so give it a generous `timeout_ms` instead.
 
 Every waiter has its own 900 s budget and always exits, so it will notify you well inside that window. The backstop should essentially never fire. **Do not shorten it**: a short interval is polling at full coordinator context wearing a different hat.
 
@@ -317,7 +342,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 
 > **Codex runs LOCALLY first — and it is the ONLY local reviewer.** Implementing sub-agents run local Codex via the `codex-review` skill during pre-PR self-review, passing the Scope Brief. **Not `codex review --base main`** — that CLI rejects `--base` together with a prompt, so the promptless form cannot carry the brief and reports the work the change deliberately did not do. Prefer it **converged** (`[SKILLS_DIR]/dev/references/scope-contract.md` § Convergence — no blocking finding left unresolved, not zero output). **There is no local CodeRabbit pass; the `cr` CLI is not used.** Gate 2b is the PR-level CodeRabbit review, which applies only when the GitHub App is configured — its waiter reports `STATUS=NOT_CONFIGURED` otherwise, which is terminal and expected for most repos. If CodeRabbit rate-limits, resolve findings already received, record `skipped (rate-limited)`, and continue; never wait for its cooldown.
 
-**As coordinator, YOU handle reviewer waits directly — but you never *block* on them.** Launch every configured reviewer's waiter in ONE message, all backgrounded, each redirecting to its own log. They run concurrently; a completion notification wakes you per reviewer. No sub-agents are involved and there is no execution mode to pick.
+**As coordinator, YOU handle reviewer waits directly, and you never spend turns polling them.** Launch every configured reviewer's waiter concurrently — on Claude Code that means one message with every call backgrounded, each redirecting to its own log, and a completion notification per reviewer; on a host without those notifications, keep the handles and collect them per **Waiting and reconciliation**. No sub-agents are involved and there is no execution mode to pick.
 
 ```
 # ALL in one message, every one run_in_background: true.
@@ -325,12 +350,12 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 # before the waiter ever starts, so you get no STATUS line at all — the one failure
 # the whole protocol exists to prevent. `mkdir -p` is idempotent; never rely on an
 # earlier step having created it.
-Bash: mkdir -p .claude/team/waits && bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> \
-        > .claude/team/waits/copilot-<PR_NUMBER>.log 2>&1
-Bash: mkdir -p .claude/team/waits && bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh <PR_NUMBER> \
-        > .claude/team/waits/rabbit-<PR_NUMBER>.log 2>&1
-Bash: mkdir -p .claude/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> \
-        > .claude/team/waits/ci-<PR_NUMBER>.log 2>&1
+Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> \
+        > [AGENT_DIR]/team/waits/copilot-<PR_NUMBER>.log 2>&1
+Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh <PR_NUMBER> \
+        > [AGENT_DIR]/team/waits/rabbit-<PR_NUMBER>.log 2>&1
+Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> \
+        > [AGENT_DIR]/team/waits/ci-<PR_NUMBER>.log 2>&1
 
 # On each notification: read the log, branch on its STATUS= line, classify
 # findings in the ledger, THEN invoke that reviewer's resolver skill.
@@ -410,8 +435,8 @@ When all tasks are complete and all PRs merged:
 4. **Tear down every worktree created in STEP 2.5.** For each one, in order: remove the `node_modules` symlink first (so `git worktree remove` doesn't traverse into the shared deps), then `git worktree remove --force <path>`, then `git worktree prune`. Delete the branch with `git branch -D <branch>` only if it's unmerged/abandoned (a merged PR's branch is already gone from origin). Confirm `git worktree list` shows only the main repo and `git status` is clean before continuing.
 
    ```bash
-   rm -f <REPO_ROOT>/.claude/worktrees/<slug>/node_modules
-   git worktree remove --force <REPO_ROOT>/.claude/worktrees/<slug>
+   rm -f <REPO_ROOT>/[AGENT_DIR]/worktrees/<slug>/node_modules
+   git worktree remove --force <REPO_ROOT>/[AGENT_DIR]/worktrees/<slug>
    git worktree prune
    git branch -D <branch>   # only if unmerged/abandoned
    ```
@@ -424,7 +449,7 @@ When all tasks are complete and all PRs merged:
 
 - **ALWAYS pass `name` to EVERY `Agent` call** — coder, verify, fix, anything. `name` is what makes the teammate addressable via `SendMessage` and visible in `members[]`; omitting it produces an anonymous worker you can't steer by name. No exceptions.
 - **NEVER provision or tear down a team.** On Claude Code that means never passing `team_name` (accepted-but-ignored) and never calling `TeamCreate`/`TeamDelete` (removed) — the team is implicit, session-scoped, and cleaned up on exit. On any host: there is nothing to create, so an attempt to create it is a bug.
-- **NEVER rely on `isolation: "worktree"` for a teammate** — a teammate runs as a full session in the lead's working directory, so the flag is a no-op. For any coders that run concurrently, pre-create real worktrees under `.claude/worktrees/` and pin each via the prompt preamble (STEP 2.5). If you don't, run coders strictly one-at-a-time. Always tear the worktrees down in STEP 4.
+- **NEVER rely on `isolation: "worktree"` for a teammate** — a teammate runs as a full session in the lead's working directory, so the flag is a no-op. For any coders that run concurrently, pre-create real worktrees under `[AGENT_DIR]/worktrees/` and pin each via the prompt preamble (STEP 2.5). If you don't, run coders strictly one-at-a-time. Always tear the worktrees down in STEP 4.
 - **NEVER write code yourself** — all implementation goes through coder agents
 - **NEVER create branches or commits** — coder agents handle this
 - **NEVER delegate the full SDLC to a single agent** — it inlines everything and skips the later steps. True on every host: the failure is prompt scope, not whether delegates can nest
@@ -432,7 +457,7 @@ When all tasks are complete and all PRs merged:
 - **NEVER merge without completing the MERGE GATE CHECKLIST** — every gate must pass, every time, for every PR
 - **NEVER merge without Copilot review** — always invoke `copilot-review` yourself. No exceptions.
 - **ALWAYS attempt CodeRabbit when configured, but never block on its rate limits** — invoke `coderabbit-review`; resolve feedback already received, then record `skipped (rate-limited)` and continue immediately if throttled.
-- **NEVER `sleep`, poll, or block on a wait.** Every reviewer and CI wait is a BACKGROUNDED script that notifies you on exit; reconcile on that notification. A foreground waiter is killed at the Bash tool's 600 s cap anyway. The only timer permitted in a run is one long `ScheduleWakeup` silence backstop.
+- **NEVER `sleep` or poll on a wait.** Every reviewer and CI wait is a long-running script whose result you reconcile once, on the wake your host provides (notification on Claude Code, a returning `wait_agent` on Codex — **Waiting and reconciliation**). On Claude Code a foreground waiter is killed at the Bash tool's 600 s cap anyway, and the only timer permitted in a run is one long `ScheduleWakeup` silence backstop.
 - **NEVER mark a teammate's PR as ready** until you've inspected it
 - **ALWAYS handle Copilot review and CI monitoring directly** — these are coordinator responsibilities, not sub-agent responsibilities. Launch their waiters backgrounded, all in one message.
 - **ALWAYS pass a deliberate `model` size to every `Agent` call** — see the size table in STEP 3. Coders are `large`; never downgrade them.

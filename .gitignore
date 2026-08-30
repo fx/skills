@@ -7,5 +7,10 @@ node_modules/
 .DS_Store
 
 # Scratch space the review and coordination skills write into while they run —
-# waiter logs, worktree state. Never part of a change.
+# waiter logs, worktree state. Never part of a change. One entry per host agent
+# directory — `[AGENT_DIR]` resolves per host, so the artifacts land in whichever
+# one is running (skills/dev/references/host-adapters.md).
 .claude/team/
+.claude/worktrees/
+.agents/team/
+.agents/worktrees/

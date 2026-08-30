@@ -8,6 +8,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
+>
+> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
+> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
+> Substitute it; never write a literal `.claude/` path on another host.
 
 **⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure — carrying the Scope Brief, triaging in filter order,
@@ -200,9 +204,9 @@ an empty `requested_reviewers` as "the request did not land", and never treat a
 stdout and stderr to a log file, then read that file when the completion
 notification arrives:
 ```bash
-mkdir -p .claude/team/waits && \
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> \
-  > .claude/team/waits/copilot-<PR_NUMBER>.log 2>&1
+  > [AGENT_DIR]/team/waits/copilot-<PR_NUMBER>.log 2>&1
 ```
 
 **Do NOT run it in the foreground.** The Bash tool caps a foreground `timeout` at

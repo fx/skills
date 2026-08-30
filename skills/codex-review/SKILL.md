@@ -8,6 +8,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
+>
+> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
+> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
+> Substitute it; never write a literal `.claude/` path on another host.
 
 **⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure — carrying the Scope Brief, triaging in filter order,
@@ -172,9 +176,9 @@ rather than silently retrying.
 invocation, and the `AGENTS.md` pointer check, so none of them can be
 half-remembered:
 ```bash
-mkdir -p .claude/team/waits && \
+mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/codex-review/scripts/run-codex-review.sh /tmp/scope-prompt.md \
-  > .claude/team/waits/codex-review.log 2>&1
+  > [AGENT_DIR]/team/waits/codex-review.log 2>&1
 ```
 
 Write the scope prompt (built as below) to a file and pass its path, or pass `-`
