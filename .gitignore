@@ -1,0 +1,7 @@
+# duvet regenerates these on every `duvet report`. Committing them would
+# duplicate the spec text and let it drift.
+.duvet/reports/
+.duvet/requirements/
+
+node_modules/
+.DS_Store
