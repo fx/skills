@@ -652,11 +652,12 @@ Re-verify only the item that failed, on the new head.
 
 **The sub-step numbers are stable identifiers other skills reference, not a running order.** This step runs as a loop, and 6.2 is entered from a wake, never from the clock:
 
-1. **6.1** — costs no push, so it runs first. Record its findings in the ledger; do **not** fix them yet.
-2. **6.3's waiter launch** — the hosted reviewers are the long pole, so they start before anything is fixed. Fixing 6.1's findings first would spend a push and a full reviewer cycle for no reason.
-3. **On each reviewer wake** — read that log, classify its threads (6.3, per-reviewer steps 1–2), then re-enter **6.2 once** for everything currently on the table across every channel. That is the single batched fix pass, and it is where the only push in this step happens.
-4. **Only after 6.2's push** do the resolvers run, with their blocking entries annotated `already fixed in <sha>`. A resolver is never invoked with an un-fixed `blocking` disposition here, because its own blocking path pushes independently and that is exactly the per-reviewer push this ordering exists to prevent.
-5. Repeat from 3 for each later wake, against the new head.
+1. **6.1** — costs no push and needs nobody, so it runs first. Record its findings in the ledger.
+2. **If 6.1 produced a blocking finding, fix it now** — one **6.2** pass, one push, and that SHA becomes the candidate head. Do this **before** launching anything in 6.3: a hosted review started on a head you already know must change is a full reviewer cycle spent on a diff that will not survive. Nothing is waiting yet, so this fix costs nothing but the push it was always going to need.
+3. **6.3's waiter launch**, on a head with no known blocking finding. The hosted reviewers are the long pole, so from here on nothing waits on them that could have gone first.
+4. **On each reviewer wake** — read that log, classify its threads (6.3, per-reviewer steps 1–2), then re-enter **6.2 once** for everything currently on the table across every channel, and push once.
+5. **Only after that push** do the resolvers run, with their blocking entries annotated `already fixed in <sha>`. A resolver is never invoked with an un-fixed `blocking` disposition, because its own blocking path pushes independently — the per-reviewer push this ordering exists to prevent.
+6. **The push in 4 created a new head, so re-cover it** (6.3, per-reviewer step 4) before repeating from 4 on the next wake.
 
 If a wake arrives while nothing else is outstanding and its channel is the only one with findings, 6.2 still runs once for that channel — a batch of one is not a violation. What is forbidden is fixing channel A, pushing, and then fixing channel B (`references/head-discipline.md` § Batch findings).
 
@@ -769,7 +770,10 @@ bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NU
    - `ERROR` — the wait never started. Report it.
 2. Read its unresolved threads and classify them in the shared ledger **before** invoking any resolver. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
 3. **Fix before you dispatch.** Take every blocking entry this wake produced, together with every other channel's outstanding blocking entries, through **one** Step 6.2 pass, and push once. Then invoke each reviewer's resolver, passing a disposition for every thread that carries a finding — `blocking` annotated `already fixed in <sha>`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions) — so every one of them is settled without a further edit or push. A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. Handing a resolver an un-fixed `blocking` disposition puts it on its own fixing path, which pushes per reviewer — the churn this ordering exists to prevent.
-4. After a resolver pushes, record the new SHA as the candidate head and inspect only feedback added or changed since the previous reviewed SHA. Classify and deduplicate it in the shared ledger. Relaunch only the waiter whose state or evidence the delta invalidated; do not restart every reviewer merely because `HEAD` changed. **Any CI wait outstanding for the prior SHA is superseded** — stop it, reclaim its slot, and never read its verdict as evidence about this head.
+4. **After the Step 6.2 push** — that push, not a resolver's, is what moves the head under this ordering — record the new SHA as the candidate head and re-cover it:
+   - **Relaunch the waiter of every reviewer whose evidence the delta invalidated**, and only those. Do not restart a reviewer the delta did not touch merely because `HEAD` changed. **Copilot does not re-review a push on its own** — its waiter must be relaunched, or the fix you just pushed ships unreviewed by it; CodeRabbit re-reviews by itself and its waiter is relaunched only to observe that.
+   - On the next wake, inspect only feedback added or changed since that reviewer's previously reviewed SHA, and classify and deduplicate it in the shared ledger.
+   - **Any CI wait outstanding for the prior SHA is superseded** — stop it, reclaim its slot, and never read its verdict as evidence about this head.
 5. Stop when the channel has **converged** per `references/scope-contract.md` § Convergence — no blocking finding left unresolved, ledger-wide — confirmed by one latest-delta pass, and every required reviewer thread is settled.
 
 Never let a reviewer's findings reach an implementer before you have classified them.

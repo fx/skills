@@ -35,7 +35,7 @@ When the head changes:
 
 - Outstanding CI waits for the previous SHA are **superseded**. Do not keep waiting on them, do not read their eventual verdict as merge evidence, and do not treat their failure as this head's failure. Where the waiter is a child process or teammate, stop it and reclaim the slot.
 - Review results for the previous SHA remain valid **for the code that did not change**; re-review the delta only. That is the existing bounded-delta rule, unchanged.
-- Re-launch only the waiters whose evidence the delta actually invalidated. A head change is never by itself a reason to restart every reviewer.
+- Re-launch the waiters whose evidence the delta invalidated, and only those. A head change is never by itself a reason to restart every reviewer — but it is always a reason to re-cover the code that changed, so a reviewer that does not re-review a push on its own (Copilot) must be relaunched explicitly or the new commits ship unreviewed by it.
 
 **A verdict whose SHA you cannot confirm is not a pass.** The CI waiter prints `PR_HEAD_SHA=` beside its verdict for exactly this comparison, and `PR_HEAD_SHA=unknown` when it could not read it; the Copilot waiter prints `REVIEWED_COMMIT_ID=` and `PR_HEAD_SHA=`, which must be equal.
 
@@ -53,6 +53,7 @@ Before spawning a fix agent, drain everything already on the table: local review
 
 Where a wait costs a concurrency slot (waiter children on Codex) or a coordinator wake, order the launches by what actually unblocks work:
 
+0. **Never start a hosted reviewer on a head you already know must change.** A blocking finding you are holding — from a local pass, an integration check, a failed verification — is a diff that will not survive, and every reviewer launched against it spends a full cycle reviewing it anyway. Fix and push first; that costs only the push it already needed. This orders *against* the rest of the list rather than within it: waiting is cheap to start and expensive to waste.
 1. **Hosted reviewer waiters first.** Their findings change the tree, so their results decide whether the current head survives at all.
 2. **Keep at least one slot for coding or fix work** while they run. A coordinator whose every slot holds a waiter cannot advance anything.
 3. **Launch the CI waiter last** — only once the current head carries no unresolved blocking review finding, or when there is genuinely nothing else to advance. Watching CI on a head a pending review is about to invalidate is a wait you pay for twice.
