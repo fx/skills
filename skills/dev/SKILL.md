@@ -441,9 +441,15 @@ for cfg in vite.config.ts vite.config.js next.config.js next.config.ts next.conf
         break
     fi
 done
+
+if [[ -n "$WEB_FILES" && "$HAS_WEB_STACK" == true ]]; then
+    echo "Browser verification is possible — launch the verifier below."
+else
+    echo "No web changes or no web stack — skip 4.6.2."
+fi
 ```
 
-If web changes exist and browser-verifiable items are present, launch the verify-web-change sub-agent. It works from the branch diff against `main`, so it needs no PR:
+Both conditions must hold: changed web files with no web stack means nothing to serve, and a web stack with no changed web files means nothing this change put on screen. If they do hold and browser-verifiable items are present, launch the verify-web-change sub-agent. It works from the branch diff against `main`, so it needs no PR:
 
 ```
 Agent tool:
