@@ -232,7 +232,8 @@ Derive **size signal** from the user's own language: "just", "real quick",
 not filler — honour it.
 
 **The Scope Brief MUST be included verbatim in every downstream sub-agent prompt
-and every reviewer invocation in Steps 3, 4, 4.5, 6, and 8.** A reviewer without
+and every reviewer invocation in Steps 3, 4, 4.5, 4.6, 6, and 8** — verifiers
+included, not only reviewers. A reviewer without
 it reports the work you deliberately did not do, and every such finding costs a
 full review cycle to filter by hand.
 
@@ -448,6 +449,10 @@ If web changes exist and browser-verifiable items are present, launch the verify
 Agent tool:
   prompt: "Load the verify-web-change skill (Skill tool: skill='verify-web-change'), then:
 
+           [PASTE THE STEP 2.5 SCOPE BRIEF VERBATIM HERE — without it the verifier
+            reports deliberately-deferred behaviour as a failure, and each one of
+            those costs a fix/review cycle]
+
            Verify the following Test Plan items on the current branch [BRANCH]
            (no PR exists yet — work from the branch diff against main):
 
@@ -484,6 +489,8 @@ If any item failed, fold its failures into the Step 4.5 ledger and fix them **wi
 ```
 Agent tool:
   prompt: "Load the coder skill (Skill tool: skill='coder'), then:
+
+           [PASTE THE STEP 2.5 SCOPE BRIEF VERBATIM HERE]
 
            Fix these verification failures:
            [FAILURE DETAILS]
@@ -709,6 +716,8 @@ The coordinator MUST classify and deduplicate these findings in the Step 2.5 led
 ```
 Agent tool:
   prompt: "Load the coder skill (Skill tool: skill='coder'), then:
+
+           [PASTE THE STEP 2.5 SCOPE BRIEF VERBATIM HERE]
 
            Fix only these blocking issues in PR #[NUMBER], in one commit series:
            [EVERY BLOCKING LEDGER ENTRY FROM EVERY CHANNEL THAT HAS REPORTED —

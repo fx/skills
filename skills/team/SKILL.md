@@ -399,6 +399,11 @@ Agent tool:
   name: "verify-<slug>"                 # REQUIRED — addressable handle
   model:     "<medium — see the size table>"  # verification is mechanical
   prompt: "Load the verify-web-change skill (Skill tool: skill='verify-web-change').
+
+           <STEP 0 SCOPE BRIEF, VERBATIM — mandatory for verify prompts too, per
+            'Build the Scope Brief' above; without it the verifier reports
+            deliberately-deferred behaviour as a failure>
+
            Verify branch <branch-name> in <ABS_WORKTREE_PATH> (no PR exists yet —
            work from the branch diff against main).
            Start the dev server and confirm the app loads without errors.

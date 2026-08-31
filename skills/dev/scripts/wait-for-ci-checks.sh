@@ -58,10 +58,11 @@
 # discards a superseded result.
 #
 # `unknown` means the pair could not be confirmed — either read failed, or the head
-# moved while the verdict was being read. The verdict still stands for whatever the
-# head was at the time, but it cannot be attributed here, so the caller MUST confirm
-# the SHA itself before treating it as merge evidence. See
-# dev/references/head-discipline.md § Evidence is SHA-scoped.
+# moved while the verdict was being read. ⛔ THE CALLER MUST DISCARD THAT VERDICT AND
+# RELAUNCH THE WAIT. Reading the head afterwards does not rescue it: a `gh pr checks`
+# response taken earlier cannot be retroactively attributed to a SHA observed later,
+# which is the exact mis-association this line exists to catch. An unconfirmed SHA is
+# not evidence — dev/references/head-discipline.md § Evidence is SHA-scoped.
 #
 # gh pr checks --json fields: bucket, completedAt, description, event,
 #   link, name, startedAt, state, workflow
@@ -311,8 +312,8 @@ read_head_sha() {
 #
 # `$1` is the head observed immediately BEFORE the checks read; empty if that read
 # failed or was skipped. Only a confirmed, unchanged pair is printed as a SHA.
-# Anything else is `unknown`, which the protocol defines as "the caller must
-# confirm the SHA itself before treating this as merge evidence".
+# Anything else is `unknown`, which the protocol defines as "discard this verdict
+# and relaunch the wait" — never as something a later head read can repair.
 emit_head_sha() {
     local before="$1" after
     after=$(read_head_sha diag)
