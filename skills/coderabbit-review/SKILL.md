@@ -105,7 +105,7 @@ on STATUS, not on prose.
 | `TERMINAL_PASS` | 0 | Check settled clean, zero unresolved threads → the gate is met. Go to Step 1b only if you still need to read findings. |
 | `TERMINAL_FAIL` | 1 | Settled with a failing conclusion, or unresolved threads remain → **Step 1b**. Do not re-run for a better answer. |
 | `PENDING` | 2 | Still running at budget expiry. **Not a verdict, not a failure.** Re-running is safe and correct if you still need it. Never record it as "no findings". |
-| `NOT_CONFIGURED` | 3 | The App is not installed for this repo. **Terminal — report once and proceed without the PR-level gate. Never retry, never wait.** |
+| `NOT_CONFIGURED` | 3 | The App is not installed for this repo. **Terminal — report once and proceed without the PR-level gate. Never retry, never wait.** A coordinator running several PRs also caches it per `[SKILLS_DIR]/dev/references/head-discipline.md` § Reviewer availability is cached for the run, rather than re-establishing it on each PR. |
 | `ERROR` | 4 | Bad args or `gh` failure; the wait never started → report. If it identifies a rate/quota limit, take the exception above. |
 
 `UNRESOLVED_THREADS=unknown` means the read **failed**, not that there are none;
@@ -155,6 +155,13 @@ it re-derive triage it cannot see, and it will edit for threads you classified
 immaterial or deferred. The false-premise suffix is what routes a thread Step 1b
 rejected to the outdated/incorrect path instead of a re-triage that loses the
 `REVIEW.md` entry.
+
+**Where a coordinator is running several channels, the blocking fixes are batched
+and pushed before this dispatch** (`[SKILLS_DIR]/dev/references/head-discipline.md`
+§ Batch findings), so the `blocking` dispositions arrive annotated
+`already fixed in <sha>` (`[SKILLS_DIR]/dev/references/scope-contract.md`
+§ Resolver dispositions). Dispatching with an un-fixed one instead sends the
+resolver down its own edit-and-push path, once per reviewer.
 
 ## Step 3: Loop until settled
 

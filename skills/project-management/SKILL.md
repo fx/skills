@@ -5,6 +5,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 
 # Project Management
 
+> **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
+> the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
+> every skill referenced below is installed as a sibling there.
+
 This skill manages project tasks and documentation for AI-driven development. Work is tracked in:
 - **`docs/changes/NNNN-name.md`** — Feature-level task lists tied to specific change documents
 - **`docs/tasks.md`** — Catch-all task list for work not tied to a specific change
@@ -165,11 +169,12 @@ This is fast and idempotent — it checks what exists and only creates/modifies 
 
 ### Every Task Completion MUST:
 
-1. Mark task complete in the file where the task lives: `- [x] Task (PR #N)`
+1. Mark task complete in the file where the task lives: `- [x] Task`, plus `(PR #N)` where the PR number is already known. The annotation is **optional** — see item 6: tracking is written with the implementation, before the PR exists, and a completed task is never held back or re-committed for the sake of adding a number the merge commit already records.
 2. Task lists may be in `docs/tasks.md` OR in `docs/changes/*.md` files
 3. If ALL tasks in a change document are now complete, update its `**Status:**` to `complete`
 4. **Sync indexes** — Update `docs/index.yml` and `docs/index.md` to reflect the new status (see Workflow 5)
 5. Include ALL of the above updates in the same PR
+6. **Write them with the implementation, not after the PR's gates have run** — step 1 of `[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head, which step 5 then confirms. `(PR #N)` is unknown before the PR exists: add it if another push is going out anyway, otherwise leave it off. It is never worth a commit of its own.
 
 ### Before Creating Tasks:
 

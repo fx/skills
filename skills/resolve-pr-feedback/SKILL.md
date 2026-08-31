@@ -228,7 +228,9 @@ outdated/incorrect path — reply, resolve, and update `REVIEW.md` where a
 convention was misread — reachable, which an authoritative disposition would
 close off.
 
-**If multiple exist:** Prefer running Copilot and CodeRabbit resolvers **in parallel** by spawning each as a sub-agent in the same message (see `dev` Step 6.3 for the exact pattern). Codecov is sequential after them since coverage fixes typically require code from the other resolvers to be in place first.
+**If multiple exist:** run the Copilot and CodeRabbit resolvers **in parallel** by spawning each as a sub-agent in the same message (see `dev` Step 6.3 for the exact pattern) — but only where at most one of them carries `blocking` dispositions. Codecov is sequential after them since coverage fixes typically require code from the other resolvers to be in place first.
+
+**Where two or more channels carry blocking findings, fix them once, together, before dispatching any resolver** (`[SKILLS_DIR]/dev/references/head-discipline.md` § Batch findings). Two resolvers editing the same branch in parallel also race on the working tree, which is the local reason the rule is not optional here. Hand the whole blocking set to one fix agent, push once, then invoke each resolver with its blocking threads annotated `already fixed in <sha>` (`[SKILLS_DIR]/dev/references/scope-contract.md` § Resolver dispositions), leaving each to do only what it alone can do.
 
 ### 5. Verify All Resolved AND Loop Until Convergence
 
