@@ -520,8 +520,8 @@ Record every item's result — they are written into the PR body in Step 5, alre
 
 1. Every blocking ledger entry from Step 4.5 is resolved and the local matrix has converged.
 2. Step 4.6 recorded a result for every non-manual test plan item.
-3. **Task tracking is already committed** — the change document, `docs/tasks.md`, `docs/index.yml`, and `docs/index.md` reflect what this branch completes, from the Step 4 commits. If it is missing, send the Step 4 coder back for it **now**, before the push (the coordinator never authors it — see CRITICAL RULES); it must never become a post-gate commit.
-4. Generated files, lockfiles, and snapshots are regenerated and committed.
+3. **Whatever tracks this work is already committed** — the `[DOC_PATH]` identified in Step 4, plus any index the project keeps in step with it. **Skip this if `[DOC_PATH]` is `none`**: a repo with no change documents, task list, or index has nothing to commit here, and the gate is satisfied by that fact rather than blocked by it. Where there is one and it is missing from the diff, send the Step 4 coder back for it **now**, before the push (the coordinator never authors it — see CRITICAL RULES); it must never become a post-gate commit.
+4. **Whatever the project generates is regenerated and committed** — lockfiles, snapshots, generated sources. Same conditional: a project that generates none of these skips this too.
 
 Then push and record the SHA:
 
