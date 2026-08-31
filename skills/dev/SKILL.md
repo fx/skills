@@ -826,7 +826,7 @@ Script behavior:
 - Phase 1 (discovery): waits up to 90 s for any check to appear.
 - Phase 2: polls every 30 s until all checks settle, against a shared 900 s wall-clock budget.
 
-**Check the SHA before the STATUS, on every verdict.** `TERMINAL_PASS` and `TERMINAL_FAIL` are both evidence about the commit named on the `PR_HEAD_SHA=` line, and **only** that commit:
+**Check the SHA before the STATUS, on every verdict.** `TERMINAL_PASS`, `TERMINAL_FAIL`, and `NOT_CONFIGURED` are each evidence about the commit named on the `PR_HEAD_SHA=` line, and **only** that commit — including the last, since "this PR has no CI" is a terminal claim about a specific head. `PENDING` and `ERROR` are not verdicts and carry no SHA line.
 
 - `PR_HEAD_SHA=` equals `CANDIDATE_HEAD` → read the STATUS below.
 - Anything else — a different SHA, or `unknown` — → **the verdict is superseded or unattributable. Discard it, do not act on it, and relaunch the wait against `CANDIDATE_HEAD`.** `unknown` is not "probably fine": the script emits it precisely because it could not tie the result to one commit, and re-reading the head yourself afterwards cannot retroactively attribute a `gh pr checks` response taken earlier. A failure on a superseded SHA is not this head's failure either — never send one to Step 7.2.

@@ -45,7 +45,9 @@
 #
 # Additional machine-readable lines emitted before STATUS:
 #   CHECKS_TOTAL=<n>  CHECKS_PASSED=<n>  CHECKS_FAILED=<n>  CHECKS_SKIPPED=<n>
-#   PR_HEAD_SHA=<sha|unknown>
+#   PR_HEAD_SHA=<sha|unknown>   on every TERMINAL verdict — TERMINAL_PASS,
+#                               TERMINAL_FAIL, and NOT_CONFIGURED alike. PENDING
+#                               and ERROR are not verdicts, so they carry none.
 #
 # PR_HEAD_SHA IS PART OF THE VERDICT, NOT DECORATION. A CI result is evidence about
 # exactly one commit. `gh pr checks` always reports the PR's CURRENT head, so a push
@@ -360,7 +362,14 @@ fi
 echo "Phase 1: waiting up to ${DISCOVERY_DEADLINE}s for checks to start..."
 
 total=0
+head_before=""
 while :; do
+    # Bracket discovery exactly as Phase 2 brackets the settle loop: NOT_CONFIGURED
+    # is a TERMINAL verdict about CI on a specific commit, so it needs the same
+    # attribution. A push during the grace period otherwise produces "this PR has
+    # no CI" about a head nobody named.
+    head_before=$(read_head_sha wait)
+
     read_rc=0
     checks=$(get_checks) || read_rc=$?
     if (( read_rc == 2 )); then
@@ -395,6 +404,7 @@ if (( total == 0 )); then
     echo "This PR has no CI configured to run on it. TERMINAL — do not keep waiting."
     echo "⚠️  This is NOT a pass. A merge gate that requires green CI is NOT satisfied"
     echo "    by the absence of CI; confirm that against the repo's branch protection."
+    emit_head_sha "$head_before"
     finish NOT_CONFIGURED
 fi
 
