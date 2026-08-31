@@ -162,6 +162,7 @@ as ONE finding naming the class and list every other site — § Reporting a cla
 | Disposition | Action |
 |---|---|
 | **blocking** | Fix it, swept as a class, and push (or commit, for a local review). A contract blocker is never discharged by a reply explaining it — the artifact has to change. |
+| **blocking, annotated `already fixed in <sha>`** | The coordinator batched this fix into an earlier push. Confirm the fix is in the branch, reply citing the commit, and resolve. **No edit, no push.** Not a fourth disposition — the same one, already discharged (§ Resolver dispositions). If the fix is not actually there, say so instead of resolving. |
 | **immaterial** | **Reply with the reasoning** — what the observation is, why it is below the bar — and resolve. **No edit.** For a local review with no threads, it goes in the closing note instead. |
 | **deferred** | Reply citing the exclusion that covers it, and resolve. **No edit, and no commit** — including no tracker commit, which widens the change. Return the follow-up to the coordinator, or propose it to the user when running standalone. |
 

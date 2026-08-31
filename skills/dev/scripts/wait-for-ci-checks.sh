@@ -45,6 +45,17 @@
 #
 # Additional machine-readable lines emitted before STATUS:
 #   CHECKS_TOTAL=<n>  CHECKS_PASSED=<n>  CHECKS_FAILED=<n>  CHECKS_SKIPPED=<n>
+#   PR_HEAD_SHA=<sha|unknown>
+#
+# PR_HEAD_SHA IS PART OF THE VERDICT, NOT DECORATION. A CI result is evidence about
+# exactly one commit. `gh pr checks` always reports the PR's CURRENT head, so a push
+# landing mid-wait silently moves what is being observed — the caller launched this
+# on SHA A and can be handed a verdict about SHA B. The line is read at the moment
+# the verdict is decided, so the caller can compare it against the SHA it recorded
+# and discard a superseded result. `unknown` means the read failed: the verdict
+# still stands for whatever the head then was, but the caller must confirm the SHA
+# itself before treating it as merge evidence. See dev/references/head-discipline.md
+# § Evidence is SHA-scoped.
 #
 # gh pr checks --json fields: bucket, completedAt, description, event,
 #   link, name, startedAt, state, workflow
@@ -256,6 +267,26 @@ get_checks() {
     return 1
 }
 
+# Read the PR's head SHA for the verdict line.
+#
+# This runs AFTER a verdict is decided, so it is reporting rather than waiting and
+# is capped by DIAGNOSTIC_BUDGET like every other post-verdict read.
+#
+# It can never fail the run. Turning an already-decided TERMINAL_PASS into an ERROR
+# because a metadata read timed out would discard a verdict the caller waited 900 s
+# for. On any failure it prints `unknown`, which the protocol defines as "the caller
+# must confirm the SHA itself before treating this as merge evidence" — an honest
+# gap rather than a fabricated SHA the caller would compare against and trust.
+head_sha_or_unknown() {
+    local out rc=0
+    out=$(timeout "$DIAGNOSTIC_BUDGET" gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>/dev/null) || rc=$?
+    if (( rc != 0 )) || [[ -z "${out//[[:space:]]/}" ]]; then
+        printf 'unknown'
+        return 0
+    fi
+    printf '%s' "$out"
+}
+
 # Count checks in a bucket (pass, fail, skipping, pending).
 count_by_bucket() {
     local json="$1" bucket="$2"
@@ -373,6 +404,7 @@ while (( SECONDS < TIMEOUT )); do
         printf '%s' "$checks" | jq -r '.[] | "  \(.state): \(.name)"'
 
         echo ""
+        echo "PR_HEAD_SHA=$(head_sha_or_unknown)"
         echo "CHECKS_TOTAL=${total}"
         echo "CHECKS_PASSED=${passed_checks}"
         echo "CHECKS_FAILED=${failed_checks}"

@@ -5,13 +5,17 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 
 # Resolve CI Failures
 
+> **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
+> the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
+> every skill referenced below is installed as a sibling there.
+
 Meta-skill that analyzes failing CI checks on a PR, fetches failure logs, categorizes failures, and delegates fixes via the coder skill.
 
 ## WHEN TO USE THIS SKILL
 
 **USE THIS SKILL** when ANY of the following occur:
 
-- SDLC Step 7.4 invokes it after `wait-for-ci-checks.sh` exits with code 1
+- SDLC Step 7.2 invokes it after `wait-for-ci-checks.sh` exits with code 1
 - User says "resolve CI failures" / "fix CI" / "fix failing checks" / "fix the build"
 - CI checks are red and fixes need to be coordinated
 - After pushing code to a PR when checks fail
@@ -27,7 +31,7 @@ Meta-skill that analyzes failing CI checks on a PR, fetches failure logs, catego
 - ❌ NEVER leave comments directly on the GitHub PR
 - ❌ NEVER retry a check without pushing a fix first
 - ✅ ALWAYS fix root causes, not symptoms
-- ✅ ALWAYS push changes after fixing
+- ✅ ALWAYS fix every failure in this batch, then push **once** — one push per failure buys one full CI cycle per failure (`[SKILLS_DIR]/dev/references/head-discipline.md` § Batch findings)
 - ✅ ALWAYS report infrastructure failures to user — do not attempt to fix them
 
 ## Core Workflow
@@ -145,20 +149,23 @@ Agent tool:
            - Analyze the error and fix the root cause
            - Do NOT suppress errors or skip tests
            - Commit with format: fix(ci): description
-           - Push changes after committing"
+           - Do NOT push. Every fix in this batch is pushed together, once, by
+             the caller — a push per fix costs a full CI cycle per fix."
   description: "Fix CI failure: [CHECK_NAME]"
 ```
 
-If multiple checks failed with independent root causes, delegate fixes for ALL of them. Sequential delegation is preferred to avoid merge conflicts.
+If multiple checks failed with independent root causes, delegate fixes for ALL of them before pushing anything. Sequential delegation is preferred to avoid merge conflicts. Where the caller has other findings outstanding for the same head — reviewer threads, verification failures — those belong in this same push too.
 
 ### 6. Push Changes
 
-Verify all fixes are committed and pushed:
+Push once, after every fix in the batch is committed:
 
 ```bash
 git status
 git push
 ```
+
+That push creates a new head. Every CI or review result outstanding for the previous SHA is superseded (`[SKILLS_DIR]/dev/references/head-discipline.md` § Evidence is SHA-scoped) — the caller re-waits on the new SHA and must not read the old verdict as evidence about it.
 
 If the coder sub-agent already pushed, verify with:
 

@@ -105,7 +105,7 @@ on STATUS, not on prose.
 | `TERMINAL_PASS` | 0 | Check settled clean, zero unresolved threads → the gate is met. Go to Step 1b only if you still need to read findings. |
 | `TERMINAL_FAIL` | 1 | Settled with a failing conclusion, or unresolved threads remain → **Step 1b**. Do not re-run for a better answer. |
 | `PENDING` | 2 | Still running at budget expiry. **Not a verdict, not a failure.** Re-running is safe and correct if you still need it. Never record it as "no findings". |
-| `NOT_CONFIGURED` | 3 | The App is not installed for this repo. **Terminal — report once and proceed without the PR-level gate. Never retry, never wait.** |
+| `NOT_CONFIGURED` | 3 | The App is not installed for this repo. **Terminal — report once and proceed without the PR-level gate. Never retry, never wait.** It is a property of the **repository**, so a coordinator running several PRs records it once and skips this waiter for the rest of the run (`[SKILLS_DIR]/dev/references/head-discipline.md` § Reviewer availability is cached for the run) — re-establishing the same absence per PR costs a launch, the discovery grace, and a wake, every time. |
 | `ERROR` | 4 | Bad args or `gh` failure; the wait never started → report. If it identifies a rate/quota limit, take the exception above. |
 
 `UNRESOLVED_THREADS=unknown` means the read **failed**, not that there are none;

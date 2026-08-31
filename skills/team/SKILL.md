@@ -250,6 +250,8 @@ Two constraints worth knowing rather than rediscovering:
 
 **Implementation steps** (planning, coding, testing) → Spawn focused agents. For any coder that will run **concurrently** with another, give it an isolated worktree via STEP 2.5 and start its prompt with the worktree preamble — do NOT rely on `isolation: "worktree"` (it's a no-op for teammates; see the prohibition above). Give each agent ONLY its specific job — the change doc path, spec path, plan, and acceptance criteria. Do NOT tell it to follow the full SDLC. Always pass the handle (see above).
 
+**Tracking updates ride in the implementation commit, never in a later one.** Every coder prompt MUST tell it to check off, in the same commit series as the code, the tracking items its own PR completes (`docs/tasks.md`, the change doc's task list). A tracking commit pushed after the merge gates have been verified invalidates the CI and exact-head review evidence those gates just collected — `[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head. The Status-flip split below is the same rule applied to the one field that must not flip early.
+
 When you spawn the coder for the FINAL piece of a change, your prompt MUST include: "This is the final implementing PR for <change>. In the same commit, flip `**Status:** draft` → `**Status:** complete` in `docs/changes/<NNNN>-*.md` AND flip `status: draft` → `status: complete` for that change's entry in `docs/index.yml`. Sync `docs/index.md` if present." For every NON-final coder on the same change, your prompt MUST include: "Leave the change-doc `**Status:**` field and `docs/index.yml` entry untouched — the final PR flips them." This split prevents rebase-conflict storms across multi-PR changes and ensures the final PR carries the Status flip atomically.
 
 **PR creation** → Either do it yourself via `gh pr create` or spawn a focused PR preparer agent. Load `github` skill first. **⛔ If you create the PR yourself, the `--title` MUST be a conventional-commit subject — `type(scope): description` — matching the canonical regex `^(feat|fix|docs|refactor|chore|test|perf|build|ci|style|revert)(\(.+\))?!?: .+` (see the github skill's "Use Conventional Formats"). Do NOT write a prose title; running `gh pr create` directly does NOT exempt you from the conventional-commit rule. Verify the title against the regex before AND after creation.** (Prose titles the coordinator wrote directly — bypassing pr-preparer — are exactly how non-conventional titles have slipped onto `main`.)
@@ -259,6 +261,8 @@ When you spawn the coder for the FINAL piece of a change, your prompt MUST inclu
 **⛔ NEVER `sleep` or poll waiting for anything.** Every wait — Copilot, CodeRabbit, CI — runs as a long-running wait script (host-adapters.md, op 6), never in a foreground call and never as a chain of sleeps, and never as `gh pr checks --watch`. How its completion reaches you, and whether waiting on a teammate is forbidden or mandatory, is host-specific — see **Waiting and reconciliation** below before you decide to idle. This is the single largest source of wasted coordinator turns and it is non-negotiable.
 
 **Merge gates** → Always handle directly. See MANDATORY MERGE GATE CHECKLIST below.
+
+**Per-PR ordering** → Follow `[SKILLS_DIR]/dev/references/head-discipline.md` for every PR: local validation and review convergence, then finalize tracking, then push the **candidate head**, then hosted review convergence, then CI on the final head, then the merge gates. Not `push → wait for everything → fix one thing → push → wait for everything again`. On a multi-PR run this is where the wall clock actually goes: a run that pushes between collecting evidence and using it pays for every CI cycle twice.
 
 **Browser verification** → Spawn a dedicated verify agent if the task has UI changes.
 
@@ -284,6 +288,8 @@ A coordinator that reads the Claude Code line on Codex spawns one teammate, decl
 #### The ledger
 
 Keep `[AGENT_DIR]/team/waits/ledger.json` — one row per tracked teammate and per tracked PR, recording its last known state and what you are waiting on for it. It exists so a wake is a cheap diff instead of a re-derivation of the whole run.
+
+Each PR row also carries **the candidate head SHA** and, per channel, **the SHA that channel's last result observed** (`[SKILLS_DIR]/dev/references/head-discipline.md` § Evidence is SHA-scoped). That pair is what makes a stale result detectable: a result whose SHA is not the current head is evidence about a commit you are no longer merging. Keep one run-level row too, for reviewer availability — a reviewer recorded `NOT_CONFIGURED` there is skipped for every remaining PR.
 
 #### Reconcile on wake, never on a timer
 
@@ -344,10 +350,16 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 
 **As coordinator, YOU own reviewer waits, and you never spend turns polling them.** Launch every configured reviewer's waiter concurrently, in the shape your host's row prescribes (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits): on Claude Code, one message with every call backgrounded to its own log, woken by a completion notification per reviewer, and no sub-agent involved; on Codex, one small-tier waiter child per reviewer that you `wait_agent` on. There is no execution mode to pick — read your host's row and follow it.
 
-**Where waiters are children, they spend the same concurrency slots your coders do.** Codex allows three live teammates, so two reviewers plus CI already fill the wave: land the coders first, or run the waiters in batches of at most three and reconcile between them. A fourth child does not fail — it queues, and a queued waiter is indistinguishable from a hung one.
+**Where waiters are children, they spend the same concurrency slots your coders do.** Codex allows three live teammates, so launching Copilot, CodeRabbit, and CI together consumes every slot and leaves the coordinator unable to advance any coding or fix work. A fourth child does not fail — it queues, and a queued waiter is indistinguishable from a hung one.
+
+**Launch order (`[SKILLS_DIR]/dev/references/head-discipline.md` § Waiter scheduling order):**
+
+1. **Reviewer waiters first** — only the ones this run has not already established as `NOT_CONFIGURED` (see below). Their findings change the tree, so they decide whether this head survives.
+2. **Keep at least one slot free** for coding or fix work while they run.
+3. **CI waiter last** — launch it only once the current head carries no unresolved blocking review finding, or when there is genuinely nothing else to advance. CI is already running from the moment of the push; what you are scheduling is your own attention.
 
 ```
-# Claude Code spelling: ALL in one message, every one run_in_background: true.
+# Claude Code spelling: reviewers in one message, every one run_in_background: true.
 # On another host, same waiters, that host's shape (host-adapters.md § Long waits) —
 # on Codex, one small-tier waiter child per script that you wait_agent on.
 # Each command creates the log dir itself: if it does not exist the REDIRECT fails
@@ -358,6 +370,8 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/copilot-review/script
         > [AGENT_DIR]/team/waits/copilot-<PR_NUMBER>.log 2>&1
 Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh <PR_NUMBER> \
         > [AGENT_DIR]/team/waits/rabbit-<PR_NUMBER>.log 2>&1
+
+# LATER — once the reviewers above have converged on this head:
 Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> \
         > [AGENT_DIR]/team/waits/ci-<PR_NUMBER>.log 2>&1
 
@@ -365,6 +379,12 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-
 # branch on its STATUS= line, classify findings in the ledger, THEN invoke that
 # reviewer's resolver skill.
 ```
+
+**Reviewer availability is established once per run, not once per PR.** The first `STATUS=NOT_CONFIGURED` for a reviewer is a fact about the repository: record it in the ledger and skip that reviewer's waiter for every remaining PR, without launching the script again (§ Reviewer availability is cached for the run). Re-establishing the same absence on each PR costs a spawn, the discovery grace, and a wake, every time. Re-check only if the configuration visibly changes. This caching covers `NOT_CONFIGURED` alone — `PENDING`, `TERMINAL_*`, and `ERROR` are per-PR, per-SHA facts.
+
+**Every waiter result is evidence about one SHA** (§ Evidence is SHA-scoped). Record it in the ledger row beside the result. When a PR's head changes, mark every outstanding CI wait for the prior SHA **superseded**: stop the waiter, reclaim its slot, and never read its verdict as merge evidence for the new head. Review results survive for the code that did not change — re-review the delta, and relaunch only the waiters the delta actually invalidated.
+
+**Batch findings across channels before spawning a fix agent** (§ Batch findings). Collect everything currently available for this head — local review, Copilot, CodeRabbit, browser verification, test-plan verification, known CI failures — classify and deduplicate it in one pass, then spawn one fix teammate for the whole blocking set. Never `finding → fix → push, next finding → fix → push`: each push restarts CI and every push-triggered reviewer. Do not hold the batch open for a channel that has not reported; late findings are the next batch.
 
 **Never run a waiter in a call that cannot outlive it** — on Claude Code the Bash tool caps a foreground `timeout` at 600 000 ms, below every waiter's 900 s budget, so a foreground call is killed mid-poll with no STATUS and no exit code and the caller re-runs it blindly. Each host's surviving shape is in `[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits; on Codex it is a teammate running the script that you `wait_agent` on. **Never launch one without the redirect**: the cycle is driven by what the script prints.
 
@@ -374,19 +394,24 @@ If CodeRabbit is not configured (its waiter reports `STATUS=NOT_CONFIGURED`, exi
 
 ### Browser Verification Gate (Gate 6)
 
-For tasks with UI changes, spawn a dedicated verify agent:
+**Run it before the candidate head is pushed, not at the gate.** `verify-web-change` works from the branch diff against `main` and needs no PR, so a failure it finds costs a local fix instead of another push, another CI run, and another review round (`[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head). At merge time this gate then checks a recorded result rather than starting the work.
+
+For tasks with UI changes, spawn a dedicated verify agent as soon as the coder reports implementation complete:
 
 ```
 Agent tool:
-  name: "verify-<pr-number>"            # REQUIRED — addressable handle
+  name: "verify-<slug>"                 # REQUIRED — addressable handle
   model:     "<medium — see the size table>"  # verification is mechanical
   prompt: "Load the verify-web-change skill (Skill tool: skill='verify-web-change').
-           Verify PR #<NUMBER> on branch <branch-name>.
-           Check out the branch, start the dev server, and confirm the app loads without errors.
+           Verify branch <branch-name> in <ABS_WORKTREE_PATH> (no PR exists yet —
+           work from the branch diff against main).
+           Start the dev server and confirm the app loads without errors.
            Report back whether verification passed or failed, with details of any errors."
-  description: "Verify PR #<NUMBER> in browser"
+  description: "Verify <branch-name> in browser"
   mode: "bypassPermissions"
 ```
+
+Fold any failure into the same batch as the local review findings, fix once, then push. If a UI change lands after the PR is open, re-verify only the delta and let that result ride with the next batched push.
 
 **Why this gate exists:** CI does NOT catch runtime-only errors like circular dependencies, SSR failures, or broken module initialization.
 
@@ -463,6 +488,10 @@ When all tasks are complete and all PRs merged:
 - **NEVER merge without Copilot review** — always invoke `copilot-review` yourself. No exceptions.
 - **ALWAYS attempt CodeRabbit when configured, but never block on its rate limits** — invoke `coderabbit-review`; resolve feedback already received, then record `skipped (rate-limited)` and continue immediately if throttled.
 - **NEVER `sleep` or poll on a wait.** Every reviewer and CI wait is a long-running script whose result you reconcile once, on the wake your host provides (notification on Claude Code, a returning `wait_agent` on Codex — **Waiting and reconciliation**). On Claude Code a foreground waiter is killed at the Bash tool's 600 s cap anyway, and the only timer permitted in a run is one long `ScheduleWakeup` silence backstop.
+- **NEVER launch the CI waiter alongside the reviewer waiters.** Reviewers first, one slot kept free for fix work, CI only once the head carries no unresolved blocking review finding — or when there is nothing else to advance (`[SKILLS_DIR]/dev/references/head-discipline.md` § Waiter scheduling order).
+- **NEVER treat a result whose SHA is not the current head as evidence about that head.** When a head moves, outstanding CI waits for the prior SHA are superseded — stop them and reclaim the slot (§ Evidence is SHA-scoped).
+- **NEVER push one fix per finding.** Collect every available finding across every channel, classify and deduplicate, then one fix pass and one push (§ Batch findings).
+- **NEVER re-establish a reviewer's `NOT_CONFIGURED` status per PR** — it is a repository fact, cached in the ledger for the whole run.
 - **NEVER mark a teammate's PR as ready** until you've inspected it
 - **ALWAYS own Copilot review and CI monitoring** — reading the result and classifying it are coordinator responsibilities, never a sub-agent's. Launch their waiters concurrently in your host's shape (§ Long waits); where that shape is a waiter child, it reports `STATUS=` and nothing more.
 - **ALWAYS pass a deliberate tier to every spawn** — see the size table in STEP 3. Coders are `large`; never downgrade them. On Codex that also requires `fork_turns: "none"`, or the override is rejected and the teammate silently inherits your model.
