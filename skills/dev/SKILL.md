@@ -613,7 +613,7 @@ For items requiring external services, physical devices, or user accounts, you M
 1. **Tell the user** which items require their manual verification
 2. **Explain what to test** — be specific about the steps
 3. **Ask them to confirm** each item passes or fails
-4. **Collect their response before the Step 8.1 merge gates** — see below; do not idle on it
+4. **Collect their response before the Step 8.1 merge gates** — see below; do not idle on it, but do not reach the gates without it either
 
 Example:
 ```
@@ -637,7 +637,8 @@ Per item:
 - **Verified (fail)**: leave `- [ ]` and append `— FAILED: [reason]`. A failure the user has not explicitly accepted **blocks the merge gates** — it is not an annotation you may ship past them (Step 4.6.4)
 - **Verified (fail), accepted by user**: leave `- [ ]` and append `— FAILED: [reason] (accepted by user)`
 - **Manual — confirmed by user**: `- [x]` and append `(manually verified)`
-- **Manual — not yet verified**: leave `- [ ]` and append `— requires manual testing`
+- **Manual — not yet verified**: leave `- [ ]` and append `— requires manual testing`. This is a *pending* state, not a settled one: it is fine to proceed through Steps 6 and 7 while the user tests, and it **blocks the Step 8.1 merge gates** until they answer or explicitly accept it unverified
+- **Manual — user accepted it unverified**: leave `- [ ]` and append `— not verified (accepted by user)`
 
 ```bash
 gh pr edit [PR_NUMBER] --body "$UPDATED_BODY"
@@ -649,7 +650,9 @@ A failure here is a defect that escaped Step 4.6, so treat it as one more input 
 
 Re-verify only the item that failed, on the new head.
 
-**⛔ DO NOT REACH THE STEP 8.1 MERGE GATES until every test plan item is verified, explicitly accepted by the user as a known failure, confirmed by the user as a manual pass, or annotated as requiring manual testing.** A non-manual item that simply failed is none of those and blocks. Waiting on a manual-only *answer* never blocks Step 6 — post the request and proceed.
+**⛔ DO NOT REACH THE STEP 8.1 MERGE GATES until every test plan item is settled**, which means exactly one of: verified; confirmed by the user as a manual pass; a failure the user explicitly accepted; or a manual item the user explicitly accepted as unverified. `— requires manual testing` with no answer yet is **not** settled — it is the pending state, and merging on it ships the only verification that change had unperformed. A non-manual item that simply failed is not settled either.
+
+Waiting on a manual answer never blocks **Steps 6 and 7** — post the request, launch the reviewers, and carry on. It blocks only the gates, by which point the user is present anyway: Step 8.4 hands them the PR for merge approval, so asking for their test result costs no extra round trip.
 
 ---
 
@@ -662,9 +665,9 @@ Re-verify only the item that failed, on the new head.
 1. **6.1** — costs no push and needs nobody, so it runs first. Record its findings in the ledger.
 2. **If 6.1 produced a blocking finding, fix it now** — one **6.2** pass, one push, and that SHA becomes the candidate head. Do this **before** launching anything in 6.3: a hosted review started on a head you already know must change is a full reviewer cycle spent on a diff that will not survive. Nothing is waiting yet, so this fix costs nothing but the push it was always going to need.
 3. **6.3's waiter launch**, on a head with no known blocking finding. The hosted reviewers are the long pole, so from here on nothing waits on them that could have gone first.
-4. **On each reviewer wake** — read that log, classify its threads (6.3, per-reviewer steps 1–2), then re-enter **6.2 once** for everything currently on the table across every channel, and push once.
-5. **Only after that push** do the resolvers run, with their blocking entries annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions). A resolver invoked with an un-fixed `blocking` disposition takes its own pushing path instead, once per reviewer.
-6. **The push in 4 created a new head, so re-cover it** — 6.3, per-reviewer step 4, applying `references/head-discipline.md` § Evidence is SHA-scoped — before repeating from 4 on the next wake.
+4. **On each reviewer wake** — read that log and classify its threads (6.3, per-reviewer steps 1–2). **If the table now holds any blocking entry**, re-enter **6.2 once** for everything currently on it across every channel, and push once. If it holds none, there is nothing to fix and nothing to push — go straight to 5.
+5. **Dispatch the resolvers on every wake, push or no push.** A wake that produced only `immaterial` and `deferred` findings still has threads to settle, and leaving them for a later push that may never come is what stalls the 6.3 convergence gate. The only ordering constraint is that a `blocking` entry is fixed in 4 before its thread is dispatched, so it arrives annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions) rather than sending the resolver down its own pushing path.
+6. **If 4 pushed, that created a new head, so re-cover it** — 6.3, per-reviewer step 4, applying `references/head-discipline.md` § Evidence is SHA-scoped — before repeating from 4 on the next wake. A wake that pushed nothing invalidates no evidence and needs no relaunch.
 
 If a wake arrives while nothing else is outstanding and its channel is the only one with findings, 6.2 still runs once for that channel — a batch of one is not a violation. What is forbidden is fixing channel A, pushing, and then fixing channel B (`references/head-discipline.md` § Batch findings).
 
@@ -939,7 +942,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 - [ ] Copilot review RECEIVED and ALL threads resolved (via `copilot-review` skill — NEVER raw `gh api`)
 - [ ] CodeRabbit is passing with all received threads resolved, not configured, or explicitly recorded as `skipped (rate-limited)`. CodeRabbit throttling is optional and never blocks merge.
 - [ ] Zero unresolved **blocking** ledger entries (`references/scope-contract.md` § Blocking) — `required-by-contract`, `regression-caused-by-change`, and any entry blocking by tier; the latest affected delta is verified within the stopping bounds
-- [ ] Every test plan item verified, user-confirmed, annotated manual-only, or recorded as a failure the user explicitly accepted (Step 5.5)
+- [ ] Every test plan item **settled** (Step 5.5): verified, user-confirmed as a manual pass, or explicitly accepted by the user — as a known failure, or as knowingly unverified. An unanswered `— requires manual testing` is pending, not settled, and blocks
 - [ ] Codecov coverage passing with 0 missing lines
 - [ ] No unresolved review threads from any reviewer (Copilot, CodeRabbit, human, or future automated reviewer); follow-up/out-of-scope threads are settled without expanding implementation
 
@@ -1086,7 +1089,7 @@ Workflow complete when ALL true:
 - ✅ Browser and programmatic test-plan verification done BEFORE the PR was opened
 - ✅ Candidate head frozen and recorded before hosted review and CI (Step 4.7)
 - ✅ PR created with description (including links to related specs/changes and the verified test plan)
-- ✅ ALL test plan items addressed: browser-verified, programmatically verified, user-confirmed manual verification, or a failure the user explicitly accepted (NEVER silently skipped, and never a failure shipped past the gates unaccepted)
+- ✅ ALL test plan items settled: browser-verified, programmatically verified, user-confirmed manual verification, or explicitly accepted by the user as a known failure or as knowingly unverified (NEVER silently skipped, and never shipped past the gates merely annotated)
 - ✅ PR test plan items checked off or annotated with verification results in the PR description
 - ✅ Self-review done as a delta/integration pass, findings batched into the same fix push as the hosted reviewers'
 - ✅ Automated review feedback classified and settled; blocking findings resolved and the latest affected delta verified without unrelated review restarts
