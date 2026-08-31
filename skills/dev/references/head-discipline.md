@@ -23,7 +23,9 @@ Per PR, in this order:
 9. Once hosted review has converged, wait for CI on the current candidate head.
 10. Verify the merge gates against that same SHA, then merge.
 
-**Nothing between step 9 and the merge may push.** A gate that needs a commit is a defect in an earlier step — fix it there. If one slips through anyway, the resulting SHA is a new candidate head: re-run steps 9–10 on it rather than merging on evidence collected for its parent.
+**Every push after step 6 re-enters at step 7, whatever produced it.** A hosted-review fix, a CI-remediation fix, a late verification fix, a missing tracking commit — each creates a new candidate head, and the steps after 7 are the ones whose evidence it just invalidated. Re-entering means re-covering the delta with the reviewers that do not re-review a push on their own, then reaching CI and the gates on the new SHA. Skipping back in — jumping from a CI fix straight to another CI wait, say — ships a commit no reviewer has read, and finalization then discovers a reviewed SHA that is not the head.
+
+**Nothing between step 9 and the merge may push.** A gate that needs a commit is a defect in an earlier step — fix it there. If one slips through anyway, it is a push like any other: re-enter at step 7 rather than merging on evidence collected for its parent.
 
 CI normally starts by itself the moment you push, and that is fine — it may well be green by the time you reach step 9. The rule is not "stop CI from running", it is **do not spend a coordinator turn, or a concurrency slot, watching a run you are about to invalidate**.
 

@@ -657,7 +657,7 @@ Re-verify only the item that failed, on the new head.
 3. **6.3's waiter launch**, on a head with no known blocking finding. The hosted reviewers are the long pole, so from here on nothing waits on them that could have gone first.
 4. **On each reviewer wake** — read that log, classify its threads (6.3, per-reviewer steps 1–2), then re-enter **6.2 once** for everything currently on the table across every channel, and push once.
 5. **Only after that push** do the resolvers run, with their blocking entries annotated `already fixed in <sha>`. A resolver is never invoked with an un-fixed `blocking` disposition, because its own blocking path pushes independently — the per-reviewer push this ordering exists to prevent.
-6. **The push in 4 created a new head, so re-cover it** (6.3, per-reviewer step 4) before repeating from 4 on the next wake.
+6. **The push in 4 created a new head, so re-cover it** — 6.3, per-reviewer step 4, applying `references/head-discipline.md` § Evidence is SHA-scoped — before repeating from 4 on the next wake.
 
 If a wake arrives while nothing else is outstanding and its channel is the only one with findings, 6.2 still runs once for that channel — a batch of one is not a violation. What is forbidden is fixing channel A, pushing, and then fixing channel B (`references/head-discipline.md` § Batch findings).
 
@@ -722,7 +722,7 @@ Agent tool:
   description: "Fix review issues"
 ```
 
-**Do not hold the batch open for a channel that has not reported** (`references/head-discipline.md` § Batch findings) — late findings are the next batch, against the new head. After the push, record the new SHA as the candidate head and supersede every outstanding wait bound to the previous one.
+**Do not hold the batch open for a channel that has not reported** (`references/head-discipline.md` § Batch findings) — late findings are the next batch, against the new head. After the push, record the new SHA as the candidate head and apply § Evidence is SHA-scoped to every wait still bound to the previous one.
 
 Then invoke each reviewer's resolver to settle its threads, passing its blocking entries annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions). The resolvers reply, resolve, and record `REVIEW.md` entries — they do not edit or push again. Letting two resolvers fix in parallel instead races them on the same branch and buys two CI cycles for one round of feedback.
 
@@ -773,7 +773,7 @@ bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NU
 4. **After the Step 6.2 push** — that push, not a resolver's, is what moves the head under this ordering — record the new SHA as the candidate head and re-cover it:
    - **Relaunch the waiter of every reviewer whose evidence the delta invalidated**, and only those. Do not restart a reviewer the delta did not touch merely because `HEAD` changed. **Copilot does not re-review a push on its own** — its waiter must be relaunched, or the fix you just pushed ships unreviewed by it; CodeRabbit re-reviews by itself and its waiter is relaunched only to observe that.
    - On the next wake, inspect only feedback added or changed since that reviewer's previously reviewed SHA, and classify and deduplicate it in the shared ledger.
-   - **Any CI wait outstanding for the prior SHA is superseded** — stop it, reclaim its slot, and never read its verdict as evidence about this head.
+   - **Any CI wait outstanding for the prior SHA is superseded** (`references/head-discipline.md` § Evidence is SHA-scoped) — stop it and reclaim its slot for the relaunches above (§ Waiter scheduling order).
 5. Stop when the channel has **converged** per `references/scope-contract.md` § Convergence — no blocking finding left unresolved, ledger-wide — confirmed by one latest-delta pass, and every required reviewer thread is settled.
 
 Never let a reviewer's findings reach an implementer before you have classified them.
@@ -860,10 +860,11 @@ Pass the failure details from the script output to the skill. The skill will:
 
 **Batch the CI failures with anything else outstanding before that push** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
 
-**After the skill completes and fixes are pushed, record the new SHA as `CANDIDATE_HEAD` and GO BACK TO Step 7.0** — re-run the wait script against the new head. This creates a loop:
+**After the skill completes and fixes are pushed, record the new SHA as `CANDIDATE_HEAD` and re-enter Step 6.3 before Step 7.0.** A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first. Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
 
 ```
-Step 7.1 (wait) → fail → Step 7.2 (batched fix) → Step 7.0 (new head) → Step 7.1 (wait) → ...
+Step 7.1 (wait) → fail → Step 7.2 (batched fix, one push)
+                       → Step 6.3 (re-cover the new head) → Step 7.0 → Step 7.1 (wait) → ...
 ```
 
 **⚠️ Maximum 3 iterations.** Track the current iteration count. If checks still fail after 3 fix attempts, STOP and report the persistent failures to the user with full details.

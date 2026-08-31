@@ -169,7 +169,7 @@ This is fast and idempotent — it checks what exists and only creates/modifies 
 
 ### Every Task Completion MUST:
 
-1. Mark task complete in the file where the task lives: `- [x] Task (PR #N)`
+1. Mark task complete in the file where the task lives: `- [x] Task`, plus `(PR #N)` where the PR number is already known. The annotation is **optional** — see item 6: tracking is written with the implementation, before the PR exists, and a completed task is never held back or re-committed for the sake of adding a number the merge commit already records.
 2. Task lists may be in `docs/tasks.md` OR in `docs/changes/*.md` files
 3. If ALL tasks in a change document are now complete, update its `**Status:**` to `complete`
 4. **Sync indexes** — Update `docs/index.yml` and `docs/index.md` to reflect the new status (see Workflow 5)
