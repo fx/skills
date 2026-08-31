@@ -326,7 +326,7 @@ Identify `[DOC_PATH]` before spawning — the change document or task list named
 grep -rl "keyword from task" docs/changes/ docs/tasks.md 2>/dev/null || true
 ```
 
-**Tracking updates belong here, not at finalization** — step 5 of `references/head-discipline.md` § The candidate head. Nothing about them needs the PR to exist.
+**Tracking updates belong here, not at finalization** — they ride with the implementation at step 1 of `references/head-discipline.md` § The candidate head, where step 5 later confirms none is outstanding. Nothing about them needs the PR to exist.
 
 Verify commits exist:
 ```bash

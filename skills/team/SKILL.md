@@ -372,9 +372,10 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-
         > [AGENT_DIR]/team/waits/ci-<PR_NUMBER>.log 2>&1
 
 # On each wake — a notification, or the wait_agent that returns: read the log,
-# branch on its STATUS= line, classify its findings in the ledger, then spawn ONE
-# fix teammate for every channel's outstanding blocking findings and push once
-# (§ Batch findings). Only AFTER that push do you invoke the resolvers, with their
+# branch on its STATUS= line, classify its findings in the ledger, then combine
+# every channel's outstanding blocking findings into ONE set, hand that whole set
+# to a SINGLE fix teammate, and push once (§ Batch findings) — one teammate for
+# all channels, never one per channel. Only AFTER that push do you invoke the resolvers, with their
 # blocking threads annotated `already fixed in <sha>` (scope-contract.md
 # § Resolver dispositions) — a resolver handed an UN-fixed blocking disposition
 # takes its own edit-and-push path instead, once per reviewer.
