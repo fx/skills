@@ -373,9 +373,9 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-
 # branch on its STATUS= line, classify its findings in the ledger, then spawn ONE
 # fix teammate for every channel's outstanding blocking findings and push once
 # (§ Batch findings). Only AFTER that push do you invoke the resolvers, with their
-# blocking threads annotated `already fixed in <sha>` — a resolver handed an
-# un-fixed blocking disposition takes its own edit-and-push path, which is the
-# per-reviewer push this ordering exists to prevent.
+# blocking threads annotated `already fixed in <sha>` (scope-contract.md
+# § Resolver dispositions) — a resolver handed an UN-fixed blocking disposition
+# takes its own edit-and-push path instead, once per reviewer.
 ```
 
 **On every wake**, record the result against the SHA it observed and apply § Evidence is SHA-scoped — including stopping any CI waiter whose SHA the head has moved past, which also returns its slot to the wave.
@@ -443,7 +443,7 @@ If the flip is missing when you reach the gates anyway:
 
 1. **Do NOT merge.**
 2. **Spawn a focused fix agent** to flip both files. Never commit it yourself — Coordinator Rules below: the coordinator writes no code and creates no commits. Commit message: `docs(changes): mark <NNNN> complete`.
-3. Record the resulting SHA as the new candidate head, re-run the CI wait against it, and re-verify the merge gates on it (§ Evidence is SHA-scoped) — the previous run's evidence is superseded.
+3. Record the resulting SHA as the new candidate head and **re-enter at step 7 of `[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head**, exactly as any other post-candidate push does: re-cover the delta with the hosted reviewers first — Copilot does not re-review a push on its own — then the CI wait, then the gates. Going straight to CI merges a commit no required reviewer has read.
 4. Then merge.
 
 This MUST NOT become a follow-up PR. Doing it post-merge means main spent some window in a wrong state, and the user sees a stale `draft` for every change you ship.
@@ -498,7 +498,7 @@ When all tasks are complete and all PRs merged:
 - **ALWAYS use `project-management`** to verify task tracking
 - **ALWAYS run the full merge gate checklist** even for "trivial" or "follow-up" PRs
 - **NEVER merge without browser verification** — spawn a verify agent if needed. CI alone does NOT catch runtime errors.
-- **NEVER merge the FINAL PR of a change doc with `Status: draft` still in the diff.** The flip to `complete` rides in that PR, in both `docs/changes/<NNNN>-*.md` and `docs/index.yml`. If the coder forgot, send a fix agent to their branch, then re-wait for CI on the new head before merging. Do NOT defer to a follow-up PR. See PRE-MERGE: Change-Doc Status Flip above.
+- **NEVER merge the FINAL PR of a change doc with `Status: draft` still in the diff.** The flip to `complete` rides in that PR, in both `docs/changes/<NNNN>-*.md` and `docs/index.yml`. If the coder forgot, send a fix agent to their branch, then re-enter hosted review and CI on the new head before merging (§ The candidate head). Do NOT defer to a follow-up PR. See PRE-MERGE: Change-Doc Status Flip above.
 
 ## Handling Agent Issues
 

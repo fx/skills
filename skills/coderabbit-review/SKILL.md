@@ -158,10 +158,10 @@ rejected to the outdated/incorrect path instead of a re-triage that loses the
 
 **Where a coordinator is running several channels, the blocking fixes are batched
 and pushed before this dispatch** (`[SKILLS_DIR]/dev/references/head-discipline.md`
-§ Batch findings), and the `blocking` dispositions arrive annotated
-`already fixed in <sha>` — reply and resolve, no edit, no push. Dispatching with
-an un-fixed `blocking` disposition instead sends the resolver down its own
-edit-and-push path, once per reviewer.
+§ Batch findings), so the `blocking` dispositions arrive annotated
+`already fixed in <sha>` (`[SKILLS_DIR]/dev/references/scope-contract.md`
+§ Resolver dispositions). Dispatching with an un-fixed one instead sends the
+resolver down its own edit-and-push path, once per reviewer.
 
 ## Step 3: Loop until settled
 
