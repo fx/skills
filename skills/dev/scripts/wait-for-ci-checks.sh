@@ -50,12 +50,16 @@
 # PR_HEAD_SHA IS PART OF THE VERDICT, NOT DECORATION. A CI result is evidence about
 # exactly one commit. `gh pr checks` always reports the PR's CURRENT head, so a push
 # landing mid-wait silently moves what is being observed — the caller launched this
-# on SHA A and can be handed a verdict about SHA B. The line is read at the moment
-# the verdict is decided, so the caller can compare it against the SHA it recorded
-# and discard a superseded result. `unknown` means the read failed: the verdict
-# still stands for whatever the head then was, but the caller must confirm the SHA
-# itself before treating it as merge evidence. See dev/references/head-discipline.md
-# § Evidence is SHA-scoped.
+# on SHA A and can be handed a verdict about SHA B. The head is therefore read on
+# BOTH sides of the checks read the verdict came from, and a SHA is printed only
+# when the two agree; the caller compares it against the SHA it recorded and
+# discards a superseded result.
+#
+# `unknown` means the pair could not be confirmed — either read failed, or the head
+# moved while the verdict was being read. The verdict still stands for whatever the
+# head was at the time, but it cannot be attributed here, so the caller MUST confirm
+# the SHA itself before treating it as merge evidence. See
+# dev/references/head-discipline.md § Evidence is SHA-scoped.
 #
 # gh pr checks --json fields: bucket, completedAt, description, event,
 #   link, name, startedAt, state, workflow
@@ -267,24 +271,58 @@ get_checks() {
     return 1
 }
 
-# Read the PR's head SHA for the verdict line.
+# Read the PR's head SHA, or print nothing.
 #
-# This runs AFTER a verdict is decided, so it is reporting rather than waiting and
-# is capped by DIAGNOSTIC_BUDGET like every other post-verdict read.
+# `cap_kind` selects the budget: `wait` for a read taken while WAITING (bounded by
+# the budget remaining, like every other polling read), `diag` for one taken after
+# a verdict is decided, which is reporting rather than waiting.
 #
 # It can never fail the run. Turning an already-decided TERMINAL_PASS into an ERROR
 # because a metadata read timed out would discard a verdict the caller waited 900 s
-# for. On any failure it prints `unknown`, which the protocol defines as "the caller
-# must confirm the SHA itself before treating this as merge evidence" — an honest
-# gap rather than a fabricated SHA the caller would compare against and trust.
-head_sha_or_unknown() {
-    local out rc=0
-    out=$(timeout "$DIAGNOSTIC_BUDGET" gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>/dev/null) || rc=$?
-    if (( rc != 0 )) || [[ -z "${out//[[:space:]]/}" ]]; then
-        printf 'unknown'
+# for. On any failure it prints the empty string, which the one caller below maps
+# to `unknown` — an honest gap rather than a fabricated SHA the caller would
+# compare against and trust.
+read_head_sha() {
+    local cap_kind="$1" cap out rc=0
+    if [[ "$cap_kind" == "wait" ]]; then
+        cap=$(wait_cap)
+    else
+        cap=$DIAGNOSTIC_BUDGET
+    fi
+    # `timeout 0 CMD` DISABLES the cap in coreutils rather than expiring at once,
+    # so an exhausted budget must SKIP the call, exactly as get_checks does.
+    if (( cap <= 0 )); then return 0; fi
+    out=$(timeout "$cap" gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>/dev/null) || rc=$?
+    if (( rc != 0 )); then return 0; fi
+    printf '%s' "${out//[[:space:]]/}"
+}
+
+# Emit the PR_HEAD_SHA line for a decided verdict.
+#
+# ⛔ THE VERDICT AND THE SHA MUST DESCRIBE THE SAME COMMIT, so the head is read on
+# BOTH sides of the checks read this verdict came from. `gh pr checks` reports
+# whatever the head was when IT ran; a push landing between that call and this one
+# would otherwise print head B's SHA above head A's result, and a caller whose
+# ledger already says B would accept A's CI as evidence for B — the precise
+# mis-association the SHA line exists to prevent, delivered with a SHA that makes
+# it look verified.
+#
+# `$1` is the head observed immediately BEFORE the checks read; empty if that read
+# failed or was skipped. Only a confirmed, unchanged pair is printed as a SHA.
+# Anything else is `unknown`, which the protocol defines as "the caller must
+# confirm the SHA itself before treating this as merge evidence".
+emit_head_sha() {
+    local before="$1" after
+    after=$(read_head_sha diag)
+    if [[ -n "$before" && "$before" == "$after" ]]; then
+        echo "PR_HEAD_SHA=${after}"
         return 0
     fi
-    printf '%s' "$out"
+    if [[ -n "$before" && -n "$after" ]]; then
+        echo "The head moved from ${before:0:7} to ${after:0:7} while this verdict was"
+        echo "being read, so the result above cannot be attributed to either commit."
+    fi
+    echo "PR_HEAD_SHA=unknown"
 }
 
 # Count checks in a bucket (pass, fail, skipping, pending).
@@ -365,6 +403,12 @@ echo ""
 echo "Phase 2: waiting for all checks to complete..."
 
 while (( SECONDS < TIMEOUT )); do
+    # Read the head BEFORE the checks read, every iteration, so the pair that
+    # decides the verdict brackets it (see emit_head_sha). A failed or skipped
+    # read leaves this empty, which forces PR_HEAD_SHA=unknown rather than a
+    # SHA that might not be the one the checks were reported for.
+    head_before=$(read_head_sha wait)
+
     # Branch on the RETURN CODE, exactly as Phase 1 does. `if ! ...` collapses
     # budget-expiry (2) into generic failure and would report a reachable,
     # authenticated setup as broken when the last read is killed at the deadline.
@@ -404,7 +448,7 @@ while (( SECONDS < TIMEOUT )); do
         printf '%s' "$checks" | jq -r '.[] | "  \(.state): \(.name)"'
 
         echo ""
-        echo "PR_HEAD_SHA=$(head_sha_or_unknown)"
+        emit_head_sha "$head_before"
         echo "CHECKS_TOTAL=${total}"
         echo "CHECKS_PASSED=${passed_checks}"
         echo "CHECKS_FAILED=${failed_checks}"

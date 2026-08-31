@@ -1,6 +1,8 @@
 # Head Discipline
 
-Canonical rules for **when to push**, **what a review or CI result is evidence of**, and **what order to wait in**. `dev` and `team` both reference this file; neither restates it.
+Canonical rules for **when to push**, **what a review or CI result is evidence of**, and **what order to wait in**.
+
+**These rules are defined here and referenced elsewhere, never restated** (`AGENTS.md` § Writing style; `scope-contract.md` § Blocking states the same principle for its own rules — a copied rule drifts, and the stale copy is reliably the narrower one). A skill applying one of them at its point of use writes the imperative it needs and names the section: *"launch the CI waiter last (§ Waiter scheduling order)"*, not a paraphrase of why. If a skill needs different behaviour, change it here, for everyone.
 
 One failure motivates all of it: **every push invalidates the head-scoped evidence gathered before it.** A workflow that pushes between collecting evidence and using it pays for the same wait twice. Observed on a 19-hour `team` run: roughly 70% of wall clock spent waiting on CI, most of it on runs a later push had already superseded.
 

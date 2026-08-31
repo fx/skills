@@ -98,14 +98,9 @@ duvet# During an explicitly invoked `dev` lifecycle, the coordinator MUST delega
 
 ### Head Discipline (push once, wait once)
 
-**Every push invalidates the head-scoped evidence collected before it.** The lifecycle is ordered so that everything which can change the tree happens before the **candidate head** (Step 4.7), and everything expensive and head-scoped happens after it. Full rule: `references/head-discipline.md`.
+**Every push invalidates the head-scoped evidence collected before it.** That is why this lifecycle is ordered around a **candidate head** (Step 4.7) rather than pushing whenever something is ready.
 
-Four rules from it bind every step below:
-
-- **Finalize before you push** — tracking docs, status flips, generated files, and pre-PR verification all ride with the implementation, never after the gates.
-- **Evidence is SHA-scoped** — record the SHA with every review and CI result; when the head moves, outstanding CI waits for the old SHA are superseded.
-- **Batch findings** — collect, classify, deduplicate, fix once, push once. Never `finding → fix → push` per finding.
-- **Reviewer waiters before the CI waiter** — CI on a head a pending review will invalidate is a wait paid for twice.
+`references/head-discipline.md` defines the rules; they are not restated here or in the steps below, which name the section they are applying. Read all five before running this workflow: § The candidate head, § Evidence is SHA-scoped, § Batch findings, § Waiter scheduling order, § Reviewer availability is cached for the run.
 
 ### Scope Discipline (STOP rule)
 
@@ -330,7 +325,7 @@ Identify `[DOC_PATH]` before spawning — the change document or task list named
 grep -rl "keyword from task" docs/changes/ docs/tasks.md 2>/dev/null || true
 ```
 
-**Tracking updates belong here, not at finalization.** A tracking commit pushed after the merge gates have been verified invalidates the CI and exact-head review evidence those gates just collected, and buys nothing that could not have ridden with the code (`references/head-discipline.md` § The candidate head).
+**Tracking updates belong here, not at finalization** — step 5 of `references/head-discipline.md` § The candidate head. Nothing about them needs the PR to exist.
 
 Verify commits exist:
 ```bash
@@ -346,7 +341,7 @@ git diff main --stat
 
 **MANDATORY: Run one complete local review matrix before creating the PR.** Run each available pass once in order against the current `HEAD`, record the revision that each channel reviewed, and classify its findings before accepting fixes. If `/simplify` edits directly, retain only changes that satisfy the contract classification and record the resulting revision before starting the next pass.
 
-**Run all three passes, then fix once.** Do not fix and re-run between passes: collect every local finding, classify and deduplicate the whole set in the ledger, sweep each finding's class, and hand the entire blocking set to one fix agent (`references/head-discipline.md` § Batch findings). Local passes are cheap to run and expensive to serialize — this is the last stage where a fix costs nothing but a local rerun, so spend the thoroughness here rather than after the push.
+**Run all three passes, then fix once** (`references/head-discipline.md` § Batch findings). Do not fix and re-run between passes. This is the last stage where a fix costs nothing but a local rerun, so spend the thoroughness here rather than after the push.
 
 **Every pass below follows `fx-review`** — the canonical review procedure
 (Skill tool: `skill="fx-review"`), which each reviewer skill loads first. This
@@ -413,7 +408,7 @@ Proceed to Step 4.6 when all of the following are true:
 
 ### STEP 4.6: Test Plan Construction and Verification (MANDATORY, PRE-PR)
 
-**Verification happens before the PR exists.** Everything in this step runs against the local branch, so a failure it finds costs a local fix instead of an extra push, an extra CI run, and an extra hosted-review round (`references/head-discipline.md` § The candidate head). Only the items that genuinely require a human or an external system survive into Step 5.5.
+**Verification happens before the PR exists** — step 4 of `references/head-discipline.md` § The candidate head. Everything here runs against the local branch, so only the items that genuinely require a human or an external system survive into Step 5.5.
 
 This step is MANDATORY for every change, not only web/UI ones. Backend changes, platform integrations, CLI tools, and infrastructure changes all have test plans.
 
@@ -496,7 +491,9 @@ Agent tool:
   description: "Fix verification failures"
 ```
 
-Re-run only the verification whose evidence the fix invalidated, plus the Step 4.5 passes and tests the delta invalidated — Step 4.5's remediation rules apply here unchanged, and a fix nothing reviewed is not converged. **Maximum 2 fix iterations.** If items still fail after 2 attempts, carry them into Step 5 annotated as unverified and say so in the PR body.
+Re-run only the verification whose evidence the fix invalidated, plus the Step 4.5 passes and tests the delta invalidated — Step 4.5's remediation rules apply here unchanged, and a fix nothing reviewed is not converged.
+
+**Maximum 2 fix iterations, and the bound is an escalation, not a bypass.** If a non-manual item still fails after 2 attempts, **STOP and report it to the user** with what fails, what the two attempts changed, and the cheapest path forward. Do not open the PR on the strength of having hit the bound: a failed browser or programmatic item is a known defect, and no later step accepts one — the Step 8.1 merge gates require every test plan item verified, user-confirmed, or manual-only, and "failed twice" is none of those. The user may accept the failure explicitly, in which case record it in the ledger as accepted-by-user with their reason and carry it into the PR body annotated `— FAILED: <reason> (accepted by user)`. Only that recorded acceptance lets the item past the gate.
 
 Record every item's result — they are written into the PR body in Step 5, already checked off.
 
@@ -520,11 +517,7 @@ git push -u origin HEAD
 git rev-parse HEAD    # ← the CANDIDATE HEAD; every review and CI result is evidence about this SHA and no other
 ```
 
-Record the candidate head in the ledger. From here on, follow `references/head-discipline.md`:
-
-- **Evidence is SHA-scoped.** A review or CI result carries the SHA it observed, or it is not evidence (§ Evidence is SHA-scoped).
-- **When the head changes, outstanding CI waits for the prior SHA are superseded** — stop them, do not read their verdict as merge evidence, and re-review only the delta.
-- **Every subsequent fix is batched into one push** (§ Batch findings), which becomes the new candidate head.
+Record the candidate head in the ledger. From here on `references/head-discipline.md` § Evidence is SHA-scoped and § Batch findings govern every result you read and every fix you push; each later push replaces the candidate head.
 
 ---
 
@@ -562,8 +555,10 @@ Skill tool: skill="pr-preparer", args="
              Do NOT commit or amend anything — create the PR on that exact SHA.
            - Create PR with: gh pr create  (NO --draft flag)
            - Body MUST carry the Step 4.6 Test plan with its recorded results:
-             verified items already '- [x]', failed items '- [ ] … — FAILED: reason',
-             manual-only items '- [ ] … — requires manual testing'
+             verified items already '- [x]', failed items the user accepted
+             '- [ ] … — FAILED: reason (accepted by user)', manual-only items
+             '- [ ] … — requires manual testing'. An unaccepted failure must not
+             reach here at all — Step 4.6.4 escalates it instead.
              [PASTE THE STEP 4.6 TEST PLAN WITH RESULTS]
            - Include links to related spec/change docs in the PR body
              (use relative paths from repo root, e.g. docs/specs/auth/ or docs/changes/0003-add-oauth.md)
@@ -632,7 +627,8 @@ BODY=$(gh pr view [PR_NUMBER] --json body --jq '.body')
 
 Per item:
 - **Verified (pass)**: `- [x]`
-- **Verified (fail)**: leave `- [ ]` and append `— FAILED: [reason]`
+- **Verified (fail)**: leave `- [ ]` and append `— FAILED: [reason]`. A failure the user has not explicitly accepted **blocks the merge gates** — it is not an annotation you may ship past them (Step 4.6.4)
+- **Verified (fail), accepted by user**: leave `- [ ]` and append `— FAILED: [reason] (accepted by user)`
 - **Manual — confirmed by user**: `- [x]` and append `(manually verified)`
 - **Manual — not yet verified**: leave `- [ ]` and append `— requires manual testing`
 
@@ -642,11 +638,11 @@ gh pr edit [PR_NUMBER] --body "$UPDATED_BODY"
 
 #### 5.5.4 Handle failures
 
-A failure here is a defect that escaped Step 4.6, so treat it as one more input to the current batch rather than its own cycle: record it in the ledger and let it ride with the Step 6.2 fix push (`references/head-discipline.md` § Batch findings). Only a failure that blocks every other channel justifies a push of its own. **Maximum 2 fix iterations**, counted together with Step 4.6's; after that, annotate the item as unverified in the PR body and continue.
+A failure here is a defect that escaped Step 4.6, so treat it as one more input to the current batch rather than its own cycle: record it in the ledger and let it ride with the Step 6.2 fix push (`references/head-discipline.md` § Batch findings). Only a failure that blocks every other channel justifies a push of its own. **Maximum 2 fix iterations**, counted together with Step 4.6's — and as there, reaching the bound is an escalation: STOP, report the failing item to the user, and let them decide. An item they explicitly accept is annotated `— FAILED: <reason> (accepted by user)`; an unaccepted failure blocks the merge gates.
 
 Re-verify only the item that failed, on the new head.
 
-**⛔ DO NOT REACH THE STEP 8.1 MERGE GATES until every test plan item is verified, confirmed by the user, or explicitly annotated as requiring manual testing.** Waiting on a manual-only answer never blocks Step 6 — post the request and proceed.
+**⛔ DO NOT REACH THE STEP 8.1 MERGE GATES until every test plan item is verified, explicitly accepted by the user as a known failure, confirmed by the user as a manual pass, or annotated as requiring manual testing.** A non-manual item that simply failed is none of those and blocks. Waiting on a manual-only *answer* never blocks Step 6 — post the request and proceed.
 
 ---
 
@@ -654,7 +650,15 @@ Re-verify only the item that failed, on the new head.
 
 **MANDATORY: Execute ALL sub-steps.**
 
-**Execution order within this step is 6.1 → 6.3's waiter launch → 6.2.** The sub-step numbers are stable identifiers other skills reference, not a running order. 6.1 costs no push, so it runs first; the hosted reviewers in 6.3 are the long pole, so they start next; 6.2 is the **single batched fix pass** that drains everything 6.1 and 6.3 produced (`references/head-discipline.md` § Batch findings). Fixing 6.1's findings before launching 6.3 spends a full push and a full reviewer cycle for no reason.
+**The sub-step numbers are stable identifiers other skills reference, not a running order.** This step runs as a loop, and 6.2 is entered from a wake, never from the clock:
+
+1. **6.1** — costs no push, so it runs first. Record its findings in the ledger; do **not** fix them yet.
+2. **6.3's waiter launch** — the hosted reviewers are the long pole, so they start before anything is fixed. Fixing 6.1's findings first would spend a push and a full reviewer cycle for no reason.
+3. **On each reviewer wake** — read that log, classify its threads (6.3, per-reviewer steps 1–2), then re-enter **6.2 once** for everything currently on the table across every channel. That is the single batched fix pass, and it is where the only push in this step happens.
+4. **Only after 6.2's push** do the resolvers run, with their blocking entries annotated `already fixed in <sha>`. A resolver is never invoked with an un-fixed `blocking` disposition here, because its own blocking path pushes independently and that is exactly the per-reviewer push this ordering exists to prevent.
+5. Repeat from 3 for each later wake, against the new head.
+
+If a wake arrives while nothing else is outstanding and its channel is the only one with findings, 6.2 still runs once for that channel — a batch of one is not a violation. What is forbidden is fixing channel A, pushing, and then fixing channel B (`references/head-discipline.md` § Batch findings).
 
 #### 6.1 Self-Review — delta and integration only
 
@@ -738,9 +742,9 @@ Then invoke each reviewer's resolver to settle its threads, passing its blocking
 
 **⛔ Launch each configured reviewer's wait script concurrently, each redirecting to its own log file.** Take the shape of the wait from `references/host-adapters.md` § Long waits — on Claude Code it is one message with every call `run_in_background: true`, woken per reviewer by its completion notification, and spawning sub-agents for the wait buys nothing; on Codex the same table says to delegate each waiter to a teammate and `wait_agent` on it. Either way the concurrency is the same and there is no "can I spawn sub-agents?" branch to agonise over: root session, `team` coordinator, and sub-agent all follow their host's row. **Where the row makes each waiter a child, those children spend the host's concurrency slots** — Codex has three for teammates, so two reviewer waiters already take two of them. That is the other reason the CI wait is Step 7 rather than a third child launched here: it would leave no slot for the fix work its own result might require. Launch at most three waiters at a time and reconcile between batches; a spawn past the limit queues, and a queued waiter looks exactly like a hung one.
 
-**Reviewer waiters go first; the CI waiter is Step 7 and waits its turn** (`references/head-discipline.md` § Waiter scheduling order). Reviewer findings change the tree, so they decide whether this head survives at all — starting a CI waiter alongside them spends a slot, and later a wake, on a run the next fix push supersedes. CI is already running; you are choosing when to *watch* it.
+**Reviewer waiters go first; the CI waiter is Step 7 and waits its turn** (`references/head-discipline.md` § Waiter scheduling order).
 
-**Skip a reviewer whose absence this run already established.** `STATUS=NOT_CONFIGURED` is a property of the repository, not of the PR: once recorded in the ledger, that reviewer's waiter is not launched again for the rest of the run (`references/head-discipline.md` § Reviewer availability is cached for the run). It matters most under `team`, where the same absence would otherwise be re-established once per PR.
+**Skip a reviewer whose absence this run already established** (`references/head-discipline.md` § Reviewer availability is cached for the run). It matters most under `team`, which runs many PRs against one repository.
 
 ```bash
 # Claude Code spelling: both in ONE message, both run_in_background: true.
@@ -764,7 +768,7 @@ bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NU
    - `NOT_CONFIGURED` — that reviewer does not apply to this repo. Terminal: report once, proceed without it, never retry.
    - `ERROR` — the wait never started. Report it.
 2. Read its unresolved threads and classify them in the shared ledger **before** invoking any resolver. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
-3. Invoke each reviewer's resolver only after classification, passing the blocking findings and a disposition for every thread that carries a finding — `blocking`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions) — so it settles both no-edit dispositions without code or task-tracker changes. A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. **Where more than one channel has reported, dispose of them together and fix them in one Step 6.2 pass** — one push, not one per reviewer.
+3. **Fix before you dispatch.** Take every blocking entry this wake produced, together with every other channel's outstanding blocking entries, through **one** Step 6.2 pass, and push once. Then invoke each reviewer's resolver, passing a disposition for every thread that carries a finding — `blocking` annotated `already fixed in <sha>`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions) — so every one of them is settled without a further edit or push. A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. Handing a resolver an un-fixed `blocking` disposition puts it on its own fixing path, which pushes per reviewer — the churn this ordering exists to prevent.
 4. After a resolver pushes, record the new SHA as the candidate head and inspect only feedback added or changed since the previous reviewed SHA. Classify and deduplicate it in the shared ledger. Relaunch only the waiter whose state or evidence the delta invalidated; do not restart every reviewer merely because `HEAD` changed. **Any CI wait outstanding for the prior SHA is superseded** — stop it, reclaim its slot, and never read its verdict as evidence about this head.
 5. Stop when the channel has **converged** per `references/scope-contract.md` § Convergence — no blocking finding left unresolved, ledger-wide — confirmed by one latest-delta pass, and every required reviewer thread is settled.
 
@@ -794,7 +798,7 @@ transition to manage in this workflow.
 
 #### 7.0 Enter this step only on a converged head
 
-**Do not start the CI wait until Step 6.3 has converged on the current head** — no unresolved blocking review finding anywhere in the ledger (`references/head-discipline.md` § Waiter scheduling order). CI has been running since the push regardless; what this step schedules is the coordinator's attention, and attention spent on a head the next fix push supersedes is spent twice.
+**Do not start the CI wait until Step 6.3 has converged on the current head** — no unresolved blocking review finding anywhere in the ledger (`references/head-discipline.md` § Waiter scheduling order). CI has been running since the push regardless; what this step schedules is the coordinator's attention.
 
 The one exception: when there is genuinely nothing else to advance — no other PR, no other work in flight — start the CI wait early. An idle coordinator loses nothing by watching.
 
@@ -845,7 +849,7 @@ Pass the failure details from the script output to the skill. The skill will:
 2. Delegate fixes to a sub-agent with the coder skill
 3. Push the fixes
 
-**Batch the CI failures with anything else outstanding before that push** (`references/head-discipline.md` § Batch findings): if a reviewer thread is still open or a verification item still failing, fix them in the same commit series. Every separate push buys another full CI cycle.
+**Batch the CI failures with anything else outstanding before that push** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
 
 **After the skill completes and fixes are pushed, record the new SHA as `CANDIDATE_HEAD` and GO BACK TO Step 7.0** — re-run the wait script against the new head. This creates a loop:
 
@@ -916,6 +920,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 - [ ] Copilot review RECEIVED and ALL threads resolved (via `copilot-review` skill — NEVER raw `gh api`)
 - [ ] CodeRabbit is passing with all received threads resolved, not configured, or explicitly recorded as `skipped (rate-limited)`. CodeRabbit throttling is optional and never blocks merge.
 - [ ] Zero unresolved **blocking** ledger entries (`references/scope-contract.md` § Blocking) — `required-by-contract`, `regression-caused-by-change`, and any entry blocking by tier; the latest affected delta is verified within the stopping bounds
+- [ ] Every test plan item verified, user-confirmed, annotated manual-only, or recorded as a failure the user explicitly accepted (Step 5.5)
 - [ ] Codecov coverage passing with 0 missing lines
 - [ ] No unresolved review threads from any reviewer (Copilot, CodeRabbit, human, or future automated reviewer); follow-up/out-of-scope threads are settled without expanding implementation
 
@@ -1062,7 +1067,7 @@ Workflow complete when ALL true:
 - ✅ Browser and programmatic test-plan verification done BEFORE the PR was opened
 - ✅ Candidate head frozen and recorded before hosted review and CI (Step 4.7)
 - ✅ PR created with description (including links to related specs/changes and the verified test plan)
-- ✅ ALL test plan items addressed: browser-verified, programmatically verified, or user-confirmed manual verification (NEVER silently skipped)
+- ✅ ALL test plan items addressed: browser-verified, programmatically verified, user-confirmed manual verification, or a failure the user explicitly accepted (NEVER silently skipped, and never a failure shipped past the gates unaccepted)
 - ✅ PR test plan items checked off or annotated with verification results in the PR description
 - ✅ Self-review done as a delta/integration pass, findings batched into the same fix push as the hosted reviewers'
 - ✅ Automated review feedback classified and settled; blocking findings resolved and the latest affected delta verified without unrelated review restarts

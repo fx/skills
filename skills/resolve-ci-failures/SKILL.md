@@ -31,7 +31,7 @@ Meta-skill that analyzes failing CI checks on a PR, fetches failure logs, catego
 - ❌ NEVER leave comments directly on the GitHub PR
 - ❌ NEVER retry a check without pushing a fix first
 - ✅ ALWAYS fix root causes, not symptoms
-- ✅ ALWAYS fix every failure in this batch, then push **once** — one push per failure buys one full CI cycle per failure (`[SKILLS_DIR]/dev/references/head-discipline.md` § Batch findings)
+- ✅ ALWAYS fix every failure in this batch, then push **once** (`[SKILLS_DIR]/dev/references/head-discipline.md` § Batch findings)
 - ✅ ALWAYS report infrastructure failures to user — do not attempt to fix them
 
 ## Core Workflow
@@ -154,7 +154,7 @@ Agent tool:
   description: "Fix CI failure: [CHECK_NAME]"
 ```
 
-If multiple checks failed with independent root causes, delegate fixes for ALL of them before pushing anything. Sequential delegation is preferred to avoid merge conflicts. Where the caller has other findings outstanding for the same head — reviewer threads, verification failures — those belong in this same push too.
+If multiple checks failed with independent root causes, delegate fixes for ALL of them before pushing anything. Sequential delegation is preferred to avoid merge conflicts. Where the caller has other findings outstanding for the same head — reviewer threads, verification failures — those belong in this same push too (§ Batch findings).
 
 ### 6. Push Changes
 
@@ -165,7 +165,7 @@ git status
 git push
 ```
 
-That push creates a new head. Every CI or review result outstanding for the previous SHA is superseded (`[SKILLS_DIR]/dev/references/head-discipline.md` § Evidence is SHA-scoped) — the caller re-waits on the new SHA and must not read the old verdict as evidence about it.
+That push creates a new head; report its SHA. What the caller must then do with results outstanding for the previous one is `[SKILLS_DIR]/dev/references/head-discipline.md` § Evidence is SHA-scoped.
 
 If the coder sub-agent already pushed, verify with:
 
