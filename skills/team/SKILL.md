@@ -370,8 +370,12 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-
         > [AGENT_DIR]/team/waits/ci-<PR_NUMBER>.log 2>&1
 
 # On each wake — a notification, or the wait_agent that returns: read the log,
-# branch on its STATUS= line, classify findings in the ledger, THEN invoke that
-# reviewer's resolver skill.
+# branch on its STATUS= line, classify its findings in the ledger, then spawn ONE
+# fix teammate for every channel's outstanding blocking findings and push once
+# (§ Batch findings). Only AFTER that push do you invoke the resolvers, with their
+# blocking threads annotated `already fixed in <sha>` — a resolver handed an
+# un-fixed blocking disposition takes its own edit-and-push path, which is the
+# per-reviewer push this ordering exists to prevent.
 ```
 
 **On every wake**, record the result against the SHA it observed and apply § Evidence is SHA-scoped — including stopping any CI waiter whose SHA the head has moved past, which also returns its slot to the wave.

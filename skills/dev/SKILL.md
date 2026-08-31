@@ -826,11 +826,16 @@ Script behavior:
 - Phase 1 (discovery): waits up to 90 s for any check to appear.
 - Phase 2: polls every 30 s until all checks settle, against a shared 900 s wall-clock budget.
 
-Branch on the trailing `STATUS=` line:
+**Check the SHA before the STATUS, on every verdict.** `TERMINAL_PASS` and `TERMINAL_FAIL` are both evidence about the commit named on the `PR_HEAD_SHA=` line, and **only** that commit:
+
+- `PR_HEAD_SHA=` equals `CANDIDATE_HEAD` → read the STATUS below.
+- Anything else — a different SHA, or `unknown` — → **the verdict is superseded or unattributable. Discard it, do not act on it, and relaunch the wait against `CANDIDATE_HEAD`.** `unknown` is not "probably fine": the script emits it precisely because it could not tie the result to one commit, and re-reading the head yourself afterwards cannot retroactively attribute a `gh pr checks` response taken earlier. A failure on a superseded SHA is not this head's failure either — never send one to Step 7.2.
+
+Then branch on the trailing `STATUS=` line:
 
 | STATUS | Exit | What to do |
 |---|---|---|
-| `TERMINAL_PASS` | 0 | Every check completed, none failed → **proceed to Step 8**, but only if the `PR_HEAD_SHA=` line equals `CANDIDATE_HEAD`. A pass on a different SHA is evidence about that SHA; `PR_HEAD_SHA=unknown` means the script could not confirm it — verify the head yourself before treating it as a pass |
+| `TERMINAL_PASS` | 0 | Every check completed, none failed → **proceed to Step 8** |
 | `TERMINAL_FAIL` | 1 | Every check completed, at least one failed → **proceed to Step 7.2** |
 | `PENDING` | 2 | Still running at budget expiry. Not a verdict. Re-run to keep waiting, or report the wait as unfinished. **Never** record it as "CI passed". |
 | `NOT_CONFIGURED` | 3 | No checks appeared within the discovery grace — this PR has no CI configured. **This is NOT a pass**: a merge gate requiring green CI is not satisfied by the absence of CI. Report it and confirm against branch protection. |
