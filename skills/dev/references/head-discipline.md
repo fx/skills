@@ -16,7 +16,7 @@ Per PR, in this order:
 2. Run every **local** check and reviewer available — tests, `/simplify`, `/code-review`, `codex-review`.
 3. Batch every local finding, classify, and fix in **one** pass (§ Batch findings — one fix pass per push).
 4. Run the verification that does not need a PR to exist — browser and programmatic test-plan items.
-5. Finalize everything else that would otherwise force a later commit: task-tracking docs, change-doc and index status flips, generated files, recorded test-plan results.
+5. Confirm everything else that would otherwise force a later commit **is already committed** — task-tracking docs, change-doc and index status flips, generated files, recorded test-plan results. These ride with the implementation in step 1, not in a finalizing commit of their own; this step is the check that none is outstanding, and finding one here means step 1 missed it.
 6. Push. **Record that SHA as the candidate head.**
 7. Open or update the PR, set its metadata, then start the hosted reviewers.
 8. Batch every hosted blocking finding into **one** fix push. That push creates a new candidate head — return to step 7 for the delta only.
