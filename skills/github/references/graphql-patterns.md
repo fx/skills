@@ -2,6 +2,11 @@
 
 Common GraphQL query and mutation patterns for GitHub operations via `gh api graphql`.
 
+Every list query below shows **one page**. `first: 100` is a page size, not a
+promise that the connection fits in it, so any snippet whose result is read as a
+complete set has to be driven by § Pagination Pattern — that section is the
+canonical mechanism, and the examples above it show field shape only.
+
 ## Pull Request Operations
 
 ### Get PR Details with Review Threads
@@ -148,6 +153,12 @@ gh api graphql -f query='
   --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")] | length'
 ```
 
+**⛔ That count is only valid on a PR you already know fits in one page, and it is
+the wrong shape for a gate.** The `--jq` consumes the response `pageInfo` would
+have arrived in, so there is no cursor left to continue with, and the `length` is
+taken per page. Any count a decision rests on uses § Pagination Pattern instead:
+accumulate `nodes` across all pages first, then filter, then count.
+
 ### Get All Bot Review Comments
 
 ```bash
@@ -221,29 +232,81 @@ echo "$RESULT" | jq '.data'
 ## Best Practices
 
 1. **Use Variables** - Always use GraphQL variables (`-f` or `-F` flags) instead of string interpolation
-2. **Filter with jq** - Use `--jq` to filter results client-side rather than complex GraphQL queries
-3. **Batch Wisely** - For >100 items, use pagination with `after` cursor
+2. **Filter with jq** - Use `--jq` to filter results client-side rather than complex GraphQL queries — but never on a paging call, see § Pagination Pattern
+3. **Paginate Always** - A connection read as a complete set must be paged to exhaustion, whatever its size; `first: 100` is not a bound on what exists
 4. **Check Errors** - Always check for `.errors` in the response before processing `.data`
 5. **Node IDs** - PR review thread IDs start with `RT_`, comment IDs start with `PRRC_` or `IC_`
 
 ## Pagination Pattern
 
+`reviewThreads(first: 100)` returns **at most** the first 100 threads. A truncated
+read raises no error — the response is well-formed and simply shorter — so every
+count taken off it reads as complete. This section is the canonical mechanism for
+reading a connection to exhaustion; skills point here rather than restating the
+loop, because four copies of a cursor loop drift and the stale copy is the one that
+silently truncates.
+
+**The invariant: accumulate `nodes` across all pages first, then filter, then
+count.** Filtering or counting per page is its own bug — a per-page `group_by`
+splits one reviewer's threads across pages and reports each slice as that
+reviewer's total, and a per-page `length` has exactly the same shape.
+
+**Never hang a reducing `--jq` on the paging call.** `--jq '... | length'` or
+`--jq '[... | select(...)]'` discards `pageInfo`, so the response you needed the
+cursor from no longer carries one: there is nothing left to page with, and a
+first-page `0` becomes indistinguishable from a genuine `0`. Fetch each page raw;
+filter the accumulated array afterwards.
+
 ```bash
-# For queries returning >100 items
-gh api graphql -f query='
-  query($owner: String!, $repo: String!, $pr: Int!, $after: String) {
-    repository(owner: $owner, name: $repo) {
-      pullRequest(number: $pr) {
-        reviewThreads(first: 100, after: $after) {
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          nodes {
-            id
+OWNER="owner"; REPO="repo"; PR=13
+AFTER=null            # gh -F converts the literal null to a JSON null
+ALL_THREADS='[]'
+
+while :; do
+  PAGE=$(gh api graphql -f query='
+    query($owner: String!, $repo: String!, $pr: Int!, $after: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100, after: $after) {
+            totalCount
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id
+              isResolved
+              path
+              line
+              comments(first: 10) { nodes { author { login } body } }
+            }
           }
         }
       }
-    }
-  }' -f owner="owner" -f repo="repo" -F pr=13
+    }' -f owner="$OWNER" -f repo="$REPO" -F pr="$PR" -F after="$AFTER")
+  # No --jq on that call — pageInfo has to survive to the next iteration.
+
+  ALL_THREADS=$(jq -n --argjson acc "$ALL_THREADS" --argjson page "$PAGE" \
+    '$acc + $page.data.repository.pullRequest.reviewThreads.nodes')
+
+  jq -e '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' \
+    <<< "$PAGE" > /dev/null || break
+  AFTER=$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor' \
+    <<< "$PAGE")
+done
 ```
+
+`ALL_THREADS` now holds every thread, unfiltered. `totalCount` on any page is the
+expected total, so `jq 'length' <<< "$ALL_THREADS"` against it is a free check that
+the loop actually finished. Only now apply the filter — once, over the whole set:
+
+```bash
+# One reviewer's unresolved threads, counted over every page
+jq '[.[] | select(.isResolved == false
+       and (.comments.nodes[0].author.login | tostring | contains("<login>")))]
+    | length' <<< "$ALL_THREADS"
+
+# Per-reviewer breakdown, grouped over every page
+jq '[.[] | select(.isResolved == false) | .comments.nodes[0].author.login]
+    | group_by(.) | map({reviewer: .[0], unresolved: length})' <<< "$ALL_THREADS"
+```
+
+Request only the fields the caller needs. A page of 100 threads each carrying ten
+comment bodies is a large response to hold and re-parse on every iteration.

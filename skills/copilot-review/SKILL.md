@@ -328,13 +328,27 @@ query {
       }
     }
   }
-}" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")] | length'
+}"
 ```
 
-**Count across every page, not just the first.** `first: 100` is one page; while
-`pageInfo.hasNextPage` is `true`, re-run with `after: "<endCursor>"` and sum the
-counts. A `0` from a truncated read is indistinguishable from a genuine `0` and
-passes condition (2) below with unresolved Copilot threads still open.
+**That returns one page — page it to exhaustion before reading the gate off it**
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
+carries the executable loop). While `pageInfo.hasNextPage` is `true`, re-run with
+`after: "<endCursor>"` and accumulate the `nodes` into one array. Note there is no
+`--jq` on that call, deliberately: a filter that collapses the response to a count
+throws away `endCursor` along with it, leaving nothing to page with. Count once,
+over the accumulated set:
+
+```bash
+jq '[.[] | select(.isResolved == false
+       and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")]
+    | length' <<< "$ALL_THREADS"
+```
+
+**Accumulate, then filter, then count** — a per-page `length` splits the Copilot
+total across pages exactly as a per-page `group_by` would. And a `0` from a
+truncated read is indistinguishable from a genuine `0`: it passes condition (2)
+below with unresolved Copilot threads still open.
 
 The gate is passed when **both** hold:
 

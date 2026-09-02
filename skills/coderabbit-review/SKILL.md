@@ -135,8 +135,26 @@ query {
       }
     }
   }
-}' --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))]'
+}'
 ```
+
+**That returns one page — page it to exhaustion before triaging off it**
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
+carries the executable loop). While `pageInfo.hasNextPage` is `true`, re-run with
+`after: "<endCursor>"` and accumulate the `nodes` into one array; there is no
+`--jq` on that call because a filter that reduces the response to an array of
+matches discards `endCursor` too. **Accumulate, then filter** — once, over the
+whole set:
+
+```bash
+jq '[.[] | select(.isResolved == false
+       and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))]' \
+  <<< "$ALL_THREADS"
+```
+
+A thread stranded past the first page is never triaged and never given a
+disposition, so it neither reaches the resolver nor shows up in Step 3's count —
+the gate reads as met while the finding sits unread.
 
 Assign one of `blocking`, `immaterial`, or `deferred` to each thread **that
 carries a finding**. Yours is authoritative — you hold the Scope Brief; the
@@ -196,14 +214,23 @@ query {
       }
     }
   }
-}' --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))] | length'
+}'
 ```
 
-**Page it to exhaustion before reading condition 2 off it.** `first: 100` returns
-one page; while `pageInfo.hasNextPage` is `true`, re-run with `after: "<endCursor>"`
-and sum. The Step 1b fetch above needs the same treatment for the same reason — a
-thread past the first page is never triaged and never given a disposition, so it
-neither appears in this count nor blocks anything, while the gate reads as met.
+**That returns one page — page it to exhaustion before reading condition 2 off
+it**, the same loop Step 1b uses
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern). While
+`pageInfo.hasNextPage` is `true`, re-run with `after: "<endCursor>"` and accumulate
+the `nodes`; keep the call free of a reducing `--jq`, or the count you asked for
+arrives without the `endCursor` you need to continue. **Accumulate, then filter,
+then count** — a per-page `length` under-reports exactly as a per-page `group_by`
+would:
+
+```bash
+jq '[.[] | select(.isResolved == false
+       and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))]
+    | length' <<< "$ALL_THREADS"
+```
 
 ## Concurrency with other reviewers
 

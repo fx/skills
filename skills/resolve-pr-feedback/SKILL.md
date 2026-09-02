@@ -144,10 +144,11 @@ query {
 
 **This returns one page, not the thread list.** Re-run it with
 `after: "<endCursor>"` for as long as `pageInfo.hasNextPage` is `true`, and
-categorise the accumulated nodes from **all** pages. Stopping at the first page on
-a PR with more than 100 threads drops the rest without any error — the response is
-well-formed and simply shorter — so the skill would report a triaged, settled PR
-while unread findings sit on page 2.
+categorise the accumulated nodes from **all** pages — the executable loop is
+`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern.
+Stopping at the first page on a PR with more than 100 threads drops the rest
+without any error — the response is well-formed and simply shorter — so the skill
+would report a triaged, settled PR while unread findings sit on page 2.
 
 **Fetch `path`, `line`, and `body`, not just the author.** Step 4 requires a
 disposition per thread, and a disposition cannot be derived from an ID and a
@@ -358,23 +359,30 @@ query {
       }
     }
   }
-}' | jq '[.data.repository.pullRequest.reviewThreads.nodes[]
-          | select(.isResolved == false)
-          | .comments.nodes[0].author.login]
-         | group_by(.) | map({reviewer: .[0], unresolved: length})
-         | map(select(.reviewer
-               | startswith("copilot-pull-request-reviewer")
-                 or contains("coderabbitai")
-                 or startswith("codecov")))'
+}'
 ```
 
-**Page this one to exhaustion too, and aggregate across pages before reading the
-result.** An empty array from a single page is exactly what a truncated read looks
-like, and this query is the merge gate — the one place a false zero converts
-straight into "settled". Keep requesting `after: "<endCursor>"` while
-`pageInfo.hasNextPage` is `true`, concatenate the `nodes` arrays, and run the `jq`
-filter over the whole set; a per-page `group_by` also splits one reviewer's count
-across pages.
+**That returns one page — page it to exhaustion before reading the gate off it**
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
+carries the executable loop). Keep requesting `after: "<endCursor>"` while
+`pageInfo.hasNextPage` is `true` and concatenate the `nodes` arrays. Nothing
+reduces that call, deliberately: the `jq` below would consume the response the
+cursor lives in, and this query is the merge gate — the one place a false zero
+converts straight into "settled". **Accumulate, then filter, then count**, over
+the whole set:
+
+```bash
+jq '[.[] | select(.isResolved == false) | .comments.nodes[0].author.login]
+    | group_by(.) | map({reviewer: .[0], unresolved: length})
+    | map(select(.reviewer
+          | startswith("copilot-pull-request-reviewer")
+            or contains("coderabbitai")
+            or startswith("codecov")))' <<< "$ALL_THREADS"
+```
+
+Run that once, never per page: a per-page `group_by` splits one reviewer's threads
+across pages and reports each slice as that reviewer's total, and an empty array
+from a single page is exactly what a truncated read looks like.
 
 That reports a per-reviewer breakdown, so "unresolved threads remain" comes with the
 reviewer name attached. An empty array over the **fully paginated** set means **the
