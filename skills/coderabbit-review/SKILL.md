@@ -123,7 +123,8 @@ gh api graphql -f query='
 query {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: null) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           isResolved
@@ -186,7 +187,8 @@ gh api graphql -f query='
 query {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: <PR_NUMBER>) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: null) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
           comments(first: 1) { nodes { author { login } } }
@@ -196,6 +198,12 @@ query {
   }
 }' --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))] | length'
 ```
+
+**Page it to exhaustion before reading condition 2 off it.** `first: 100` returns
+one page; while `pageInfo.hasNextPage` is `true`, re-run with `after: "<endCursor>"`
+and sum. The Step 1b fetch above needs the same treatment for the same reason — a
+thread past the first page is never triaged and never given a disposition, so it
+neither appears in this count nor blocks anything, while the gate reads as met.
 
 ## Concurrency with other reviewers
 

@@ -15,6 +15,17 @@ every unresolved finding on a PR **from the reviewers in § Supported Reviewers*
 triages it, and dispatches the right resolver with the brief and a disposition per
 thread. Where the two appear to disagree, `fx-review` wins.
 
+**"Every" is a claim the queries below have to earn, and one page does not earn
+it.** `reviewThreads(first: 100)` returns *at most* the first 100 threads, not the
+thread list — a PR that has accumulated more (a long review cycle, several
+reviewers, a large diff) silently drops the remainder, and every count and verdict
+downstream is then computed over a subset while still reading as complete. **Every
+thread enumeration in this skill MUST be paginated to exhaustion** — follow
+`pageInfo.endCursor` with `after:` until `hasNextPage` is `false`, and triage the
+union of the pages (`[SKILLS_DIR]/github/references/graphql-patterns.md`
+§ Pagination Pattern). A truncated read is not a smaller finding list; it is an
+unknown one.
+
 **That table is the whole of this skill's coverage.** An automated reviewer with
 no row in it is never categorised, never dispatched, and never counted in any
 verdict below. Its threads still gate the merge, and the caller settles them by
@@ -111,7 +122,8 @@ gh api graphql -f query='
 query {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: null) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           isResolved
@@ -129,6 +141,13 @@ query {
   }
 }'
 ```
+
+**This returns one page, not the thread list.** Re-run it with
+`after: "<endCursor>"` for as long as `pageInfo.hasNextPage` is `true`, and
+categorise the accumulated nodes from **all** pages. Stopping at the first page on
+a PR with more than 100 threads drops the rest without any error — the response is
+well-formed and simply shorter — so the skill would report a triaged, settled PR
+while unread findings sit on page 2.
 
 **Fetch `path`, `line`, and `body`, not just the author.** Step 4 requires a
 disposition per thread, and a disposition cannot be derived from an ID and a
@@ -326,7 +345,8 @@ gh api graphql -f query='
 query {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: null) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
           comments(first: 1) {
@@ -348,11 +368,19 @@ query {
                  or startswith("codecov")))'
 ```
 
+**Page this one to exhaustion too, and aggregate across pages before reading the
+result.** An empty array from a single page is exactly what a truncated read looks
+like, and this query is the merge gate — the one place a false zero converts
+straight into "settled". Keep requesting `after: "<endCursor>"` while
+`pageInfo.hasNextPage` is `true`, concatenate the `nodes` arrays, and run the `jq`
+filter over the whole set; a per-page `group_by` also splits one reviewer's count
+across pages.
+
 That reports a per-reviewer breakdown, so "unresolved threads remain" comes with the
-reviewer name attached. An empty array means **the reviewers this skill categorised
-by login** have no open feedback — not that the PR has none. Human threads it
-excluded are deliberately not your concern; an uncategorised bot's threads are the
-caller's, per the caveat above.
+reviewer name attached. An empty array over the **fully paginated** set means **the
+reviewers this skill categorised by login** have no open feedback — not that the PR
+has none. Human threads it excluded are deliberately not your concern; an
+uncategorised bot's threads are the caller's, per the caveat above.
 
 If unresolved threads remain, report which reviewers still have open feedback.
 

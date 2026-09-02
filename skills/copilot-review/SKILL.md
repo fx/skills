@@ -317,7 +317,8 @@ gh api graphql -f query="
 query {
   repository(owner: \"$OWNER\", name: \"$REPO\") {
     pullRequest(number: <PR_NUMBER>) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: null) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
           comments(first: 1) {
@@ -329,6 +330,11 @@ query {
   }
 }" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")] | length'
 ```
+
+**Count across every page, not just the first.** `first: 100` is one page; while
+`pageInfo.hasNextPage` is `true`, re-run with `after: "<endCursor>"` and sum the
+counts. A `0` from a truncated read is indistinguishable from a genuine `0` and
+passes condition (2) below with unresolved Copilot threads still open.
 
 The gate is passed when **both** hold:
 
