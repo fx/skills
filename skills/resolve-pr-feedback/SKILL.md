@@ -37,7 +37,7 @@ You are the coordinator here, so three of its steps are specifically yours:
 |----------|---------------|----------------|
 | GitHub Copilot | `copilot-pull-request-reviewer` (GraphQL thread authors) / `copilot-pull-request-reviewer[bot]` (REST) — **never** the bare `Copilot`, which matches nothing | `copilot-feedback-resolver` |
 | CodeRabbit | `coderabbitai[bot]` | `rabbit-feedback-resolver` |
-| Codecov | `codecov[bot]` / `codecov-commenter` | `resolve-codecov-feedback` |
+| Codecov | `codecov[bot]` / `codecov-commenter` | `resolve-codecov-feedback` — for coverage gaps (§ 3b), its only channel. A review thread from Codecov is settled by hand instead (§ 3): that resolver has no thread-settlement path. |
 
 These three are the roster — there is no fallback row. A reviewer absent from the
 table has no author pattern here and no resolver to dispatch to, so this skill
@@ -144,8 +144,9 @@ Parse the response and categorize unresolved threads by author:
 - **Copilot threads**: author login is `copilot-pull-request-reviewer` (GraphQL). Match with `startswith("copilot-pull-request-reviewer")` so the REST `copilot-pull-request-reviewer[bot]` form matches too.
   - **⛔ It is NOT the bare string `Copilot`.** That value appears only in `requested_reviewers`, which is always empty and which this skill never reads. Matching on `Copilot` categorizes **zero** Copilot threads on every PR — so the resolver is never invoked, real threads are silently left unresolved, and this skill reports "nothing to do" while the merge gate is unsatisfiable.
 - **CodeRabbit threads**: author login contains `coderabbitai`
-- **Codecov threads**: author login starts with `codecov` — `codecov[bot]` or `codecov-commenter`. Match with `startswith("codecov")`, the same filter Step 5's convergence query uses. Dispatch these to `resolve-codecov-feedback` (Step 4).
-  - **This bullet is the belt, not the primary Codecov path.** § 3b is where Codecov is normally handled, because as it says, Codecov's channel is PR comments and commit statuses rather than review threads — so this bullet usually matches nothing. Keep it anyway: Step 5's gate counts every unresolved `startswith("codecov")` thread, so a Codecov thread left uncategorised here is never dispatched, never resolved, and holds the convergence loop open forever.
+- **Codecov threads**: author login starts with `codecov` — `codecov[bot]` or `codecov-commenter`. Match with `startswith("codecov")`, the same filter Step 5's convergence query uses. **Settle these by hand, yourself** — triage against the brief, reply with the disposition, resolve via `resolveReviewThread` (`github`). Codecov has a § Supported Reviewers row, so a thread of its is *not* one of the uncategorised ones you hand back to the caller (§ Error Handling).
+  - **⛔ Do NOT dispatch a Codecov review *thread* to `resolve-codecov-feedback`.** That resolver reads coverage statuses and PR comments and adds coverage; it has no thread-settlement path at all, so a thread handed to it comes back unresolved while Step 5's gate keeps selecting it — the same stall, one step later. Step 4's Codecov dispatch is for coverage gaps (§ 3b) only.
+  - **This bullet is the belt, not the primary Codecov path.** § 3b is Codecov's real channel — PR comments and commit statuses, not review threads — and it is why Codecov has a § Supported Reviewers row and a resolver at all; so this bullet usually matches nothing. Keep it anyway: Step 5's gate counts every unresolved `startswith("codecov")` thread, so a Codecov thread left uncategorised here holds the convergence loop open forever. Hand settlement resolves the thread, so the gate clears.
 
 Threads matching none of the three patterns above fall into two kinds, and
 neither is yours to resolve: human threads, which `github` forbids you from
@@ -182,8 +183,10 @@ If an absolutely-dire suppressed item is acted on, it cannot be resolved (no thr
 ### 3b. Check for Codecov Coverage Feedback
 
 Codecov's channel is PR comments and commit statuses, NOT review threads — this
-is Codecov's normal path, and § 3's Codecov bullet covers the uncommon case where
-it does open a thread. Query separately:
+is Codecov's normal path, and the only one Step 4's Codecov dispatch serves. The
+uncommon case where Codecov does open a review thread is § 3's Codecov bullet,
+and that thread is settled by hand there rather than dispatched from here. Query
+separately:
 
 ```bash
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
@@ -234,10 +237,10 @@ Skill tool: skill="rabbit-feedback-resolver",
             args="<Scope Brief verbatim> — dispositions: <thread id> blocking, <thread id> immaterial, <thread id> deferred (<exclusion>) — false premise (resolver's own handler): <thread id> (<what does not hold>)"
 ```
 
-**If Codecov coverage gaps are detected (§ 3b) or Codecov threads exist (§ 3):**
+**If Codecov coverage gaps are detected (§ 3b):**
 ```
 Skill tool: skill="resolve-codecov-feedback",
-            args="<Scope Brief verbatim> — uncovered lines in scope: <paths>; deliberately uncovered: <paths and why>; open Codecov threads: <thread id> blocking, <thread id> immaterial, or <none>"
+            args="<Scope Brief verbatim> — uncovered lines in scope: <paths>; deliberately uncovered: <paths and why>"
 ```
 
 **No bare invocation.** A `Skill tool:` line with no `args` is an incomplete call
