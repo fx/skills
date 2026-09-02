@@ -34,7 +34,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `codex-review` | Runs a scoped one-shot Codex CLI branch review as an external review adapter. |
 | `copilot-review` | Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review. |
 | `coderabbit-review` | Handles CodeRabbit's PR-level review as an optional review adapter with Scope Brief triage and rate-limit degradation. |
-| `resolve-pr-feedback` | Coordinates explicitly requested automated PR-feedback resolution across configured reviewers. |
+| `resolve-pr-feedback` | Coordinates explicitly requested automated PR-feedback resolution for the reviewers it has adapters for — Copilot, CodeRabbit and Codecov; any other configured reviewer is settled by hand by the caller. |
 | `copilot-feedback-resolver` | Processes and resolves existing GitHub Copilot review threads without creating PR-level comments. |
 | `rabbit-feedback-resolver` | Processes and resolves existing CodeRabbit review threads. |
 | `resolve-codecov-feedback` | Processes Codecov feedback and adds coverage required by an active workflow. |

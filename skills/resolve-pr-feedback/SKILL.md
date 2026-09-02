@@ -144,14 +144,16 @@ Parse the response and categorize unresolved threads by author:
 - **Copilot threads**: author login is `copilot-pull-request-reviewer` (GraphQL). Match with `startswith("copilot-pull-request-reviewer")` so the REST `copilot-pull-request-reviewer[bot]` form matches too.
   - **⛔ It is NOT the bare string `Copilot`.** That value appears only in `requested_reviewers`, which is always empty and which this skill never reads. Matching on `Copilot` categorizes **zero** Copilot threads on every PR — so the resolver is never invoked, real threads are silently left unresolved, and this skill reports "nothing to do" while the merge gate is unsatisfiable.
 - **CodeRabbit threads**: author login contains `coderabbitai`
+- **Codecov threads**: author login starts with `codecov` — `codecov[bot]` or `codecov-commenter`. Match with `startswith("codecov")`, the same filter Step 5's convergence query uses. Dispatch these to `resolve-codecov-feedback` (Step 4).
+  - **This bullet is the belt, not the primary Codecov path.** § 3b is where Codecov is normally handled, because as it says, Codecov's channel is PR comments and commit statuses rather than review threads — so this bullet usually matches nothing. Keep it anyway: Step 5's gate counts every unresolved `startswith("codecov")` thread, so a Codecov thread left uncategorised here is never dispatched, never resolved, and holds the convergence loop open forever.
 
-Threads matching neither pattern fall into two kinds, and neither is yours to
-resolve: human threads, which `github` forbids you from touching, and threads
-from an automated reviewer with no § Supported Reviewers row. **Report the
-second kind rather than dropping it** — list the reviewer and its open threads
-in your summary as uncategorised, so the caller knows there is a merge gate left
-for it to settle by hand. Silently omitting them is what makes a clean report
-here read as a clean PR.
+Threads matching none of the three patterns above fall into two kinds, and
+neither is yours to resolve: human threads, which `github` forbids you from
+touching, and threads from an automated reviewer with no § Supported Reviewers
+row. **Report the second kind rather than dropping it** — list the reviewer and
+its open threads in your summary as uncategorised, so the caller knows there is
+a merge gate left for it to settle by hand. Silently omitting them is what makes
+a clean report here read as a clean PR.
 
 **Threads are the review.** Copilot also puts some observations in a `<details><summary>Suppressed comments</summary>` block in the **review body**, where they create no thread at all — those are **ignored by default** (`copilot-review` **D4**): Copilot itself declined to raise them as threads, they are overwhelmingly wording and comment-phrasing nits, and acting on one costs a full re-review cycle. Do not open the block routinely; act only on something absolutely dire that has already caught your eye.
 
@@ -179,7 +181,9 @@ If an absolutely-dire suppressed item is acted on, it cannot be resolved (no thr
 
 ### 3b. Check for Codecov Coverage Feedback
 
-Codecov uses PR comments and commit statuses, NOT review threads. Query separately:
+Codecov's channel is PR comments and commit statuses, NOT review threads — this
+is Codecov's normal path, and § 3's Codecov bullet covers the uncommon case where
+it does open a thread. Query separately:
 
 ```bash
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
@@ -230,10 +234,10 @@ Skill tool: skill="rabbit-feedback-resolver",
             args="<Scope Brief verbatim> — dispositions: <thread id> blocking, <thread id> immaterial, <thread id> deferred (<exclusion>) — false premise (resolver's own handler): <thread id> (<what does not hold>)"
 ```
 
-**If Codecov coverage gaps detected:**
+**If Codecov coverage gaps are detected (§ 3b) or Codecov threads exist (§ 3):**
 ```
 Skill tool: skill="resolve-codecov-feedback",
-            args="<Scope Brief verbatim> — uncovered lines in scope: <paths>; deliberately uncovered: <paths and why>"
+            args="<Scope Brief verbatim> — uncovered lines in scope: <paths>; deliberately uncovered: <paths and why>; open Codecov threads: <thread id> blocking, <thread id> immaterial, or <none>"
 ```
 
 **No bare invocation.** A `Skill tool:` line with no `args` is an incomplete call
