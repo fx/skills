@@ -105,29 +105,27 @@ gh pr view --json number -q '.number'
 
 ### 2. Query All Unresolved Review Threads
 
-**IMPORTANT — this applies to the GraphQL query bodies only:** never leave an
-**undeclared** `$variable` in one. `-f query='...'` is single-quoted so the shell
-never expands anything inside it, and `$` is GraphQL's own variable sigil, so a
-`$name` the query does not declare is an undefined GraphQL variable rather than a
-value. In the static snippets in this skill — which take no cursor and no caller
-input — substitute inline values and the question never arises.
+**IMPORTANT — inside a GraphQL query body:** `-f query='...'` is single-quoted, so
+the shell never expands anything in it, and `$` is GraphQL's own variable sigil. So
+whether a `$name` works there turns on one thing only — does the query signature
+declare it:
 
-**Declared is the correct form, and § Pagination Pattern needs it.** A `$name` the
-query signature declares is fully supported; it is not what the rule above forbids,
-which is the *undeclared* case only. The cursor variable is exactly that case:
-§ Pagination Pattern declares `$endCursor: String` in the signature and passes it
-as `after: $endCursor`, and **`gh --paginate` binds it itself** — there is
-deliberately no `-f`/`-F` flag for it, and there must not be one. So read as a
-blanket ban on `$`, the rule would leave the pagination this step mandates with no
-way to advance and no way to comply. (A `$name` a `-f`/`-F` flag does bind, such as
-`-f owner="$OWNER"`, is equally fine; declared-and-unbound is the case worth calling
-out because `$endCursor` looks like an omission and is not.)
+- **Undeclared is a bug.** `$name` with no matching declaration is an undefined
+  GraphQL variable, not a value: the shell will not substitute it and the server
+  rejects the document. Anything no declared variable carries is substituted inline
+  instead — that is what the `OWNER` / `REPO` / `PR_NUMBER` placeholders are for.
+- **Declared is correct and fully supported.** A `-f`/`-F` flag may bind it
+  (`-f owner="$OWNER"`), or `gh` may bind it itself: `--paginate` supplies
+  `$endCursor`, so that one is declared with deliberately **no** flag of its own —
+  it looks like an omission and is not. Read as a blanket ban on `$`, this rule
+  would leave the pagination this step mandates no way to advance.
 
-**Plain `gh api` / `gh pr view` snippets are the opposite:** they use real shell
-variables (`PR_NUMBER`, `REPO_NWO`, `HEAD_SHA`), assigned at the top of each snippet
-so it is copy-pasteable as-is. Never mix the two styles inside one snippet — a bare
-`PR_NUMBER` sitting next to a real `${HEAD_SHA}` reads as though it were defined, and
-silently builds a request against a repo path containing the literal text.
+**Plain `gh api` / `gh pr view` snippets are the opposite:** no query body, so `$`
+is the shell's again, and they use real shell variables (`PR_NUMBER`, `REPO_NWO`,
+`HEAD_SHA`) assigned at the snippet's top so it is copy-pasteable as-is. Never mix
+the two styles inside one snippet — a bare `PR_NUMBER` next to a real `${HEAD_SHA}`
+reads as though it were defined, and silently builds a request against a repo path
+containing the literal text.
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
