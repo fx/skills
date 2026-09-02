@@ -20,11 +20,11 @@ it.** `reviewThreads(first: 100)` returns *at most* the first 100 threads, not t
 thread list — a PR that has accumulated more (a long review cycle, several
 reviewers, a large diff) silently drops the remainder, and every count and verdict
 downstream is then computed over a subset while still reading as complete. **Every
-thread enumeration in this skill MUST be paginated to exhaustion** — follow
-`pageInfo.endCursor` with `after:` until `hasNextPage` is `false`, and triage the
-union of the pages (`[SKILLS_DIR]/github/references/graphql-patterns.md`
-§ Pagination Pattern). A truncated read is not a smaller finding list; it is an
-unknown one.
+thread enumeration in this skill MUST be paginated to exhaustion** — run it under
+`gh api graphql --paginate --slurp` and triage the union of the pages
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
+carries the mechanism and the checks that make it fail closed). A truncated read is
+not a smaller finding list; it is an unknown one.
 
 **That table is the whole of this skill's coverage.** An automated reviewer with
 no row in it is never categorised, never dispatched, and never counted in any
@@ -112,13 +112,16 @@ never expands anything inside it, and `$` is GraphQL's own variable sigil, so a
 value. In the static snippets in this skill — which take no cursor and no caller
 input — substitute inline values and the question never arises.
 
-**Declared and bound is the correct form, and § Pagination Pattern needs it.** A
-`$name` the query signature declares (`query($owner: String!, $after: String)`) and
-a matching `-f`/`-F` flag binds is fully supported; it is not what the rule above
-forbids, which is the *undeclared* case only. The canonical loop advances its
-cursor exactly that way — `$after` declared in the signature, bound with
-`-F after="$AFTER"` — so read as a blanket ban on `$`, the rule would leave the
-pagination this step mandates with no way to advance and no way to comply.
+**Declared is the correct form, and § Pagination Pattern needs it.** A `$name` the
+query signature declares is fully supported; it is not what the rule above forbids,
+which is the *undeclared* case only. The cursor variable is exactly that case:
+§ Pagination Pattern declares `$endCursor: String` in the signature and passes it
+as `after: $endCursor`, and **`gh --paginate` binds it itself** — there is
+deliberately no `-f`/`-F` flag for it, and there must not be one. So read as a
+blanket ban on `$`, the rule would leave the pagination this step mandates with no
+way to advance and no way to comply. (A `$name` a `-f`/`-F` flag does bind, such as
+`-f owner="$OWNER"`, is equally fine; declared-and-unbound is the case worth calling
+out because `$endCursor` looks like an omission and is not.)
 
 **Plain `gh api` / `gh pr view` snippets are the opposite:** they use real shell
 variables (`PR_NUMBER`, `REPO_NWO`, `HEAD_SHA`), assigned at the top of each snippet
@@ -128,11 +131,13 @@ silently builds a request against a repo path containing the literal text.
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
-gh api graphql -f query='
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query='
+query($endCursor: String) {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100, after: null) {
+      reviewThreads(first: 100, after: $endCursor) {
+        totalCount
         pageInfo { hasNextPage endCursor }
         nodes {
           id
@@ -152,13 +157,13 @@ query {
 }'
 ```
 
-**This returns one page, not the thread list.** Re-run it with
-`after: "<endCursor>"` for as long as `pageInfo.hasNextPage` is `true`, and
-categorise the accumulated nodes from **all** pages — the executable loop is
-`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern.
-Stopping at the first page on a PR with more than 100 threads drops the rest
-without any error — the response is well-formed and simply shorter — so the skill
-would report a triaged, settled PR while unread findings sit on page 2.
+**`--paginate --slurp` is what makes that the thread list rather than one page.**
+`gh` walks the cursor and returns an array of pages; flatten `nodes` across them and
+categorise the accumulated set — the executable version, with the fail-closed checks
+it requires, is `[SKILLS_DIR]/github/references/graphql-patterns.md`
+§ Pagination Pattern. Reading only the first page on a PR with more than 100 threads
+drops the rest without any error — the response is well-formed and simply shorter —
+so the skill would report a triaged, settled PR while unread findings sit on page 2.
 
 **Fetch `path`, `line`, and `body`, not just the author.** Step 4 requires a
 disposition per thread, and a disposition cannot be derived from an ID and a
@@ -352,11 +357,13 @@ caller a merge gate it has not actually verified.
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
-gh api graphql -f query='
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query='
+query($endCursor: String) {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100, after: null) {
+      reviewThreads(first: 100, after: $endCursor) {
+        totalCount
         pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
@@ -372,14 +379,14 @@ query {
 }'
 ```
 
-**That returns one page — page it to exhaustion before reading the gate off it**
+**Run it under the fail-closed checks before reading the gate off it**
 (`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
-carries the executable loop). Keep requesting `after: "<endCursor>"` while
-`pageInfo.hasNextPage` is `true` and concatenate the `nodes` arrays. Nothing
-reduces that call, deliberately: the `jq` below would consume the response the
-cursor lives in, and this query is the merge gate — the one place a false zero
-converts straight into "settled". **Accumulate, then filter, then count**, over
-the whole set:
+carries the executable version). `gh` walks the cursor; flatten `nodes` across the
+slurped pages into one array. Nothing reduces that call, deliberately: `gh` rejects
+`--jq` under `--slurp`, and the `jq` below would consume the `pageInfo` the cursor
+lives in — and this query is the merge gate, the one place a false zero converts
+straight into "settled". **Accumulate, then filter, then count**, over the whole
+set:
 
 ```bash
 jq '[.[] | select(.isResolved == false) | .comments.nodes[0].author.login]

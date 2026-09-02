@@ -313,11 +313,13 @@ unsatisfiable and loops `resolve-pr-feedback` forever:
 ```bash
 OWNER="${REPO_NWO%%/*}"
 REPO="${REPO_NWO##*/}"
-gh api graphql -f query="
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query="
+query(\$endCursor: String) {
   repository(owner: \"$OWNER\", name: \"$REPO\") {
     pullRequest(number: <PR_NUMBER>) {
-      reviewThreads(first: 100, after: null) {
+      reviewThreads(first: 100, after: \$endCursor) {
+        totalCount
         pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
@@ -331,13 +333,14 @@ query {
 }"
 ```
 
-**That returns one page — page it to exhaustion before reading the gate off it**
+**`--paginate --slurp` is what reads that to exhaustion — run it under the
+fail-closed checks before reading the gate off it**
 (`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
-carries the executable loop). While `pageInfo.hasNextPage` is `true`, re-run with
-`after: "<endCursor>"` and accumulate the `nodes` into one array. Note there is no
-`--jq` on that call, deliberately: a filter that collapses the response to a count
-throws away `endCursor` along with it, leaving nothing to page with. Count once,
-over the accumulated set:
+carries the executable version). `gh` walks the cursor and returns an array of
+pages; flatten `nodes` across them into one array. Note there is no `--jq` on that
+call, deliberately — `gh` rejects it under `--slurp`, and a filter that collapses
+the response to a count throws away the `pageInfo` `--paginate` needs to reach page
+2. Count once, over the accumulated set:
 
 ```bash
 jq '[.[] | select(.isResolved == false

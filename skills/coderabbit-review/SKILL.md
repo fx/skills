@@ -119,11 +119,13 @@ disposition per thread — a count cannot be triaged. Fetch the bodies, then run
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
-gh api graphql -f query='
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query='
+query($endCursor: String) {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100, after: null) {
+      reviewThreads(first: 100, after: $endCursor) {
+        totalCount
         pageInfo { hasNextPage endCursor }
         nodes {
           id
@@ -138,13 +140,14 @@ query {
 }'
 ```
 
-**That returns one page — page it to exhaustion before triaging off it**
+**`--paginate --slurp` is what reads that to exhaustion — run it under the
+fail-closed checks before triaging off it**
 (`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
-carries the executable loop). While `pageInfo.hasNextPage` is `true`, re-run with
-`after: "<endCursor>"` and accumulate the `nodes` into one array; there is no
-`--jq` on that call because a filter that reduces the response to an array of
-matches discards `endCursor` too. **Accumulate, then filter** — once, over the
-whole set:
+carries the executable version). `gh` walks the cursor and returns an array of
+pages; flatten `nodes` across them into one array. There is no `--jq` on that call
+because `gh` rejects it under `--slurp`, and a filter reducing the response to an
+array of matches would discard the `pageInfo` `--paginate` pages from.
+**Accumulate, then filter** — once, over the whole set:
 
 ```bash
 jq '[.[] | select(.isResolved == false
@@ -201,11 +204,13 @@ pending again — go back to Step 1. Per `fx-review` Step 7, repeat Steps
 track, and it is the one a passing check cannot stand in for.
 
 ```bash
-gh api graphql -f query='
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query='
+query($endCursor: String) {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: <PR_NUMBER>) {
-      reviewThreads(first: 100, after: null) {
+      reviewThreads(first: 100, after: $endCursor) {
+        totalCount
         pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
@@ -217,14 +222,13 @@ query {
 }'
 ```
 
-**That returns one page — page it to exhaustion before reading condition 2 off
-it**, the same loop Step 1b uses
-(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern). While
-`pageInfo.hasNextPage` is `true`, re-run with `after: "<endCursor>"` and accumulate
-the `nodes`; keep the call free of a reducing `--jq`, or the count you asked for
-arrives without the `endCursor` you need to continue. **Accumulate, then filter,
-then count** — a per-page `length` under-reports exactly as a per-page `group_by`
-would:
+**Run it under the fail-closed checks before reading condition 2 off it**, the same
+mechanism Step 1b uses
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern). `gh`
+walks the cursor; flatten `nodes` across the slurped pages. Keep the call free of a
+reducing `--jq` — `gh` rejects it under `--slurp`, and it would otherwise strip the
+`pageInfo` `--paginate` pages from. **Accumulate, then filter, then count** — a
+per-page `length` under-reports exactly as a per-page `group_by` would:
 
 ```bash
 jq '[.[] | select(.isResolved == false
