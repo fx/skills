@@ -295,12 +295,33 @@ which is the correct failure mode. Check with `gh --version` and upgrade.
 **Do not fall back to a hand-rolled cursor loop**; that reinstates the exact
 fail-open surface this pattern exists to remove. If upgrading is genuinely
 impossible, drop `--slurp` and keep `--paginate`: `gh` then streams one JSON object
-per page, and `jq -s` collects them into the same array of pages, so every check
-below applies verbatim.
+per page, and `jq -s` collects them into the same array of pages — but only once
+`gh`'s own exit status is captured before the pages reach `jq`. A plain
+`gh api ... | jq -s '.'` pipeline reports the **last** command's status, so a
+`gh` failure partway through pagination — after it has already emitted one or more
+well-formed pages — is invisible: `jq -s` still succeeds on the pages it received,
+the pipeline exits 0, and a partial read reaches the caller as a complete one. That
+is the exact false-zero this section exists to prevent, on the one path `--slurp`
+does not cover. Capture `gh`'s output and exit status separately, before slurping —
+not `set -o pipefail`, which this fallback cannot assume is set in whatever script
+it gets copied into; a reader who lifts only the construct below, without also
+carrying a `pipefail` line from elsewhere, silently gets the broken pipeline back:
 
 ```bash
-PAGES=$(gh api graphql --paginate -f query='...' | jq -s '.')   # gh < 2.48.0 only
+# gh < 2.48.0 only. Capture gh's own status before slurping — a bare
+# `gh api ... | jq -s` pipeline reports jq's status, not gh's, and a gh failure
+# after one or more good pages would then read as success.
+if ! RAW=$(gh api graphql --paginate -f query='...'); then
+  echo "FATAL: gh api graphql --paginate failed reading reviewThreads for $OWNER/$REPO#$PR" >&2
+  exit 1
+fi
+PAGES=$(jq -s '.' <<< "$RAW")
 ```
+
+With `gh`'s status captured this way, every check below applies verbatim,
+including the `totalCount` completeness assertion — `PAGES` here is the same
+array-of-pages shape `--slurp` produces, and it is only ever assigned from a
+`gh` invocation already known to have exited zero.
 
 **Failing closed is mandatory — not defensive style.** A read that errors and then
 reports a number is worse than a read that errors and stops, because the number is
