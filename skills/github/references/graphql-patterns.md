@@ -191,16 +191,29 @@ gh api graphql -f query='
   --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.nodes[0].author.login == "copilot-pull-request-reviewer")'
 ```
 
+**"All" is the filter's intent, not what this call returns.** It shows one page,
+and its `--jq` consumes the response `pageInfo` would have arrived in, so there is
+no cursor left to continue with. To actually enumerate every bot comment,
+accumulate with § Pagination Pattern and apply this `select` to `ALL_THREADS`.
+
 ## Batch Operations
 
 ### Resolve Multiple Threads
 
+**This step needs every thread, so it cannot read a single page.** Unlike the
+field-shape examples above, its whole purpose is to enumerate the set exhaustively
+and act on all of it: a one-page read resolves the first 100 and silently leaves
+the rest open — under a merge gate that requires zero unresolved. Build
+`ALL_THREADS` with § Pagination Pattern first, then filter it.
+
 ```bash
-# Get all unresolved thread IDs
-THREAD_IDS=$(gh api graphql -f query='...' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id')
+# ALL_THREADS comes from § Pagination Pattern — that loop fails closed, so
+# reaching this line means the accumulation is complete, not merely non-empty.
+THREAD_IDS=$(jq -r '.[] | select(.isResolved == false) | .id' <<< "$ALL_THREADS")
 
 # Resolve each thread
 while IFS= read -r thread_id; do
+  [ -n "$thread_id" ] || continue   # empty accumulator yields one blank line
   echo "Resolving $thread_id..."
   gh api graphql -f query='
     mutation($threadId: ID!) {
@@ -257,13 +270,32 @@ cursor from no longer carries one: there is nothing left to page with, and a
 first-page `0` becomes indistinguishable from a genuine `0`. Fetch each page raw;
 filter the accumulated array afterwards.
 
+**The loop fails closed, and that is mandatory — not defensive style.** A read
+that errors and then reports a number is worse than a read that errors and stops,
+because the number is acted on: the accumulator is still `[]`, the
+`hasNextPage` test on a body with no `data` is false, the loop `break`s, and the
+filter below returns **zero** — which every caller reads as "no unresolved
+threads, gate met". A transient API error would merge the PR. So a failed request,
+a GraphQL `errors` payload, or a body missing the connection must abort with a
+non-zero status and a message naming what failed, and a partial accumulation must
+never be handed on as if it were the whole set.
+
+Check the three separately; none of them implies the others:
+
+- **`gh api`'s exit status**, explicitly. Do not infer failure from empty output —
+  `gh` can exit non-zero *with* output, and a legal response can be short.
+- **`.errors`**, separately. GraphQL returns **HTTP 200** with an `errors` array,
+  so `gh` exits `0` on a request that wholly or partly failed.
+- **The connection itself is present.** This also closes the case where the body
+  is not the JSON either check assumed.
+
 ```bash
 OWNER="owner"; REPO="repo"; PR=13
 AFTER=null            # gh -F converts the literal null to a JSON null
 ALL_THREADS='[]'
 
 while :; do
-  PAGE=$(gh api graphql -f query='
+  if ! PAGE=$(gh api graphql -f query='
     query($owner: String!, $repo: String!, $pr: Int!, $after: String) {
       repository(owner: $owner, name: $repo) {
         pullRequest(number: $pr) {
@@ -280,18 +312,40 @@ while :; do
           }
         }
       }
-    }' -f owner="$OWNER" -f repo="$REPO" -F pr="$PR" -F after="$AFTER")
+    }' -f owner="$OWNER" -f repo="$REPO" -F pr="$PR" -F after="$AFTER"); then
+    echo "FATAL: gh api graphql failed paging reviewThreads for $OWNER/$REPO#$PR (after=$AFTER)" >&2
+    exit 1
+  fi
   # No --jq on that call — pageInfo has to survive to the next iteration.
 
+  # HTTP 200 + an errors array is a failed read that gh reports as success.
+  if jq -e 'has("errors")' <<< "$PAGE" > /dev/null 2>&1; then
+    echo "FATAL: GraphQL errors paging reviewThreads for $OWNER/$REPO#$PR (after=$AFTER):" >&2
+    jq '.errors' <<< "$PAGE" >&2
+    exit 1
+  fi
+
+  # Positive shape check — also catches a body that is not the JSON above.
+  if ! jq -e '.data.repository.pullRequest.reviewThreads.nodes | arrays' \
+       <<< "$PAGE" > /dev/null 2>&1; then
+    echo "FATAL: response carried no reviewThreads page for $OWNER/$REPO#$PR (after=$AFTER)" >&2
+    printf '%s\n' "$PAGE" >&2
+    exit 1
+  fi
+
   ALL_THREADS=$(jq -n --argjson acc "$ALL_THREADS" --argjson page "$PAGE" \
-    '$acc + $page.data.repository.pullRequest.reviewThreads.nodes')
+    '$acc + $page.data.repository.pullRequest.reviewThreads.nodes') || exit 1
 
   jq -e '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' \
     <<< "$PAGE" > /dev/null || break
   AFTER=$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor' \
-    <<< "$PAGE")
+    <<< "$PAGE") || exit 1
 done
 ```
+
+Only the `break` on `hasNextPage: false` is a legitimate exit. Every other way out
+of that loop is an `exit 1`, so nothing downstream can run against a half-read
+`ALL_THREADS` — if the loop returned, the accumulator is complete.
 
 `ALL_THREADS` now holds every thread, unfiltered. `totalCount` on any page is the
 expected total, so `jq 'length' <<< "$ALL_THREADS"` against it is a free check that
