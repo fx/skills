@@ -282,11 +282,12 @@ This skill resolves automated feedback and `github` forbids touching human
 review threads at all, so an unfiltered query makes one open human comment
 permanently unsatisfiable and loops this skill against work it must not do:
 
-**Say what this verdict covers when you report it.** The categorisation above
-matches Copilot and CodeRabbit by author login, so a clean result here means
-*those* reviewers are settled — it is not evidence about a third automated
-reviewer a repo has configured, whose threads this skill never categorised and
-never resolved. Those still gate the merge, and the caller settles them by hand
+**Say what this verdict covers when you report it.** The roster is whatever the
+query below selects by author login — the § Supported Reviewers table's three,
+Copilot, CodeRabbit and Codecov — so a clean result here means *those* reviewers
+are settled. It is not evidence about a further automated reviewer a repo has
+configured, whose threads this skill never categorised and never resolved. Those
+still gate the merge, and the caller settles them by hand
 (`[SKILLS_DIR]/dev/references/scope-contract.md`
 § Injecting the brief into reviews). Reporting a bare "0 unresolved" hands the
 caller a merge gate it has not actually verified.
@@ -322,8 +323,8 @@ query {
 That reports a per-reviewer breakdown, so "unresolved threads remain" comes with the
 reviewer name attached. An empty array means **the reviewers this skill categorised
 by login** have no open feedback — not that the PR has none. Human threads it
-excluded are deliberately not your concern; a third bot's threads are the caller's,
-per the caveat above.
+excluded are deliberately not your concern; an uncategorised bot's threads are the
+caller's, per the caveat above.
 
 If unresolved threads remain, report which reviewers still have open feedback.
 
@@ -343,13 +344,13 @@ If unresolved threads remain, report which reviewers still have open feedback.
 - Invoked resolve-codecov-feedback
 
 ### Final Status
-- All Copilot and CodeRabbit threads resolved (no other reviewer categorised)
+- All Copilot, CodeRabbit and Codecov threads resolved (no other reviewer categorised)
 - Coverage improved to 85%
 ```
 
 ## Success Criteria
 
-1. All unresolved threads **from the reviewers this skill categorises** identified — matched on the `copilot-pull-request-reviewer` login, **not** the bare `Copilot`. State the roster the verdict covers when reporting it; a reviewer with no adapter is outside it and is settled by the caller. Suppressed comments are **not** part of this: they open no thread and are ignored by default (`copilot-review` **D4**)
+1. All unresolved threads **from the reviewers this skill categorises** identified — matched on the `copilot-pull-request-reviewer` login, **not** the bare `Copilot`. Name that roster — the § Supported Reviewers table's three — when reporting the verdict; a reviewer with no adapter is outside it and is settled by the caller. Suppressed comments are **not** part of this: they open no thread and are ignored by default (`copilot-review` **D4**)
 2. Appropriate resolver skill(s) invoked (Copilot + CodeRabbit in parallel where applicable)
 3. The wait-and-resolve loop has CONVERGED — a Copilot review has been **RECEIVED for the current head SHA**, left **no blocking finding unresolved** (including any carried from an earlier pass), and every thread on that head from a reviewer this skill categorised is resolved. Immaterial findings resolved by reply do not block this. Do not add "and was requested", which is not a determinable fact (**D1**). A quiet poll on an unreviewed head is not convergence
 4. CodeRabbit's check is in a terminal passing state (or absent if not configured)
