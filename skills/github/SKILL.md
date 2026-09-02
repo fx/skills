@@ -5,6 +5,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 
 # GitHub CLI Expert
 
+> **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
+> the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
+> every skill referenced below is installed as a sibling there.
+
 Comprehensive guidance for working with the GitHub CLI (`gh`) including common pitfalls, GraphQL patterns, and self-improvement workflows.
 
 ## Purpose
@@ -68,10 +72,12 @@ Use this skill only when the user explicitly invokes or names it, or when an act
 - ❌ Responding to human review comments - FORBIDDEN
 
 **The ONLY permitted interaction with review threads:**
-- ✅ Reply to EXISTING threads created by **GitHub Copilot only** using `addPullRequestReviewThreadReply`
-- ✅ Resolve Copilot threads using `resolveReviewThread`
+- ✅ Reply to an EXISTING thread created by an **automated reviewer** using `addPullRequestReviewThreadReply`
+- ✅ Resolve an automated reviewer's thread using `resolveReviewThread`
 
-**Never respond to or interact with human reviewer comments.** Only automated Copilot feedback should be addressed.
+**The line is automated versus human, not Copilot versus everything else.** Copilot and CodeRabbit are the two with their own resolver skills, and the merge gates below require CodeRabbit's delivered threads to be resolved — so a Copilot-only reading of this rule contradicts them. Any other bot a repo has configured is settled the same way, by hand, since no skill adapts it (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into reviews).
+
+**Never respond to or interact with human reviewer comments.** Human threads are out of scope and must never be touched, replied to, or resolved — only automated feedback is addressed.
 
 ## ⛔ PR Merge Requirements (CRITICAL — BLOCKING)
 
@@ -420,12 +426,12 @@ See `references/known-issues.md` for failed approaches and why they don't work.
 
 ### Resolve Copilot Review Threads
 
-**ONLY resolve threads created by GitHub Copilot.** Never interact with human review threads.
+**ONLY resolve threads created by an automated reviewer** (see the PR Comments Prohibition above). Never interact with human review threads.
 
-Use GraphQL mutations to resolve Copilot threads:
+Use GraphQL mutations to resolve an automated reviewer's threads:
 
 ```bash
-# Get thread ID (must be a Copilot thread)
+# Get thread ID (must be an automated reviewer's thread, never a human's)
 THREAD_ID="RT_kwDOQipvu86RqL7d"
 
 # Resolve it

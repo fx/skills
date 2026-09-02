@@ -1,6 +1,6 @@
 ---
 name: resolve-pr-feedback
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Coordinates explicitly requested automated PR-feedback resolution across configured reviewers."
+description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Coordinates explicitly requested automated PR-feedback resolution for the reviewers it has adapters for — Copilot, CodeRabbit and Codecov; any other configured reviewer is settled by hand by the caller."
 ---
 
 # Resolve PR Feedback
@@ -11,9 +11,26 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 
 **⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
 canonical review procedure. This skill is the **coordinator adapter**: it finds
-every unresolved automated finding on a PR, triages it, and dispatches the right
-resolver with the brief and a disposition per thread. Where the two appear to
-disagree, `fx-review` wins.
+every unresolved finding on a PR **from the reviewers in § Supported Reviewers**,
+triages it, and dispatches the right resolver with the brief and a disposition per
+thread. Where the two appear to disagree, `fx-review` wins.
+
+**"Every" is a claim the queries below have to earn, and one page does not earn
+it.** `reviewThreads(first: 100)` returns *at most* the first 100 threads, not the
+thread list — a PR that has accumulated more (a long review cycle, several
+reviewers, a large diff) silently drops the remainder, and every count and verdict
+downstream is then computed over a subset while still reading as complete. **Every
+thread enumeration in this skill MUST be paginated to exhaustion** — run it under
+`gh api graphql --paginate --slurp` and triage the union of the pages
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
+carries the mechanism and the checks that make it fail closed). A truncated read is
+not a smaller finding list; it is an unknown one.
+
+**That table is the whole of this skill's coverage.** An automated reviewer with
+no row in it is never categorised, never dispatched, and never counted in any
+verdict below. Its threads still gate the merge, and the caller settles them by
+hand (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into
+reviews).
 
 You are the coordinator here, so three of its steps are specifically yours:
 
@@ -31,13 +48,18 @@ You are the coordinator here, so three of its steps are specifically yours:
 |----------|---------------|----------------|
 | GitHub Copilot | `copilot-pull-request-reviewer` (GraphQL thread authors) / `copilot-pull-request-reviewer[bot]` (REST) — **never** the bare `Copilot`, which matches nothing | `copilot-feedback-resolver` |
 | CodeRabbit | `coderabbitai[bot]` | `rabbit-feedback-resolver` |
-| Codecov | `codecov[bot]` / `codecov-commenter` | `resolve-codecov-feedback` |
+| Codecov | `codecov[bot]` / `codecov-commenter` | `resolve-codecov-feedback` — for coverage gaps (§ 3b), its only channel. A review thread from Codecov is settled by hand instead (§ 3): that resolver has no thread-settlement path. |
+
+These three are the roster — there is no fallback row. A reviewer absent from the
+table has no author pattern here and no resolver to dispatch to, so this skill
+cannot settle it; do not treat the list as illustrative and do not infer a generic
+path for a fourth bot.
 
 ## WHEN TO USE THIS SKILL
 
 - User says "resolve PR feedback" / "check PR comments" / "address review comments"
-- User wants to handle all automated review feedback on a PR
-- After PR creation, to ensure all automated reviewers are addressed
+- User wants to handle the automated review feedback from the § Supported Reviewers roster on a PR
+- After PR creation, to ensure the reviewers in § Supported Reviewers are addressed — any other configured reviewer's threads also gate the merge, but the caller settles those by hand
 - As part of the SDLC workflow before finalizing a PR
 
 ## Parallel resolvers MUST NOT write `REVIEW.md` concurrently
@@ -83,24 +105,38 @@ gh pr view --json number -q '.number'
 
 ### 2. Query All Unresolved Review Threads
 
-**IMPORTANT — this applies to the GraphQL query bodies only:** substitute inline
-values, NOT `$variable` syntax. `-f query='...'` is single-quoted so the shell never
-expands anything inside it, and `$` is GraphQL's own variable sigil, so a `$name`
-there is a GraphQL variable you have not declared rather than a value.
+**IMPORTANT — inside a GraphQL query body:** `-f query='...'` is single-quoted, so
+the shell never expands anything in it, and `$` is GraphQL's own variable sigil. So
+whether a `$name` works there turns on one thing only — does the query signature
+declare it:
 
-**Plain `gh api` / `gh pr view` snippets are the opposite:** they use real shell
-variables (`PR_NUMBER`, `REPO_NWO`, `HEAD_SHA`), assigned at the top of each snippet
-so it is copy-pasteable as-is. Never mix the two styles inside one snippet — a bare
-`PR_NUMBER` sitting next to a real `${HEAD_SHA}` reads as though it were defined, and
-silently builds a request against a repo path containing the literal text.
+- **Undeclared is a bug.** `$name` with no matching declaration is an undefined
+  GraphQL variable, not a value: the shell will not substitute it and the server
+  rejects the document. Anything no declared variable carries is substituted inline
+  instead — that is what the `OWNER` / `REPO` / `PR_NUMBER` placeholders are for.
+- **Declared is correct and fully supported.** A `-f`/`-F` flag may bind it
+  (`-f owner="$OWNER"`), or `gh` may bind it itself: `--paginate` supplies
+  `$endCursor`, so that one is declared with deliberately **no** flag of its own —
+  it looks like an omission and is not. Read as a blanket ban on `$`, this rule
+  would leave the pagination this step mandates no way to advance.
+
+**Plain `gh api` / `gh pr view` snippets are the opposite:** no query body, so `$`
+is the shell's again, and they use real shell variables (`PR_NUMBER`, `REPO_NWO`,
+`HEAD_SHA`) assigned at the snippet's top so it is copy-pasteable as-is. Never mix
+the two styles inside one snippet — a bare `PR_NUMBER` next to a real `${HEAD_SHA}`
+reads as though it were defined, and silently builds a request against a repo path
+containing the literal text.
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
-gh api graphql -f query='
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query='
+query($endCursor: String) {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: $endCursor) {
+        totalCount
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           isResolved
@@ -119,6 +155,14 @@ query {
 }'
 ```
 
+**`--paginate --slurp` is what makes that the thread list rather than one page.**
+`gh` walks the cursor and returns an array of pages; flatten `nodes` across them and
+categorise the accumulated set — the executable version, with the fail-closed checks
+it requires, is `[SKILLS_DIR]/github/references/graphql-patterns.md`
+§ Pagination Pattern. Reading only the first page on a PR with more than 100 threads
+drops the rest without any error — the response is well-formed and simply shorter —
+so the skill would report a triaged, settled PR while unread findings sit on page 2.
+
 **Fetch `path`, `line`, and `body`, not just the author.** Step 4 requires a
 disposition per thread, and a disposition cannot be derived from an ID and a
 login: the filters need to see what the thread actually says and where. A query
@@ -133,6 +177,17 @@ Parse the response and categorize unresolved threads by author:
 - **Copilot threads**: author login is `copilot-pull-request-reviewer` (GraphQL). Match with `startswith("copilot-pull-request-reviewer")` so the REST `copilot-pull-request-reviewer[bot]` form matches too.
   - **⛔ It is NOT the bare string `Copilot`.** That value appears only in `requested_reviewers`, which is always empty and which this skill never reads. Matching on `Copilot` categorizes **zero** Copilot threads on every PR — so the resolver is never invoked, real threads are silently left unresolved, and this skill reports "nothing to do" while the merge gate is unsatisfiable.
 - **CodeRabbit threads**: author login contains `coderabbitai`
+- **Codecov threads**: author login starts with `codecov` — `codecov[bot]` or `codecov-commenter`. Match with `startswith("codecov")`, the same filter Step 5's convergence query uses. **Settle these by hand, yourself** — triage against the brief, reply with the disposition, resolve via `resolveReviewThread` (`github`). Codecov has a § Supported Reviewers row, so a thread of its is *not* one of the uncategorised ones you hand back to the caller (§ Error Handling).
+  - **⛔ Do NOT dispatch a Codecov review *thread* to `resolve-codecov-feedback`.** That resolver reads coverage statuses and PR comments and adds coverage; it has no thread-settlement path at all, so a thread handed to it comes back unresolved while Step 5's gate keeps selecting it — the same stall, one step later. Step 4's Codecov dispatch is for coverage gaps (§ 3b) only.
+  - **This bullet is the belt, not the primary Codecov path.** § 3b is Codecov's real channel — PR comments and commit statuses, not review threads — and it is why Codecov has a § Supported Reviewers row and a resolver at all; so this bullet usually matches nothing. Keep it anyway: Step 5's gate counts every unresolved `startswith("codecov")` thread, so a Codecov thread left uncategorised here holds the convergence loop open forever. Hand settlement resolves the thread, so the gate clears.
+
+Threads matching none of the three patterns above fall into two kinds, and
+neither is yours to resolve: human threads, which `github` forbids you from
+touching, and threads from an automated reviewer with no § Supported Reviewers
+row. **Report the second kind rather than dropping it** — list the reviewer and
+its open threads in your summary as uncategorised, so the caller knows there is
+a merge gate left for it to settle by hand. Silently omitting them is what makes
+a clean report here read as a clean PR.
 
 **Threads are the review.** Copilot also puts some observations in a `<details><summary>Suppressed comments</summary>` block in the **review body**, where they create no thread at all — those are **ignored by default** (`copilot-review` **D4**): Copilot itself declined to raise them as threads, they are overwhelmingly wording and comment-phrasing nits, and acting on one costs a full re-review cycle. Do not open the block routinely; act only on something absolutely dire that has already caught your eye.
 
@@ -160,7 +215,11 @@ If an absolutely-dire suppressed item is acted on, it cannot be resolved (no thr
 
 ### 3b. Check for Codecov Coverage Feedback
 
-Codecov uses PR comments and commit statuses, NOT review threads. Query separately:
+Codecov's channel is PR comments and commit statuses, NOT review threads — this
+is Codecov's normal path, and the only one Step 4's Codecov dispatch serves. The
+uncommon case where Codecov does open a review thread is § 3's Codecov bullet,
+and that thread is settled by hand there rather than dispatched from here. Query
+separately:
 
 ```bash
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
@@ -211,7 +270,7 @@ Skill tool: skill="rabbit-feedback-resolver",
             args="<Scope Brief verbatim> — dispositions: <thread id> blocking, <thread id> immaterial, <thread id> deferred (<exclusion>) — false premise (resolver's own handler): <thread id> (<what does not hold>)"
 ```
 
-**If Codecov coverage gaps detected:**
+**If Codecov coverage gaps are detected (§ 3b):**
 ```
 Skill tool: skill="resolve-codecov-feedback",
             args="<Scope Brief verbatim> — uncovered lines in scope: <paths>; deliberately uncovered: <paths and why>"
@@ -232,9 +291,9 @@ close off.
 
 **Where two or more channels carry blocking findings, fix them once, together, before dispatching any resolver** (`[SKILLS_DIR]/dev/references/head-discipline.md` § Batch findings). Two resolvers editing the same branch in parallel also race on the working tree, which is the local reason the rule is not optional here. Hand the whole blocking set to one fix agent, push once, then invoke each resolver with its blocking threads annotated `already fixed in <sha>` (`[SKILLS_DIR]/dev/references/scope-contract.md` § Resolver dispositions), leaving each to do only what it alone can do.
 
-### 5. Verify All Resolved AND Loop Until Convergence
+### 5. Verify Categorised Reviewers Resolved AND Loop Until Convergence
 
-After invoking resolver skills, re-query to confirm all threads are resolved AND that no reviewer has posted new feedback in response to the fixes that were pushed.
+After invoking resolver skills, re-query to confirm every thread from a § Supported Reviewers reviewer is resolved AND that none of them has posted new feedback in response to the fixes that were pushed.
 
 **Cycle, don't single-shot.** CodeRabbit re-runs after every push and may post new threads on the new commits. Copilot does **not** — it must be asked again. Either way, a single-pass resolver leaves a stale "settled" state behind. Loop:
 
@@ -248,7 +307,7 @@ After invoking resolver skills, re-query to confirm all threads are resolved AND
    that the ledger test alone does not cover:
    - the state holds on a head SHA that was **actually reviewed** (verify: the
      newest Copilot review's `commit_id` equals `headRefOid`);
-   - **every automated thread on that head is resolved**.
+   - **every thread on that head from a reviewer this skill categorised is resolved** — say which reviewers that covered, since a bot with no adapter is outside this query and is the caller's to settle.
 
    A suppressed-comments block is **not** a third condition and never extends this
    loop (`copilot-review` **D4**), and neither does a *Needs a closer look*
@@ -276,19 +335,34 @@ REVIEWED=$(gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
 
 The `// empty` is load-bearing: without it, a PR with no Copilot reviews prints the literal string `null`, which then gets compared against a SHA under a "these MUST match" instruction — an unreviewed head presented as a concrete-looking value instead of an obvious absence.
 
-Re-query remaining unresolved threads **from automated reviewers only**. The query
-below returns a per-reviewer breakdown array, not a single number.
-This skill resolves automated feedback and `github` forbids touching human
-review threads at all, so an unfiltered query makes one open human comment
-permanently unsatisfiable and loops this skill against work it must not do:
+Re-query remaining unresolved threads **from the § Supported Reviewers roster
+only** — the filter below selects those three by login, not every automated
+reviewer. The query returns a per-reviewer breakdown array, not a single number.
+This skill resolves the automated feedback it has adapters for, and `github`
+forbids touching human review threads at all, so an unfiltered query makes one
+open human comment permanently unsatisfiable and loops this skill against work it
+must not do:
+
+**Say what this verdict covers when you report it.** The roster is whatever the
+query below selects by author login — the § Supported Reviewers table's three,
+Copilot, CodeRabbit and Codecov — so a clean result here means *those* reviewers
+are settled. It is not evidence about a further automated reviewer a repo has
+configured, whose threads this skill never categorised and never resolved. Those
+still gate the merge, and the caller settles them by hand
+(`[SKILLS_DIR]/dev/references/scope-contract.md`
+§ Injecting the brief into reviews). Reporting a bare "0 unresolved" hands the
+caller a merge gate it has not actually verified.
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
-gh api graphql -f query='
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query='
+query($endCursor: String) {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: $endCursor) {
+        totalCount
+        pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
           comments(first: 1) {
@@ -300,19 +374,36 @@ query {
       }
     }
   }
-}' | jq '[.data.repository.pullRequest.reviewThreads.nodes[]
-          | select(.isResolved == false)
-          | .comments.nodes[0].author.login]
-         | group_by(.) | map({reviewer: .[0], unresolved: length})
-         | map(select(.reviewer
-               | startswith("copilot-pull-request-reviewer")
-                 or contains("coderabbitai")
-                 or startswith("codecov")))'
+}'
 ```
 
+**Run it under the fail-closed checks before reading the gate off it**
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
+carries the executable version). `gh` walks the cursor; flatten `nodes` across the
+slurped pages into one array. Nothing reduces that call, deliberately: `gh` rejects
+`--jq` under `--slurp`, and the `jq` below would consume the `pageInfo` the cursor
+lives in — and this query is the merge gate, the one place a false zero converts
+straight into "settled". **Accumulate, then filter, then count**, over the whole
+set:
+
+```bash
+jq '[.[] | select(.isResolved == false) | .comments.nodes[0].author.login]
+    | group_by(.) | map({reviewer: .[0], unresolved: length})
+    | map(select(.reviewer
+          | startswith("copilot-pull-request-reviewer")
+            or contains("coderabbitai")
+            or startswith("codecov")))' <<< "$ALL_THREADS"
+```
+
+Run that once, never per page: a per-page `group_by` splits one reviewer's threads
+across pages and reports each slice as that reviewer's total, and an empty array
+from a single page is exactly what a truncated read looks like.
+
 That reports a per-reviewer breakdown, so "unresolved threads remain" comes with the
-reviewer name attached. An empty array means no automated reviewer has open feedback;
-any human threads it excluded are deliberately not your concern.
+reviewer name attached. An empty array over the **fully paginated** set means **the
+reviewers this skill categorised by login** have no open feedback — not that the PR
+has none. Human threads it excluded are deliberately not your concern; an
+uncategorised bot's threads are the caller's, per the caveat above.
 
 If unresolved threads remain, report which reviewers still have open feedback.
 
@@ -325,6 +416,7 @@ If unresolved threads remain, report which reviewers still have open feedback.
 - Copilot: 2 unresolved threads found
 - CodeRabbit: 3 unresolved threads found
 - Codecov: patch coverage 65% (below threshold)
+- Uncategorised automated reviewers: <name>: <n> unresolved — no adapter here (or "none seen")
 
 ### Resolution
 - Invoked copilot-feedback-resolver
@@ -332,17 +424,23 @@ If unresolved threads remain, report which reviewers still have open feedback.
 - Invoked resolve-codecov-feedback
 
 ### Final Status
-- All automated review threads resolved
+- All Copilot, CodeRabbit and Codecov threads resolved (no other reviewer categorised)
 - Coverage improved to 85%
+- Left for the caller: <uncategorised reviewer>: <n> threads still gating the merge (settle by hand)
 ```
+
+Keep the last two lines even when there is nothing to report — write "none seen"
+and "nothing left for the caller". Dropping the line makes its absence
+indistinguishable from a run that never looked, which is the state the caller
+would read as full coverage.
 
 ## Success Criteria
 
-1. All unresolved automated review threads identified — matched on the `copilot-pull-request-reviewer` login, **not** the bare `Copilot`. Suppressed comments are **not** part of this: they open no thread and are ignored by default (`copilot-review` **D4**)
+1. All unresolved threads **from the reviewers this skill categorises** identified — matched on the `copilot-pull-request-reviewer` login, **not** the bare `Copilot`. Name that roster — the § Supported Reviewers table's three — when reporting the verdict; a reviewer with no adapter is outside it and is settled by the caller. Suppressed comments are **not** part of this: they open no thread and are ignored by default (`copilot-review` **D4**)
 2. Appropriate resolver skill(s) invoked (Copilot + CodeRabbit in parallel where applicable)
-3. The wait-and-resolve loop has CONVERGED — a Copilot review has been **RECEIVED for the current head SHA**, left **no blocking finding unresolved** (including any carried from an earlier pass), and every automated thread on that head is resolved. Immaterial findings resolved by reply do not block this. Do not add "and was requested", which is not a determinable fact (**D1**). A quiet poll on an unreviewed head is not convergence
+3. The wait-and-resolve loop has CONVERGED — a Copilot review has been **RECEIVED for the current head SHA**, left **no blocking finding unresolved** (including any carried from an earlier pass), and every thread on that head from a reviewer this skill categorised is resolved. Immaterial findings resolved by reply do not block this. Do not add "and was requested", which is not a determinable fact (**D1**). A quiet poll on an unreviewed head is not convergence
 4. CodeRabbit's check is in a terminal passing state (or absent if not configured)
-5. Final verification confirms all threads resolved
+5. Final verification confirms every categorised reviewer's threads resolved, and says which reviewers that covered
 6. Summary output provided
 
 ## Error Handling
@@ -350,3 +448,4 @@ If unresolved threads remain, report which reviewers still have open feedback.
 - If no PR found: Ask user for PR number
 - If resolver skill fails: Report which reviewer's feedback remains unresolved
 - If API errors: Retry with proper auth context
+- If a thread comes from an automated reviewer with no § Supported Reviewers row: this is not an error to work around and not a reason to improvise a resolver. Report the reviewer and its open threads as uncategorised and hand them back to the caller, which settles them by hand (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into reviews). Never report the PR as settled on their behalf

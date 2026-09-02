@@ -119,11 +119,14 @@ disposition per thread — a count cannot be triaged. Fetch the bodies, then run
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
-gh api graphql -f query='
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query='
+query($endCursor: String) {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: $endCursor) {
+        totalCount
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           isResolved
@@ -134,8 +137,27 @@ query {
       }
     }
   }
-}' --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))]'
+}'
 ```
+
+**`--paginate --slurp` is what reads that to exhaustion — run it under the
+fail-closed checks before triaging off it**
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
+carries the executable version). `gh` walks the cursor and returns an array of
+pages; flatten `nodes` across them into one array. There is no `--jq` on that call
+because `gh` rejects it under `--slurp`, and a filter reducing the response to an
+array of matches would discard the `pageInfo` `--paginate` pages from.
+**Accumulate, then filter** — once, over the whole set:
+
+```bash
+jq '[.[] | select(.isResolved == false
+       and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))]' \
+  <<< "$ALL_THREADS"
+```
+
+A thread stranded past the first page is never triaged and never given a
+disposition, so it neither reaches the resolver nor shows up in Step 3's count —
+the gate reads as met while the finding sits unread.
 
 Assign one of `blocking`, `immaterial`, or `deferred` to each thread **that
 carries a finding**. Yours is authoritative — you hold the Scope Brief; the
@@ -182,11 +204,14 @@ pending again — go back to Step 1. Per `fx-review` Step 7, repeat Steps
 track, and it is the one a passing check cannot stand in for.
 
 ```bash
-gh api graphql -f query='
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query='
+query($endCursor: String) {
   repository(owner: "OWNER", name: "REPO") {
     pullRequest(number: <PR_NUMBER>) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: $endCursor) {
+        totalCount
+        pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
           comments(first: 1) { nodes { author { login } } }
@@ -194,7 +219,21 @@ query {
       }
     }
   }
-}' --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))] | length'
+}'
+```
+
+**Run it under the fail-closed checks before reading condition 2 off it**, the same
+mechanism Step 1b uses
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern). `gh`
+walks the cursor; flatten `nodes` across the slurped pages. Keep the call free of a
+reducing `--jq` — `gh` rejects it under `--slurp`, and it would otherwise strip the
+`pageInfo` `--paginate` pages from. **Accumulate, then filter, then count** — a
+per-page `length` under-reports exactly as a per-page `group_by` would:
+
+```bash
+jq '[.[] | select(.isResolved == false
+       and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))]
+    | length' <<< "$ALL_THREADS"
 ```
 
 ## Concurrency with other reviewers

@@ -166,7 +166,7 @@ Nothing in this spec is enforced mechanically. These are instructions in prompt 
 
 ### Why Procedure Is Absent
 
-The skills contain a great deal of ordering: numbered SDLC steps, a review matrix, wave-based execution, worktree setup, bounded remediation rounds. None of it appears above. Those are the mechanisms by which the gates are reached, and they are rewritten routinely; specifying them would convert every tuning pass into a spec violation. If a rule here would become false because someone renamed or reordered a workflow step, it does not belong in this spec.
+The skills contain a great deal of ordering: numbered SDLC steps, review passes, wave-based execution, worktree setup, bounded remediation rounds. None of it appears above. Those are the mechanisms by which the gates are reached, and they are rewritten routinely; specifying them would convert every tuning pass into a spec violation. If a rule here would become false because someone renamed or reordered a workflow step, it does not belong in this spec.
 
 ## Constraints
 

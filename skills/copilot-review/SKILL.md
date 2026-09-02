@@ -158,7 +158,7 @@ class halfway spends a full Copilot wait to be told about the other half.
 
 ## Parallel With Other Reviewers
 
-This skill can run **in parallel** with `coderabbit-review` and any future automated-reviewer skills.
+This skill can run **in parallel** with `coderabbit-review`, the only other PR-level reviewer this catalog requests.
 
 **There is no mode selection.** Reviewers run concurrently in every context — root
 session, `team` coordinator, or sub-agent alike. Launch each reviewer's waiter in
@@ -273,7 +273,7 @@ reading. Take all bodies for the commit.
 
 ### Step 3: Resolve Feedback
 
-After the review is received, invoke the resolve-pr-feedback skill to process all automated review threads (Copilot, CodeRabbit, Codecov):
+After the review is received, invoke the resolve-pr-feedback skill to process the automated review threads it categorises (Copilot, CodeRabbit, Codecov):
 
 ```
 Skill tool: skill="resolve-pr-feedback",
@@ -313,11 +313,14 @@ unsatisfiable and loops `resolve-pr-feedback` forever:
 ```bash
 OWNER="${REPO_NWO%%/*}"
 REPO="${REPO_NWO##*/}"
-gh api graphql -f query="
-query {
+# $endCursor is declared and left unbound on purpose: --paginate supplies it.
+gh api graphql --paginate --slurp -f query="
+query(\$endCursor: String) {
   repository(owner: \"$OWNER\", name: \"$REPO\") {
     pullRequest(number: <PR_NUMBER>) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: \$endCursor) {
+        totalCount
+        pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
           comments(first: 1) {
@@ -327,8 +330,28 @@ query {
       }
     }
   }
-}" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")] | length'
+}"
 ```
+
+**`--paginate --slurp` is what reads that to exhaustion — run it under the
+fail-closed checks before reading the gate off it**
+(`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
+carries the executable version). `gh` walks the cursor and returns an array of
+pages; flatten `nodes` across them into one array. Note there is no `--jq` on that
+call, deliberately — `gh` rejects it under `--slurp`, and a filter that collapses
+the response to a count throws away the `pageInfo` `--paginate` needs to reach page
+2. Count once, over the accumulated set:
+
+```bash
+jq '[.[] | select(.isResolved == false
+       and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")]
+    | length' <<< "$ALL_THREADS"
+```
+
+**Accumulate, then filter, then count** — a per-page `length` splits the Copilot
+total across pages exactly as a per-page `group_by` would. And a `0` from a
+truncated read is indistinguishable from a genuine `0`: it passes condition (2)
+below with unresolved Copilot threads still open.
 
 The gate is passed when **both** hold:
 

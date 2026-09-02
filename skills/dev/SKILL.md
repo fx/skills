@@ -25,7 +25,7 @@ This skill defines the **mandatory** workflow for one explicitly invoked `/dev` 
 
 ## CRITICAL RULES
 
-**Delegate the substantive roles this lifecycle owns — requirements analysis, planning, implementation, and independent review — each to its own sub-agent that loads the matching skill. Do not delegate a mechanical operation the coordinator can perform directly.**
+**Delegate the substantive roles this lifecycle owns — requirements analysis, planning, and implementation — each to its own sub-agent that loads the matching skill. Do not delegate a mechanical operation the coordinator can perform directly.**
 
 ### How to Launch Sub-Agents with Skills
 
@@ -58,13 +58,13 @@ Choose by the **shape of the task**, not by how important it feels. Every Agent 
 
 | Size | Use for |
 |---|---|
-| **large** | Implementation (Step 4). Planning (Step 3). Requirements analysis (Step 2). Independent review. Fix agents on an **undiagnosed** failure. Anything requiring design judgment. |
+| **large** | Implementation (Step 4). Planning (Step 3). Requirements analysis (Step 2). Fix agents on an **undiagnosed** failure. Anything requiring design judgment. |
 | **medium** | PR preparation. Browser/test-plan verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
 | **small** | Pure inspection or summarisation with no judgment call. |
 
 **Request the tier, not a model name.** "Spawn a large-model sub-agent" resolves to whatever the host currently offers at that tier, so this table does not go stale every time a model ships — and a hardcoded name silently becomes wrong rather than failing loudly. Where the host requires an explicit model, map the tier to its general-purpose **coding** models and nothing else; a model specialised for another domain is the wrong choice at every tier regardless of its size. In Claude Code that means the three coding tiers only — **never select `fable`.**
 
-**Never downgrade an implementation or review agent.** Those are judgment-heavy, and a weaker agent that needs more iterations costs *more* than a stronger one that needs fewer — turn count, not per-turn price, dominates. A downgrade that adds two review rounds is a large net loss that looks like a saving.
+**Never downgrade an implementation agent.** Those are judgment-heavy, and a weaker agent that needs more iterations costs *more* than a stronger one that needs fewer — turn count, not per-turn price, dominates. A downgrade that adds two review rounds is a large net loss that looks like a saving.
 
 Two constraints worth knowing rather than rediscovering:
 
@@ -87,7 +87,8 @@ duvet# During an explicitly invoked `dev` lifecycle, the coordinator MUST delega
 - ❌ NEVER create implementation commits yourself
 - ❌ NEVER skip tests (`test.skip`, `it.skip`, `describe.skip` are FORBIDDEN)
 - ❌ NEVER select a skill as an agent type — the delegate loads it from its prompt (in Claude Code: not via `subagent_type`)
-- ✅ ALWAYS delegate requirements analysis, planning, implementation, and independent review roles
+- ✅ ALWAYS delegate requirements analysis, planning, and implementation roles
+- ❌ NEVER delegate review to a reviewing sub-agent — review is Codex, Copilot, and CodeRabbit, each driven by its own skill from the coordinator session
 - ✅ ALWAYS instruct delegated role agents to load their named skills via the Skill tool
 - ✅ ALWAYS perform straightforward status checks, branch synchronization, PR metadata updates, and an explicitly approved merge directly when delegation adds no independent judgment
 - ✅ ALWAYS verify each lifecycle gate before proceeding, except where the user explicitly waives a procedural pass that is not a mandatory correctness, security, privacy, test, or merge gate
@@ -338,39 +339,25 @@ git diff main --stat
 
 ---
 
-### STEP 4.5: Pre-PR Self-Review (simplify → review → Codex)
+### STEP 4.5: Pre-PR Self-Review (Codex)
 
-**MANDATORY: Run one complete local review matrix before creating the PR.** Run each available pass once in order against the current `HEAD`, record the revision that each channel reviewed, and classify its findings before accepting fixes. If `/simplify` edits directly, retain only changes that satisfy the contract classification and record the resulting revision before starting the next pass.
+**MANDATORY: Run the local Codex review before creating the PR.** Run it once against the current `HEAD`, record the revision it reviewed, and classify its findings before accepting fixes.
 
-**Run all three passes, then fix once** (`references/head-discipline.md` § Batch findings). Do not fix and re-run between passes. This is the last stage where a fix costs nothing but a local rerun, so spend the thoroughness here rather than after the push.
+**Batch the findings, then fix once** (`references/head-discipline.md` § Batch findings) — Codex's findings, the test failures, and the Step 4.6 verification results are one batch, taken through one fix pass before the Step 4.7 push. Do not fix and re-run between channels. This is the last stage where a fix costs nothing but a local rerun, so spend the thoroughness here rather than after the push.
 
-**Every pass below follows `fx-review`** — the canonical review procedure
+**This pass follows `fx-review`** — the canonical review procedure
 (Skill tool: `skill="fx-review"`), which each reviewer skill loads first. This
-step does not restate it. In particular: **every pass MUST receive the Step 2.5
+step does not restate it. In particular: **the pass MUST receive the Step 2.5
 Scope Brief verbatim**, and a pass run without it is incomplete — rerun it with
 the brief rather than filtering its output.
 
-**1. `/simplify`** — reuse, quality, efficiency cleanup:
-
-```
-Skill tool: skill="simplify", args="<Scope Brief>"
-```
-
-Reviews changed code for **reuse** (duplicated logic), **quality** (copy-paste, leaky abstractions, nesting), and **efficiency** (redundant computation, missed concurrency).
-
-**2. `/code-review`** — correctness bugs in the diff:
-
-```
-Skill tool: skill="code-review", args="<Scope Brief>"
-```
-
-**3. Codex (local, via `codex`)** — independent one-shot branch review:
+**Codex (local, via `codex`)** — independent one-shot branch review:
 
 ```
 Skill tool: skill="codex-review", args="<Scope Brief>"
 ```
 
-**Codex is the ONLY local reviewer.** There is no local CodeRabbit pass — the `cr` CLI is not used anywhere in this SDLC. CodeRabbit applies only at the PR level in Step 6.3, and only when the repo's GitHub App is installed.
+**Codex is the ONLY local reviewer.** The reviewer roster for this SDLC is exactly Codex locally, then Copilot and — where its GitHub App is installed — CodeRabbit at the PR level (Step 6.3). There is no local CodeRabbit pass (the `cr` CLI is not used anywhere in this SDLC), and no Claude-side review pass: do not run `/code-review`, `/simplify`, or a general-purpose reviewing sub-agent as an SDLC gate. The user may still invoke those directly; they are not part of this lifecycle.
 
 The Codex CLI takes the scope as its review prompt, so this pass is the one where a missing brief is most expensive — it will confidently report every deliberate omission. If the `codex` CLI is unavailable or not authenticated, report it once and proceed without this pass. NEVER run `codex login`.
 
@@ -382,9 +369,8 @@ Fix every **blocking** ledger entry (`references/scope-contract.md` § Blocking)
 
 1. Rerun the reviewer or check that originated the blocking finding.
 2. Rerun tests affected by the delta.
-3. Rerun another reviewer only when the delta touches the risk area that reviewer covered or invalidates its recorded evidence.
 
-Do not restart the full matrix merely because `HEAD` changed. Deduplicate repeated or reworded findings against the ledger; they do not start a new cycle. When `/dev` invokes reviewer subskills, this contract classification and bounded stopping policy takes precedence over generic instructions to resolve every actionable finding or rerun until clean.
+Do not rerun Codex merely because `HEAD` changed. Deduplicate repeated or reworded findings against the ledger; they do not start a new cycle. When `/dev` invokes reviewer subskills, this contract classification and bounded stopping policy takes precedence over generic instructions to resolve every actionable finding or rerun until clean.
 
 **The materiality bar applies to judgment-originated findings only** — things a reviewer raised on its own reading, rather than violations of a rule the project wrote down (`references/scope-contract.md`). One of those must clear the bar before it can be treated as blocking. Materiality is a **separate ledger field**, not a fourth classification — every entry still carries exactly one of the three classifications above, plus a materiality tier. An observation that would change nothing if it shipped uncorrected is recorded as `follow-up/out-of-scope` with materiality `immaterial`, and never triggers a rerun.
 
@@ -398,7 +384,7 @@ Proceed to Step 4.6 when all of the following are true:
 
    **A finding excluded at filter 1 can never carry a Material or Substantive tier.** The two fields are assigned by different filters and cannot disagree, so that one pair is illegal. Note the rule is about the *filter*, not the class name: `follow-up/out-of-scope` holds entries of two different origins, and all three tiers can be legal for it — a finding excluded at filter 1 never reaches the bar, so its tier is `n/a`; an in-scope observation that reached filter 3 and failed it is tier `immaterial`. A finding that reaches the bar at all is one no written rule covers — a written-rule violation stops at filter 2, unranked, as a contract blocker with tier `n/a` and class `required-by-contract`, and never reaches filter 3. So a finding ranked Material or Substantive is in scope by construction, is a defect in work this change actually did, and is *not* `required-by-contract`: it is `regression-caused-by-change` where the branch caused a regression, and otherwise — a two-way ambiguity in something this change wrote, say — it stays in this class and **still blocks, by tier**. The classification answers what obliges the fix; the tier answers whether it blocks, exactly as the stopping condition below states. What is illegal is that tier pair on a finding excluded at filter 1, which never reached the bar. **The filter outcome decides the resolver disposition — not the class name, and not the tier** (§ Resolver dispositions). Tier `n/a` is carried by two unrelated outcomes and so cannot pick one: a contract blocker is `n/a` because filter 2 stopped before the bar, and it is **blocking** — fixed and pushed; a finding excluded at filter 1 is `n/a` because it never reached the bar, and it is **deferred**, replied to with the exclusion. Tier `immaterial` settles as `immaterial`, replying with the materiality reasoning. Read the outcome, never the tier alone. Citing an exclusion for an in-scope observation invents one that does not exist. If you are about to record that pair, one of the two filters was misapplied — re-run them rather than writing an entry the gate can neither clear nor waive. Materiality never promotes an out-of-scope finding back into scope (`references/scope-contract.md` § Three filters); this rule is that principle applied to the ledger.
 2. Contract-required tests and tests affected by the latest delta pass.
-3. Every available review channel completed its initial pass or has a documented permitted degradation.
+3. The Codex pass completed its initial pass, or its unavailability is documented as a permitted degradation.
 4. The review has **converged** as `references/scope-contract.md` § Convergence defines it — no blocking finding left unresolved, ledger-wide, not merely none new in the latest pass. As an additional gate, that state is confirmed by one verification pass over the latest affected delta.
 
 `follow-up/out-of-scope` entries with tier `n/a` — the class and the tier together, which is what identifies a filter-1 exclusion — and immaterial observations, do not block PR creation. Tier `n/a` alone does not qualify: a `required-by-contract` entry carries it too, and blocks. Nothing else is waivable here: a reviewer-originated Material or Substantive finding blocks even though no written requirement names it, exactly as item 1 above and `references/scope-contract.md` § Blocking say. Each review channel caps at the single bound defined in `references/scope-contract.md` § The iteration bound, which counts the initial pass as iteration 1 and which no skill restates or overrides — count reviewer invocations in total, not remediation rounds on top of the first pass. **Convergence is the goal, and the bound is a runaway backstop, not a target.** Reaching it means the loop failed to converge; report it that way. Reaching the bound is a failure to converge and does not authorize Step 5. STOP, report the per-pass trend and everything still open, and let the user decide whether to create the PR — including when every remaining entry is `follow-up/out-of-scope` with tier `n/a`. A blocking entry at the bound is always an escalation; the bound never waives one. A contract amendment may change product scope, but it cannot waive mandatory correctness, security, privacy, testing, or merge rules.
@@ -504,7 +490,7 @@ Agent tool:
   description: "Fix verification failures"
 ```
 
-Re-run only the verification whose evidence the fix invalidated, plus the Step 4.5 passes and tests the delta invalidated — Step 4.5's remediation rules apply here unchanged, and a fix nothing reviewed is not converged.
+Re-run only the verification whose evidence the fix invalidated, plus the Step 4.5 Codex pass and the tests the delta invalidated — Step 4.5's remediation rules apply here unchanged, and a fix nothing reviewed is not converged.
 
 **Maximum 2 fix iterations, and the bound is an escalation, not a bypass.** If a non-manual item still fails after 2 attempts, **STOP and report it to the user** with what fails, what the two attempts changed, and the cheapest path forward. Do not open the PR on the strength of having hit the bound: a failed browser or programmatic item is a known defect, and no later step accepts one — the Step 8.1 merge gates require every test plan item verified, user-confirmed, or manual-only, and "failed twice" is none of those. The user may accept the failure explicitly, in which case record it in the ledger as accepted-by-user with their reason and carry it into the PR body annotated `— FAILED: <reason> (accepted by user)`. Only that recorded acceptance lets the item past the gate.
 
@@ -518,7 +504,7 @@ Record every item's result — they are written into the PR body in Step 5, alre
 
 **This is the last step that may change the tree before hosted review and CI.** Confirm, in order:
 
-1. Every blocking ledger entry from Step 4.5 is resolved and the local matrix has converged.
+1. Every blocking ledger entry from Step 4.5 is resolved and the local Codex review has converged.
 2. Step 4.6 recorded a result for every non-manual test plan item.
 3. **Whatever tracks this work is already committed** — the `[DOC_PATH]` identified in Step 4, plus any index the project keeps in step with it. **Skip this if `[DOC_PATH]` is `none`**: a repo with no change documents, task list, or index has nothing to commit here, and the gate is satisfied by that fact rather than blocked by it. Where there is one and it is missing from the diff, send the Step 4 coder back for it **now**, before the push (the coordinator never authors it — see CRITICAL RULES); it must never become a post-gate commit.
 4. **Whatever the project generates is regenerated and committed** — lockfiles, snapshots, generated sources. Same conditional: a project that generates none of these skips this too.
@@ -668,20 +654,22 @@ Waiting on a manual answer never blocks **Steps 6 and 7** — post the request, 
 
 **The sub-step numbers are stable identifiers other skills reference, not a running order.** This step runs as a loop, and 6.2 is entered from a wake, never from the clock:
 
-1. **6.1** — costs no push and needs nobody, so it runs first. Record its findings in the ledger.
+1. **6.1** — the head, metadata and integration check costs no push and needs nobody, so it runs first. Record its findings in the ledger.
 2. **If 6.1 produced a blocking finding, fix it now** — one **6.2** pass, one push, and that SHA becomes the candidate head. Do this **before** launching anything in 6.3: a hosted review started on a head you already know must change is a full reviewer cycle spent on a diff that will not survive. Nothing is waiting yet, so this fix costs nothing but the push it was always going to need.
-3. **6.3's waiter launch**, on a head with no known blocking finding. The hosted reviewers are the long pole, so from here on nothing waits on them that could have gone first.
+3. **6.3's waiter launch**, on a head with no known blocking finding — and where 2 pushed, **6.1's material-change test** applies to that push first, because the launch is a hosted waiter starting on a moved head like any other. The hosted reviewers are the long pole, so from here on nothing waits on them that could have gone first.
 4. **On each reviewer wake** — read that log and classify its threads (6.3, per-reviewer steps 1–2). **If the table now holds any blocking entry**, re-enter **6.2 once** for everything currently on it across every channel, and push once. If it holds none, there is nothing to fix and nothing to push — go straight to 5.
 5. **Dispatch the resolvers on every wake, push or no push.** A wake that produced only `immaterial` and `deferred` findings still has threads to settle, and leaving them for a later push that may never come is what stalls the 6.3 convergence gate. The only ordering constraint is that a `blocking` entry is fixed in 4 before its thread is dispatched, so it arrives annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions) rather than sending the resolver down its own pushing path.
-6. **If 4 pushed, that created a new head, so re-cover it** — 6.3, per-reviewer step 4, applying `references/head-discipline.md` § Evidence is SHA-scoped — before repeating from 4 on the next wake. A wake that pushed nothing invalidates no evidence and needs no relaunch.
+6. **If 4 pushed, that created a new head, so re-cover it** — apply **6.1's material-change test** to that push, then 6.3, per-reviewer step 4, applying `references/head-discipline.md` § Evidence is SHA-scoped — before repeating from 4 on the next wake. A wake that pushed nothing invalidates no evidence and needs no relaunch.
 
 If a wake arrives while nothing else is outstanding and its channel is the only one with findings, 6.2 still runs once for that channel — a batch of one is not a violation. What is forbidden is fixing channel A, pushing, and then fixing channel B (`references/head-discipline.md` § Batch findings).
 
-#### 6.1 Self-Review — delta and integration only
+> **The 6.1/6.2/6.3 numbering here deliberately diverges from the upstream `fx-cc` catalog this one derives from**, which renumbered its automated-reviewer wait to 6.1 after deleting its own 6.1 and 6.2. These numbers are the stable identifiers the paragraph above describes, and other skills in this catalog reference them by number. A later upstream sync must not "correct" them.
 
-**The branch was already reviewed at Step 4.5. Do not restart a generic code-quality review here.** The local matrix ran `/simplify`, `/code-review`, and Codex against this same code with the same Scope Brief; a second broad pass rediscovers the same ground, costs a full cycle, and its findings are indistinguishable from new ones.
+#### 6.1 Head, metadata, and integration check
 
-This pass verifies only the three things that Step 4.5 could not:
+**The branch was already reviewed at Step 4.5. Do not restart a generic code-quality review here.** Codex reviewed this same code with the same Scope Brief at Step 4.5; a second broad pass rediscovers the same ground, costs a full cycle, and its findings are indistinguishable from new ones.
+
+**This is a coordinator-run check with no delegate.** It verifies only the three things that Step 4.5 could not:
 
 1. **The pushed diff matches the reviewed SHA** — the candidate head from Step 4.7 is what the PR actually contains:
    ```bash
@@ -691,32 +679,20 @@ This pass verifies only the three things that Step 4.5 could not:
 2. **PR metadata is accurate** — title, body, linked spec/change docs, and the test plan describe what the diff does.
 3. **No integration-only issue appeared** — conflicts with `main` merged since the branch started, cross-PR interactions in a multi-PR change, or anything only visible with the change in its target context.
 
-Run a full `pr-reviewer` pass **only** when the diff changed materially since Step 4.5 converged — a hosted-reviewer fix push that touched new files or new behaviour, not a one-line correction:
+Where the diff changed **materially** since Step 4.5 converged — a fix push that touched new files or new behaviour, not a one-line correction — re-enter **Step 4.5's Codex pass on the delta** before any hosted waiter starts, and count that invocation against `references/scope-contract.md` § The iteration bound. The trigger is a material change to the diff, **not** a head move: a head that moved without changing what the reviewed code does needs no re-run, and there is no other local reviewer to reach for.
 
-```
-Agent tool:
-  prompt: "Load the pr-reviewer skill (Skill tool: skill='pr-reviewer'), then:
+**"On the delta" is carried by the prompt, never by a flag.** `codex review` rejects a scope flag passed together with a prompt, and the Scope Brief prompt is mandatory, so the prompt-only form is the only correct invocation — which reviews the whole branch against its base every time (`codex-review` § Scope flags and a custom prompt are mutually exclusive). There is no flag that narrows it, and Codex re-reading the whole branch is expected rather than a defect. Scope the re-run in the prompt, with two things:
 
-           [PASTE THE STEP 2.5 SCOPE BRIEF VERBATIM HERE — the reviewer must
-            know what was asked for before it reads the diff, and must report
-            out-of-scope findings as deferred rather than blocking]
+1. **The boundary** — the revision Step 4.5 recorded when it ran ("record the revision it reviewed"), named in the prompt as the last reviewed SHA, so Codex can tell which commits are new. Where an earlier re-run already fired, the boundary is the revision *it* recorded, not the original Step 4.5 one.
+2. **The convergence prefix** — `fx-review` § The external-reviewer block, **Part 1**, which lists every prior finding with its disposition and the classes swept closed since the last pass. That is the mechanism that keeps the pass delta-scoped: it is what stops the re-run re-reporting ground the previous pass already settled. A re-run sent without it is a second broad pass wearing a delta's name, whatever the boundary says.
 
-           Review PR #[NUMBER]. The branch already passed a full local review
-           matrix at revision [SHA REVIEWED AT STEP 4.5] (simplify, code-review,
-           codex-review) with all blocking findings resolved. Review the delta
-           since that revision, plus integration concerns only:
-           - Correctness of the delta
-           - Test coverage of the delta
-           - Security issues in the delta
-           - Interaction with main and with sibling PRs
+Record the revision each re-run reviewed, the same way Step 4.5 does, so the next one has a boundary.
 
-           Do NOT re-review code unchanged since [SHA] — it has been reviewed.
+**This is the material-change test, and it is universal: any push that moves the candidate head applies it before any hosted waiter is launched or relaunched** — 6.3's first launch included, not only the re-covers. **Never restate it as a list of push sites.** An enumeration goes stale the moment a site is added, and the omission is silent: the missed path hands the hosted reviewers a materially changed head with no local pass behind it. Stated universally, a push site added later inherits the rule for free. It is stated here and only here; those sites reference it. Applying it costs nothing at the common case, because the wording above already lets a push that did not change what the reviewed code does fall straight through.
 
-           Output: Issues found (if any), each marked in-scope or deferred"
-  description: "Review PR delta"
-```
+**Where the delta-scoped pass this test triggers reports a blocking finding, that finding goes through one 6.2 pass and its push before any hosted waiter is launched or relaunched, and the resulting push re-applies this test to its own delta.** A blocking finding in hand is a head you already know must change, and `references/head-discipline.md` § Waiter scheduling order **rule 0** forbids starting a hosted reviewer on one — the reviewer would spend a full cycle on a diff that will not survive. This consequence travels with the test: it holds at every site that applies it, it is stated here with the test and nowhere else, and a site added later inherits it for the same reason the test itself is stated universally.
 
-The coordinator MUST classify and deduplicate these findings in the Step 2.5 ledger before invoking a coder. Pass every **blocking** entry to implementation and nothing else (`references/scope-contract.md` § Blocking) — which includes a `follow-up/out-of-scope` entry blocking by tier, and excludes an entry that is not blocking. Select on blocking, never on the tier: `n/a` marks a contract blocker (filter 2 stopped before the bar) just as it marks a filter-1 exclusion, so dropping every `n/a` entry drops every mandatory rule violation.
+The coordinator MUST classify and deduplicate these findings — the integration findings above, and anything a delta-scoped Codex re-run reported — in the Step 2.5 ledger before invoking a coder. Pass every **blocking** entry to implementation and nothing else (`references/scope-contract.md` § Blocking) — which includes a `follow-up/out-of-scope` entry blocking by tier, and excludes an entry that is not blocking. Select on blocking, never on the tier: `n/a` marks a contract blocker (filter 2 stopped before the bar) just as it marks a filter-1 exclusion, so dropping every `n/a` entry drops every mandatory rule violation.
 
 #### 6.2 Batched Fix Pass
 
@@ -744,9 +720,9 @@ Agent tool:
 
 Then invoke each reviewer's resolver to settle its threads, passing its blocking entries annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions). Letting two resolvers fix in parallel instead races them on the same branch and buys two CI cycles for one round of feedback.
 
-#### 6.3 Automated Reviewer Wait (Copilot + CodeRabbit + future)
+#### 6.3 Automated Reviewer Wait (Copilot + CodeRabbit)
 
-**MANDATORY: Wait for and resolve EVERY automated reviewer configured on the repo.** Copilot and CodeRabbit are the two we know about today; future integrations slot in here. Reviewers are **independent feedback channels** with different latencies (Copilot 85 s to 12 m 42 s observed — do not budget for it being quick; CodeRabbit 2–10+ min and re-runs after every push).
+**MANDATORY: Wait for and resolve EVERY automated reviewer configured on the repo.** **Copilot and CodeRabbit are the only two this step *requests*** — that roster is closed (`references/scope-contract.md` § Injecting the brief into reviews), so do not add a pass for another reviewer, and in particular never reintroduce a Claude-side one. But *requesting* and *settling* are different obligations: if the repo has some other automated reviewer configured and it posts threads anyway, those threads are triaged and settled like any others, because no thread from a configured automated reviewer may be left open under a merge (Step 8.1's checklist, and the spec behind it). **A reviewer outside `resolve-pr-feedback`'s § Supported Reviewers table has no waiter and no resolver, so settle it by hand** — triage against the brief, reply with the disposition, resolve via `resolveReviewThread` (`github`) — and do not read a clean `resolve-pr-feedback` report as covering it; that skill categorises by author login and covers only the three in its own § Supported Reviewers table — Copilot, CodeRabbit, Codecov (`references/scope-contract.md` § Injecting the brief into reviews). Reviewers are **independent feedback channels** with different latencies (Copilot 85 s to 12 m 42 s observed — do not budget for it being quick; CodeRabbit 2–10+ min and re-runs after every push).
 
 > **CodeRabbit is PR-level only.** There is no local CodeRabbit pass — Step 4.5 runs Codex alone. CodeRabbit applies here when the repo's GitHub App auto-reviews PRs, and its waiter reports `STATUS=NOT_CONFIGURED` when it does not, which is the common case and is terminal. Prefer a passing check and resolve received feedback; if CodeRabbit rate-limits, resolve what it already delivered — blocking findings fixed, every posted thread settled — then record `skipped (rate-limited)` and continue without blocking.
 
@@ -759,7 +735,7 @@ Then invoke each reviewer's resolver to settle its threads, passing its blocking
 
 ##### Run every waiter concurrently — there is no mode selection
 
-**⛔ Launch each configured reviewer's wait script concurrently, each redirecting to its own log file.** Take the shape of the wait from `references/host-adapters.md` § Long waits — on Claude Code it is one message with every call `run_in_background: true`, woken per reviewer by its completion notification, and spawning sub-agents for the wait buys nothing; on Codex the same table says to delegate each waiter to a teammate and `wait_agent` on it. Either way the concurrency is the same and there is no "can I spawn sub-agents?" branch to agonise over: root session, `team` coordinator, and sub-agent all follow their host's row. **Where the row makes each waiter a child, those children spend the host's concurrency slots** — Codex has three for teammates, so two reviewer waiters already take two of them. That is the other reason the CI wait is Step 7 rather than a third child launched here: it would leave no slot for the fix work its own result might require. Launch at most three waiters at a time and reconcile between batches; a spawn past the limit queues, and a queued waiter looks exactly like a hung one.
+**⛔ Launch the Copilot and CodeRabbit wait scripts — the only two that exist — concurrently, each redirecting to its own log file.** Take the shape of the wait from `references/host-adapters.md` § Long waits — on Claude Code it is one message with every call `run_in_background: true`, woken per reviewer by its completion notification, and spawning sub-agents for the wait buys nothing; on Codex the same table says to delegate each waiter to a teammate and `wait_agent` on it. Either way the concurrency is the same and there is no "can I spawn sub-agents?" branch to agonise over: root session, `team` coordinator, and sub-agent all follow their host's row. **Where the row makes each waiter a child, those children spend the host's concurrency slots** — Codex has three for teammates, so two reviewer waiters already take two of them. That is the other reason the CI wait is Step 7 rather than a third child launched here: it would leave no slot for the fix work its own result might require. Launch at most three waiters at a time and reconcile between batches; a spawn past the limit queues, and a queued waiter looks exactly like a hung one.
 
 **Reviewer waiters go first; the CI waiter is Step 7 and waits its turn** (`references/head-discipline.md` § Waiter scheduling order).
 
@@ -789,6 +765,7 @@ bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NU
 2. Read its unresolved threads and classify them in the shared ledger **before** invoking any resolver. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
 3. **Fix before you dispatch.** Take every blocking entry this wake produced, together with every other channel's outstanding blocking entries, through **one** Step 6.2 pass, and push once. Then invoke each reviewer's resolver, passing a disposition for every thread that carries a finding — `blocking` annotated `already fixed in <sha>`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions). A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. Handing a resolver an un-fixed `blocking` disposition puts it on its own fixing path, which pushes per reviewer — the churn this ordering exists to prevent.
 4. **After the Step 6.2 push** — that push, not a resolver's, is what moves the head under this ordering — record the new SHA as the candidate head and re-cover it:
+   - **Apply 6.1's material-change test to the delta first — including its blocking-finding consequence, which fixes and pushes before any relaunch below.** Where it fires, its delta-scoped Codex re-entry runs *before* the relaunches, so a materially changed diff never reaches Copilot or CodeRabbit with no local pass behind it. Most pushes fall straight through.
    - **Relaunch the waiter of every reviewer whose evidence the delta invalidated**, and only those. Do not restart a reviewer the delta did not touch merely because `HEAD` changed. **Copilot does not re-review a push on its own** — its waiter must be relaunched, or the fix you just pushed ships unreviewed by it; CodeRabbit re-reviews by itself and its waiter is relaunched only to observe that.
    - On the next wake, inspect only feedback added or changed since that reviewer's previously reviewed SHA, and classify and deduplicate it in the shared ledger.
    - **Any CI wait outstanding for the prior SHA is superseded** (`references/head-discipline.md` § Evidence is SHA-scoped) — stop it and reclaim its slot for the relaunches above (§ Waiter scheduling order).
@@ -878,11 +855,12 @@ Pass the failure details from the script output to the skill. The skill will:
 
 **Batch the CI failures with anything else outstanding before that push** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
 
-**After the skill completes and fixes are pushed, record the new SHA as `CANDIDATE_HEAD` and re-enter Step 6.3 before Step 7.0.** A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first. Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
+**After the skill completes and fixes are pushed, record the new SHA as `CANDIDATE_HEAD`, apply 6.1's material-change test to the delta, and re-enter Step 6.3 before Step 7.0.** Where that test fires, its delta-scoped Codex re-entry runs first, and 6.1's blocking-finding consequence governs whatever that re-entry reports; a CI fix that only corrected a line falls straight through it. A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first. Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
 
 ```
 Step 7.1 (wait) → fail → Step 7.2 (batched fix, one push)
-                       → Step 6.3 (re-cover the new head) → Step 7.0 → Step 7.1 (wait) → ...
+                       → 6.1 material-change test → Step 6.3 (re-cover the new head)
+                       → Step 7.0 → Step 7.1 (wait) → ...
 ```
 
 **⚠️ Maximum 3 iterations.** Track the current iteration count. If checks still fail after 3 fix attempts, STOP and report the persistent failures to the user with full details.
@@ -913,7 +891,11 @@ gh pr checks [NUMBER]
 # Reuse Step 6.3 evidence when it covers the current head SHA. Invoke a dedicated
 # reviewer skill only when its check, threads, or reviewed SHA changed; do not restart
 # a settled review loop solely because finalization was reached.
-# Use the dedicated skills — NEVER raw gh api commands.
+# Use the dedicated skills — NEVER raw gh api commands. That ban is about
+# reviewers that HAVE a skill (Copilot, CodeRabbit): reaching past one loses its
+# head-SHA scoping. A reviewer with no adapter is the documented exception —
+# settle it by hand per references/scope-contract.md § Injecting the brief into
+# reviews, which is the only route available and is not a bypass.
 ```
 ```
 Skill tool: skill="copilot-review",     args="[NUMBER] — [STEP 2.5 SCOPE BRIEF VERBATIM]"
@@ -950,7 +932,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 - [ ] Zero unresolved **blocking** ledger entries (`references/scope-contract.md` § Blocking) — `required-by-contract`, `regression-caused-by-change`, and any entry blocking by tier; the latest affected delta is verified within the stopping bounds
 - [ ] Every test plan item **settled** (Step 5.5): verified, user-confirmed as a manual pass, or explicitly accepted by the user — as a known failure, or as knowingly unverified. An unanswered `— requires manual testing` is pending, not settled, and blocks
 - [ ] Codecov coverage passing with 0 missing lines
-- [ ] No unresolved review threads from any reviewer (Copilot, CodeRabbit, human, or future automated reviewer); follow-up/out-of-scope threads are settled without expanding implementation
+- [ ] No unresolved review threads from any reviewer (Copilot, CodeRabbit, human, or any other configured automated reviewer); follow-up/out-of-scope threads are settled without expanding implementation
 
 <!--
 duvet= docs/specs/fx-dev-authority/index.md#merge-gates-apply-regardless-of-change-size
@@ -1066,10 +1048,9 @@ All sub-agents are launched via the Agent tool. Each loads its skill via the Ski
 | 3 | Planner | `planner` |
 | 3,8 | Issue Updater | `issue-updater` |
 | 4,4.6.4,6.2 | Coder | `coder` (Step 4 also writes the task-tracking update; Step 6.2 is ONE batched fix pass, not one per finding) |
-| 4.5 | Pre-PR Self-Review | `simplify`, then `code-review`, then `codex-review` (local `codex`, the ONLY local reviewer) — all three passes run, then one batched fix; blocking findings resolved, latest affected delta verified |
+| 4.5 | Pre-PR Self-Review | `codex-review` (local `codex`, the ONLY local reviewer) — initial pass complete, then one batched fix; blocking findings resolved, latest affected delta verified |
 | 4.6.2 | Browser Verification | `verify-web-change` (pre-PR, against the branch) |
 | 5 | PR Preparer | `pr-preparer` |
-| 6.1 | PR Reviewer | `pr-reviewer` (delta and integration only; full pass only if the diff changed materially since 4.5) |
 | 6.3 | Copilot Review | `copilot-review` (waiter backgrounded, concurrent with coderabbit-review) |
 | 6.3 | CodeRabbit Review | `coderabbit-review` (PR-level only, waiter backgrounded, concurrent with copilot-review; classify/deduplicate feedback and verify only affected deltas within bounds) |
 | 6.3 | PR Feedback Resolver | `resolve-pr-feedback` (meta — called by reviewer skills) |
@@ -1091,13 +1072,13 @@ Workflow complete when ALL true:
 - ✅ Requirements documented
 - ✅ Plan created
 - ✅ Code implemented with atomic commits, task tracking included
-- ✅ Pre-PR review matrix completed (or permitted degradation documented), findings classified in the shared ledger, blocking findings resolved, and the latest affected delta verified within the stopping bounds
+- ✅ Pre-PR Codex review completed (or permitted degradation documented), findings classified in the shared ledger, blocking findings resolved, and the latest affected delta verified within the stopping bounds
 - ✅ Browser and programmatic test-plan verification done BEFORE the PR was opened
 - ✅ Candidate head frozen and recorded before hosted review and CI (Step 4.7)
 - ✅ PR created with description (including links to related specs/changes and the verified test plan)
 - ✅ ALL test plan items settled: browser-verified, programmatically verified, user-confirmed manual verification, or explicitly accepted by the user as a known failure or as knowingly unverified (NEVER silently skipped, and never shipped past the gates merely annotated)
 - ✅ PR test plan items checked off or annotated with verification results in the PR description
-- ✅ Self-review done as a delta/integration pass, findings batched into the same fix push as the hosted reviewers'
+- ✅ Head, metadata and integration check done (Step 6.1), findings batched into the same fix push as the hosted reviewers'
 - ✅ Automated review feedback classified and settled; blocking findings resolved and the latest affected delta verified without unrelated review restarts
 - ✅ CI waited on only after review converged, and green on the exact merge SHA
 - ✅ Task tracking docs verified present in the diff — not committed after the merge gates ran

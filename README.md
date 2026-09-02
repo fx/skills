@@ -31,12 +31,10 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `planner` | Creates a detailed implementation plan from supplied requirements and scope. |
 | `coder` | Implements code changes while following the supplied scope and project conventions; PR creation remains a separate lifecycle stage. |
 | `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows. |
-| `pr-reviewer` | Reviews code or a pull request under the shared Scope Brief and materiality rules. |
 | `codex-review` | Runs a scoped one-shot Codex CLI branch review as an external review adapter. |
 | `copilot-review` | Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review. |
 | `coderabbit-review` | Handles CodeRabbit's PR-level review as an optional review adapter with Scope Brief triage and rate-limit degradation. |
-| `pr-changeset-minimalist` | Reviews a pull request or changeset for unnecessary modifications and artifacts. |
-| `resolve-pr-feedback` | Coordinates explicitly requested automated PR-feedback resolution across configured reviewers. |
+| `resolve-pr-feedback` | Coordinates explicitly requested automated PR-feedback resolution for the reviewers it has adapters for — Copilot, CodeRabbit and Codecov; any other configured reviewer is settled by hand by the caller. |
 | `copilot-feedback-resolver` | Processes and resolves existing GitHub Copilot review threads without creating PR-level comments. |
 | `rabbit-feedback-resolver` | Processes and resolves existing CodeRabbit review threads. |
 | `resolve-codecov-feedback` | Processes Codecov feedback and adds coverage required by an active workflow. |
@@ -88,7 +86,7 @@ Everything else keeps its plain name. `AGENTS.md` has the avoid-list and the che
 
 ## Requirements
 
-Most skills assume `git` and the GitHub CLI (`gh`), authenticated. Beyond that: `codex-review` needs the Codex CLI; `verify-web-change` needs the Playwright MCP server; `coderabbit-review` and `copilot-review` need those GitHub Apps installed on the repository, and degrade to a `NOT_CONFIGURED` status when they are not.
+Most skills assume `git` and the GitHub CLI (`gh`), authenticated. Beyond that: `codex-review` needs the Codex CLI; `verify-web-change` needs the Playwright MCP server; `coderabbit-review` and `copilot-review` need those GitHub Apps installed on the repository, and degrade to a `NOT_CONFIGURED` status when they are not. Review is exactly those three: Codex locally before the PR, then Copilot and CodeRabbit on the PR.
 
 ## Contributing
 

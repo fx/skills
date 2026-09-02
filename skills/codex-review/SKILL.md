@@ -20,11 +20,13 @@ to drive the `codex` CLI, and nothing else. Where the two appear to disagree,
 `fx-review` wins.
 
 Codex is a **local, one-shot** reviewer against the current branch, and it is the
-**only** local reviewer in this SDLC. Run it during pre-PR self-review, after
-`/simplify` and `/code-review` and before `pr-preparer` (`dev` Step 4.5).
+**only** local reviewer in this SDLC — the entire pre-PR review pass
+(`dev` Step 4.5), run before `pr-preparer`.
 
 > There is no local CodeRabbit pass — the `cr` CLI is not used anywhere. CodeRabbit
 > applies only at the PR level, and only when the repo's GitHub App is installed.
+> There is no Claude-side pass either: `/simplify` and `/code-review` are not part
+> of this lifecycle, so nothing runs before Codex here.
 
 ## Project conventions: Codex is the one reviewer that needs a bridge
 
@@ -278,6 +280,12 @@ in every prompt, pass 1 included; Part 1 (the convergence prefix) goes on top of
 from pass 2 only.** On pass 1 send Part 2 alone — Part 1 has nothing to carry and
 asks the reviewer to honour a list of prior findings that does not exist.
 
+**Part 1 is also how a re-run gets scoped to a delta** — together with the prior
+pass's recorded revision, named in the prompt as the boundary. There is no flag for
+it (§ Scope flags and a custom prompt are mutually exclusive), so every run reads
+the whole branch and only the prompt narrows what it reports; `dev` Step 6.1 states
+that contract in full and is where a caller should read it.
+
 
 ## Codex-specific triage notes
 
@@ -295,5 +303,5 @@ local run:
 A **converged** Codex review — no blocking finding left unresolved
 (`[SKILLS_DIR]/dev/references/scope-contract.md` § Convergence) — is the local gate
 to PR creation (`dev` Step 4.5 → Step 5). It is the only local gate; there is
-no local CodeRabbit review to converge alongside it. Outstanding **immaterial** observations do not hold the PR; carry them
+no local CodeRabbit review, and no Claude-side review, to converge alongside it. Outstanding **immaterial** observations do not hold the PR; carry them
 into its description as a closing note.
