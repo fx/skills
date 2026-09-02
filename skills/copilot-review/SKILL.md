@@ -158,7 +158,7 @@ class halfway spends a full Copilot wait to be told about the other half.
 
 ## Parallel With Other Reviewers
 
-This skill can run **in parallel** with `coderabbit-review` and any future automated-reviewer skills.
+This skill can run **in parallel** with `coderabbit-review`, the only other PR-level reviewer this catalog requests.
 
 **There is no mode selection.** Reviewers run concurrently in every context — root
 session, `team` coordinator, or sub-agent alike. Launch each reviewer's waiter in
@@ -273,7 +273,7 @@ reading. Take all bodies for the commit.
 
 ### Step 3: Resolve Feedback
 
-After the review is received, invoke the resolve-pr-feedback skill to process all automated review threads (Copilot, CodeRabbit, Codecov):
+After the review is received, invoke the resolve-pr-feedback skill to process the automated review threads it categorises (Copilot, CodeRabbit, Codecov):
 
 ```
 Skill tool: skill="resolve-pr-feedback",

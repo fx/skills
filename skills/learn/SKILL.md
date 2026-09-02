@@ -160,6 +160,6 @@ User says: "I explicitly ran /github, but the skill did not load"
 
 User says: "/learn to never leave comments on PRs"
 
-1. Locate relevant skills (pr-preparer, pr-reviewer, etc.)
+1. Locate relevant skills (pr-preparer, resolve-pr-feedback, etc.)
 2. Add explicit prohibition with rationale
 3. Show diff, leave uncommitted
