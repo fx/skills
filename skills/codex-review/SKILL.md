@@ -280,6 +280,12 @@ in every prompt, pass 1 included; Part 1 (the convergence prefix) goes on top of
 from pass 2 only.** On pass 1 send Part 2 alone — Part 1 has nothing to carry and
 asks the reviewer to honour a list of prior findings that does not exist.
 
+**Part 1 is also how a re-run gets scoped to a delta** — together with the prior
+pass's recorded revision, named in the prompt as the boundary. There is no flag for
+it (§ Scope flags and a custom prompt are mutually exclusive), so every run reads
+the whole branch and only the prompt narrows what it reports; `dev` Step 6.1 states
+that contract in full and is where a caller should read it.
+
 
 ## Codex-specific triage notes
 
