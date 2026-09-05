@@ -20,7 +20,7 @@ The line is **who signals completion**: if something outside your command will t
 
 ## The rule
 
-**⛔ Never `sleep`, poll, or block waiting on one of these.** Every such wait runs in the shape your host's row prescribes in `host-adapters.md` § Long waits, redirecting stdout and stderr to a log file, and you read that log when the wait resolves. On Claude Code that shape is `run_in_background: true` with the completion notification as your only scheduling mechanism; on Codex it is a small-tier teammate that runs the script and reports its `STATUS=` line, with `wait_agent` on that teammate. Take the shape from the table, not from the example syntax in a skill.
+**⛔ Never `sleep`-loop, poll, or hand-roll a wait of your own on one of these.** Every such wait runs in the shape your host's row prescribes in `host-adapters.md` § Long waits, redirecting stdout and stderr to a log file, and you read that log when the wait resolves. On Claude Code that shape is `run_in_background: true` with the completion notification as your only scheduling mechanism; on Codex it is a small-tier teammate that runs the script and reports its `STATUS=` line, with `wait_agent` on that teammate. **Where your host's row prescribes a blocking primitive — Codex's `wait_agent` — calling it IS this rule, not an exception to it**; what is forbidden is the wait you invent, never the one the host hands you. Take the shape from the table, not from the example syntax in a skill.
 
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
