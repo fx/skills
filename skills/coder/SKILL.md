@@ -41,7 +41,7 @@ Pay attention to the user's framing. "Just fix the login bug real quick" is a bu
 3. Plan logical PR structure if needed
 4. Implement with tests
 5. Run the local Codex review (`codex-review`) and converge it **before** opening the PR — it is the only local reviewer, and it is mandatory here exactly as in `dev` Step 4.5
-6. Load the `github` skill and follow its **PR conventions block** — conventional-commit title, no `#<number>` or wave/phase wording in the title, and a body that is **never hard-wrapped** (one long line per paragraph; only the commit message wraps, at ~72 columns). Verify both before and after creating.
+6. Load the `github` skill and follow its **PR conventions block** — conventional-commit title, no `#<number>` or wave/phase wording in the title, and a body that is **never hard-wrapped** (one long line per paragraph; only the commit message wraps, at ~72 columns). Verify the title before and after creating; verify the body with that block's mechanical check before creating — run it against the file you are about to pass to `--body-file` — and again against the live body after creating and after every `gh pr edit`.
 7. Create PR
 8. Settle the automated reviewers with `copilot-review` and, where its GitHub App is installed, `coderabbit-review`
 9. Address feedback
