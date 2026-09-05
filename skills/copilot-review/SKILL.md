@@ -210,8 +210,10 @@ bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> 
 ```
 
 The 900 s budget covers the worst observed delivery time (12 m 42 s) in **one
-run** — but only in a call that outlives it; a wait held in the calling turn is cut
-off at your host's ceiling long before that
+run** — but only in a call that outlives it. On every host with a row in
+`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits, a wait held in the
+calling turn is cut off below that budget; read your row for the ceiling and for
+the shape that survives it
 (`[SKILLS_DIR]/dev/references/background-waits.md` § Why not the foreground).
 
 ### Read the `STATUS=` line
