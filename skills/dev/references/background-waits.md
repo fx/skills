@@ -1,6 +1,6 @@
 # Background waits
 
-**The canonical rules for waiting on an EXTERNAL completion** — a reviewer, a CI run, a teammate agent, or any long-running one-shot tool that finishes on its own schedule and reports when it does. Every skill in this catalog that waits on one of those names this file rather than restating it (`fx-review` § The two canonical sources applies the same define-once rule to review definitions).
+**The canonical rules for waiting on an EXTERNAL completion that reports through a log** — a reviewer waiter, a CI waiter, the waiter teammate a host's row prescribes for running one, or any long-running one-shot tool that finishes on its own schedule and writes its result where you read it. Every skill in this catalog that waits on one of those names this file rather than restating it (`fx-review` § The two canonical sources applies the same define-once rule to review definitions).
 
 `[AGENT_DIR]` below is the host's own per-repo agent directory — substitute your host's value from `host-adapters.md` § `[AGENT_DIR]`.
 
@@ -13,6 +13,10 @@ A skill that waits still documents its **own** invocation — which script, whic
 **A bounded readiness or teardown wait inside a single command is not one of these, and this file does not forbid it.** A loop that polls a service it just started — `for i in $(seq 1 30); do curl -sf "$URL" && break; sleep 2; done` — is part of one command whose next step depends on it, is bounded by its own iteration count, and has no completion notification to wait for. Backgrounding it would break the sequence it exists to order. `verify-web-change` uses exactly these for Docker, Compose health, and dev-server readiness, and they are correct.
 
 The line is **who signals completion**: if something outside your command will tell you it finished, run it as a long wait and wait for that signal. If nothing will, and you are gating the next line of your own script, a bounded in-command poll is right.
+
+**An ordinary delegate is not one of these either, and nothing below applies to waiting on one.** A coder, a verify agent, a reviewer sub-agent — anything whose result your host hands back to you directly — reports through its own agent result, not through a log you read. The only teammate this file governs is the **waiter** child a host's row prescribes for running a wait script and reporting its `STATUS=` line.
+
+**Where your host requires a blocking wait on outstanding teammates before your turn ends, that wait is mandatory and is not the polling forbidden below.** On Codex, ending the turn kills every live child, so `wait_agent` on each outstanding teammate is the host's own blocking primitive and skipping it destroys the run. `host-adapters.md` § Long waits and op 3 are canonical for which hosts require it and how; read your row there before deciding whether to wait on a delegate at all.
 
 ## The rule
 
@@ -31,7 +35,7 @@ Launch independent waits **concurrently** — on Claude Code, every call in one 
 
 ## Why not the foreground
 
-Every host caps the call that holds a wait below the 900 s budget these scripts run to, so a wait held in the calling turn is *guaranteed* to be cut off mid-poll, printing no `STATUS` and no exit code — which is exactly what used to force blind re-runs. `host-adapters.md` § Long waits names each host's ceiling and the shape that survives it.
+**Every host with a row in `host-adapters.md` § Long waits** caps the call that holds a wait below the 900 s budget these scripts run to, so on those hosts a wait held in the calling turn is *guaranteed* to be cut off mid-poll, printing no `STATUS` and no exit code — which is exactly what used to force blind re-runs. That table names each ceiling and the shape that survives it. A host whose row establishes no ceiling is not covered by this paragraph — but read the row before concluding that, because the reason travels: 900 s is a long time to hold one call open, and a host that cannot is the common case, not the exception.
 
 Polling the log yourself is no better: a buffered tool writes nothing until it finishes, so an early read teaches you nothing and costs a full context read every time. For a coordinator this is the single most expensive thing you can do — every wake re-reads the largest context in the team, and it gets more expensive with every turn added.
 
