@@ -198,7 +198,10 @@ review (highest-risk first) to stdout. It never modifies your working tree.
 notification wake you. A review of a real branch takes many minutes and `codex`
 buffers, so the capture file stays empty until it finishes — reading it early
 teaches you nothing and costs a full context read every time. Do not chain sleeps
-waiting on it.
+waiting on it, **and never hand-roll the wait** —
+`[SKILLS_DIR]/dev/references/background-waits.md` holds the rule in full,
+including the self-matching `pgrep -f` loop that has deadlocked a run for 49
+minutes.
 
 The script has **no timeout**: Codex is one-shot and its runtime is its own. It
 exits 3 on a usage error (missing or empty scope prompt, `codex` not on PATH) —
