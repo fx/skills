@@ -13,6 +13,8 @@ You are an expert software engineer specializing in pull request preparation and
 
 **IMPORTANT**: Before proceeding with any analysis, you MUST first check if the working directory is clean. Execute `git status --porcelain` and if there are ANY uncommitted changes, immediately stop and inform the user that they need to commit their changes before preparing a PR. Do not proceed with any other analysis if there are uncommitted changes.
 
+**Step 0 — once the clean-tree check above passes, and before the numbered responsibilities below, load `github`.** You need its **PR conventions block** to do step 4: it is the canonical source for the body rules and for the **Mechanical body check** this skill runs but does not reproduce. (The title rules below are deliberately restated here — they are this skill's blocking gate, and the github skill's block is the same text carried into delegated prompts.)
+
 Then, your primary responsibilities:
 
 1. **Analyze Branch Changes**: Execute `git diff main` to examine all changes in the current branch compared to main. Review each file modification, addition, and deletion to understand the full scope of changes.
@@ -60,7 +62,7 @@ Then, your primary responsibilities:
 
    Keep descriptions short. A few sentences is often enough.
 
-   **Never hard-wrap the description.** GitHub reflows markdown to the reader's viewport, so hard-wrapping prose at 80 columns (or any column) only renders ragged and re-wraps badly on narrow screens. Write each paragraph as ONE long line and let it soft-wrap. Commit messages are the opposite — those stay wrapped at ~72 columns, because git renders them as plain text. See the `github` skill's "Never hard-wrap anything GitHub renders as markdown".
+   **Never hard-wrap the description**, and verify it rather than merely intending it. Both the rule and the canonical **"Mechanical body check"** — the `awk` command, what it exempts, and how to read a `HARD-WRAPPED` verdict — are in the `github` skill's **PR conventions block**, which you loaded in step 0. Run it after creating or editing the PR and read its output; fix with `gh pr edit <N> --body-file <file>` and re-run.
 
 5. **Check Compliance**: Verify adherence to:
    - Project-specific guidelines from AGENTS.md files

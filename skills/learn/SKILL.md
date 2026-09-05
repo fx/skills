@@ -13,7 +13,9 @@ This skill updates the skills in this catalog based on learnings from the curren
 
 Skills are installed into an agent directory (`.claude/skills/`, `.agents/skills/`, …), but edits must land in the **git checkout** of the catalog, not in an installed copy. When `skills add` installs by symlink — the default and recommended method — the installed entry points back at that checkout.
 
-Resolve it:
+**The invocation's own base directory is the strongest evidence of which copy ran.** A skill's prompt states the directory it was loaded from; that path, resolved through any symlink, is the copy that actually executed. Prefer it over anything the search below infers.
+
+Otherwise, resolve it:
 
 ```bash
 # Find where an installed skill from this catalog actually lives.
@@ -35,9 +37,15 @@ Then verify it is the right repo and is clean:
 cd <repo-root> && git remote -v && git status
 ```
 
-**If nothing resolves** — the skills were installed with `--copy`, or the checkout has moved — do not edit the installed copy. Editing a copy makes the change invisible to `skills update` and it is silently reverted on the next update. Ask the user for the path to their clone of the catalog, or tell them to clone it, and abort until you have one.
+**If nothing resolves** — the skills were installed with `--copy`, or the checkout has moved — do not edit the installed copy. Editing a copy makes the change invisible to `skills update` and it is silently reverted on the next update. Ask the user for the path to their clone of the catalog, or tell them to clone it, and abort until you have one. The same holds for any other build-artifact copy a host keeps: an edit there is overwritten by the next sync and never reaches a repo.
+
+**If the resolved copy belongs to a different repository, the fix belongs in that repository.** Clone it (prefer SSH — HTTPS may have no credential helper configured), edit there, and leave the change uncommitted for review exactly as Step 6 requires. Do **not** silently redirect the fix into this catalog because this catalog is the repo this skill knows; the redirected edit is reviewed, merged, and completely inert.
+
+**If several trees carry the same defect, fix the authoritative one first, then apply the same fix to the others.** A catalog cloned twice — symlinked into one agent directory and `--copy`-installed into another — will otherwise keep a stale divergent copy that some session eventually loads.
 
 **If the working tree is dirty**, report what is uncommitted and ask before proceeding — this skill leaves its own changes uncommitted, and mixing them with unrelated work makes the diff unreviewable.
+
+**Always tell the user which tree you edited and why.** A learning applied to the wrong copy is worse than none: it reports success and changes nothing, so the skill keeps misbehaving while everyone believes it was fixed. Name the resolved path when you report, not just the file.
 
 ### Read AGENTS.md and respect it
 
