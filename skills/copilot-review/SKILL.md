@@ -160,11 +160,10 @@ class halfway spends a full Copilot wait to be told about the other half.
 
 This skill can run **in parallel** with `coderabbit-review`, the only other PR-level reviewer this catalog requests.
 
-**There is no mode selection.** Reviewers run concurrently in every context — root
-session, `team` coordinator, or sub-agent alike. Launch each reviewer's waiter in
-the shape your host's row prescribes
+Launch each reviewer's waiter in the shape your host's row prescribes
 (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits) and handle whichever
-wake arrives first; the old "can I spawn?" branch no longer applies.
+wake arrives first — `[SKILLS_DIR]/dev/references/background-waits.md` covers why
+that needs no mode selection.
 
 Do not budget for Copilot being quick. Observed delivery ranges from **85 s to
 12 m 42 s** (D3), which is why the wait budget is a single 900 s run; CodeRabbit is
@@ -210,12 +209,10 @@ bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> 
   > [AGENT_DIR]/team/waits/copilot-<PR_NUMBER>.log 2>&1
 ```
 
-**Do NOT run it in a call that cannot outlive it.** On Claude Code the Bash tool
-caps a foreground `timeout` at 600 000 ms, below the script's 900 s budget — such a
-call is killed mid-poll, printing no STATUS and no exit code. That kill is
-what previously made the re-run protocol unreachable and forced blind retries.
-Backgrounded processes are not subject to the cap, which is why the budget can now
-cover the worst observed delivery time (12 m 42 s) in **one run**.
+The 900 s budget covers the worst observed delivery time (12 m 42 s) in **one
+run** — but only in a call that outlives it; a wait held in the calling turn is cut
+off at your host's ceiling long before that
+(`[SKILLS_DIR]/dev/references/background-waits.md` § Why not the foreground).
 
 ### Read the `STATUS=` line
 

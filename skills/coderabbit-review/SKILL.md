@@ -79,21 +79,15 @@ CodeRabbit alone; it does not relax Copilot, CI, tests, or other merge gates.
 CodeRabbit auto-runs — there is **no review-request step**.
 
 **⛔ Run the waiter as a long wait** (`[SKILLS_DIR]/dev/references/host-adapters.md`
-§ Long waits), redirecting stdout and stderr to a log file and reading that file on
-the wake. On Claude Code that is `run_in_background: true` plus its completion
-notification:
+§ Long waits) under the discipline in
+`[SKILLS_DIR]/dev/references/background-waits.md`, redirecting stdout and stderr to
+a log file and reading that file on the wake. On Claude Code that is
+`run_in_background: true` plus its completion notification:
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh <PR_NUMBER> \
   > [AGENT_DIR]/team/waits/rabbit-<PR_NUMBER>.log 2>&1
 ```
-
-**Do NOT run it in a call that cannot outlive it.** On Claude Code the Bash tool
-caps a foreground `timeout` at 600 000 ms, below the script's 900 s budget — such
-a call is killed mid-poll, printing no STATUS and no exit code, which is exactly
-what used to force blind re-runs; backgrounded processes are not subject to that
-cap. Never launch it *without* the redirect: the cycle is driven by what the
-script prints.
 
 ### Read the `STATUS=` line
 

@@ -282,7 +282,7 @@ This is not hypothetical. In an observed run, all three coders received the TITL
 
 ### Waiting and reconciliation (NON-NEGOTIABLE)
 
-**⛔ The rule: never burn coordinator turns on a timer.** No `sleep` loops, no `gh pr checks --watch`, no re-reading state every 30 seconds to see whether anything moved. Every wake costs a full read of your entire context, and your context is the largest in the team — a poll loop is the single most expensive thing you can do, and it gets more expensive with every turn you add. The full discipline — what counts as an external completion, and the ways a hand-rolled wait fails without erroring — is in `[SKILLS_DIR]/dev/references/background-waits.md`; read it once and apply it to every wait below.
+**⛔ The rule: never burn coordinator turns on a timer.** No `sleep` loops, no `gh pr checks --watch`, no re-reading state every 30 seconds to see whether anything moved. The full discipline — what counts as an external completion, why a poll loop costs you more than anyone else on the team, and the ways a hand-rolled wait fails without erroring — is in `[SKILLS_DIR]/dev/references/background-waits.md`; read it once and apply it to every wait below.
 
 **The mechanism that replaces polling is host-specific, and getting it backwards ends the run.** Check `[SKILLS_DIR]/dev/references/host-adapters.md` (op 3) for your host:
 
@@ -402,7 +402,7 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-
 
 **Before spawning a fix teammate**, apply § Batch findings across every channel that has reported for this head: local review, Copilot, CodeRabbit, browser verification, test-plan verification, and known CI failures go into one fix teammate and one push.
 
-**Never run a waiter in a call that cannot outlive it** — on Claude Code the Bash tool caps a foreground `timeout` at 600 000 ms, below every waiter's 900 s budget, so a foreground call is killed mid-poll with no STATUS and no exit code and the caller re-runs it blindly. Each host's surviving shape is in `[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits; on Codex it is a teammate running the script that you `wait_agent` on. **Never launch one without the redirect**: the cycle is driven by what the script prints.
+**Run every waiter in the shape your host's row prescribes** (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits) and under the discipline in `[SKILLS_DIR]/dev/references/background-waits.md`.
 
 Waiters exist for Copilot and CodeRabbit only, and those are the only two this workflow requests. Should an automated reviewer outside `resolve-pr-feedback`'s § Supported Reviewers table post threads anyway, they still gate the merge and you settle them by hand (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into reviews) — a clean `resolve-pr-feedback` report does not cover them.
 
@@ -513,7 +513,7 @@ When all tasks are complete and all PRs merged:
 - **NEVER merge without completing the MERGE GATE CHECKLIST** — every gate must pass, every time, for every PR
 - **NEVER merge without Copilot review** — always invoke `copilot-review` yourself. No exceptions.
 - **ALWAYS attempt CodeRabbit when configured, but never block on its rate limits** — invoke `coderabbit-review`; resolve feedback already received, then record `skipped (rate-limited)` and continue immediately if throttled.
-- **NEVER `sleep` or poll on a wait.** Every reviewer and CI wait is a long-running script whose result you reconcile once, on the wake your host provides (notification on Claude Code, a returning `wait_agent` on Codex — **Waiting and reconciliation**). On Claude Code a foreground waiter is killed at the Bash tool's 600 s cap anyway, and the only timer permitted in a run is one long `ScheduleWakeup` silence backstop. The full wait discipline — what counts as an external completion, and how a hand-rolled wait fails silently and totally — is in `[SKILLS_DIR]/dev/references/background-waits.md`.
+- **NEVER `sleep` or poll on a wait.** Every reviewer and CI wait is a long-running script whose result you reconcile once, on the wake your host provides (notification on Claude Code, a returning `wait_agent` on Codex — **Waiting and reconciliation**). The only timer permitted in a run is one long `ScheduleWakeup` silence backstop. The full wait discipline — what counts as an external completion, and how a hand-rolled wait fails silently and totally — is in `[SKILLS_DIR]/dev/references/background-waits.md`.
 - **ALWAYS run each PR through `[SKILLS_DIR]/dev/references/head-discipline.md`** — § The candidate head for the order, § Evidence is SHA-scoped for what a result proves, § Batch findings before any fix spawn, § Waiter scheduling order for launches, § Reviewer availability is cached for the run for `NOT_CONFIGURED`. Those rules live there and are not restated here; a coordinator that has not read them will reproduce the CI churn this workflow was rewritten to remove.
 - **NEVER mark a teammate's PR as ready** until you've inspected it
 - **ALWAYS own Copilot review and CI monitoring** — reading the result and classifying it are coordinator responsibilities, never a sub-agent's. Launch their waiters concurrently in your host's shape (§ Long waits); where that shape is a waiter child, it reports `STATUS=` and nothing more.

@@ -735,7 +735,7 @@ Then invoke each reviewer's resolver to settle its threads, passing its blocking
 
 ##### Run every waiter concurrently
 
-**⛔ Launch the Copilot and CodeRabbit wait scripts — the only two that exist — concurrently, each redirecting to its own log file** (`references/background-waits.md` holds the wait discipline in full, including why a hand-rolled poll is never the answer). Take the shape of the wait from `references/host-adapters.md` § Long waits — on Claude Code it is one message with every call `run_in_background: true`, woken per reviewer by its completion notification, and spawning sub-agents for the wait buys nothing; on Codex the same table says to delegate each waiter to a teammate and `wait_agent` on it. Either way the concurrency is the same and there is no "can I spawn sub-agents?" branch to agonise over: root session, `team` coordinator, and sub-agent all follow their host's row. **Where the row makes each waiter a child, those children spend the host's concurrency slots** — Codex has three for teammates, so two reviewer waiters already take two of them. That is the other reason the CI wait is Step 7 rather than a third child launched here: it would leave no slot for the fix work its own result might require. Launch at most three waiters at a time and reconcile between batches; a spawn past the limit queues, and a queued waiter looks exactly like a hung one.
+**⛔ Launch the Copilot and CodeRabbit wait scripts — the only two that exist — concurrently, each redirecting to its own log file** (`references/background-waits.md` holds the wait discipline in full, including why a hand-rolled poll is never the answer). Take the shape of the wait from `references/host-adapters.md` § Long waits. **Where the row makes each waiter a child, those children spend the host's concurrency slots** — Codex has three for teammates, so two reviewer waiters already take two of them. That is the other reason the CI wait is Step 7 rather than a third child launched here: it would leave no slot for the fix work its own result might require. Launch at most three waiters at a time and reconcile between batches; a spawn past the limit queues, and a queued waiter looks exactly like a hung one.
 
 **Reviewer waiters go first; the CI waiter is Step 7 and waits its turn** (`references/head-discipline.md` § Waiter scheduling order).
 
@@ -752,8 +752,6 @@ mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NUMBER] \
      > [AGENT_DIR]/team/waits/rabbit-[PR_NUMBER].log 2>&1
 ```
-
-**Never run a waiter in a call that cannot outlive it.** On Claude Code that means never in the foreground: the Bash tool caps a foreground `timeout` at 600 000 ms, below every waiter's 900 s budget, so the call is killed mid-poll, printing no STATUS and no exit code, and the caller then re-runs it blindly. Every host has some equivalent ceiling — Codex yields `exec_command` after 30 s — which is why `references/host-adapters.md` § Long waits gives each one a shape that survives the budget. **Never launch one without the redirect**: the cycle is driven by what the script prints.
 
 ###### Then, per reviewer, on its wake
 
@@ -818,8 +816,6 @@ mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh [PR_NUMBER] \
      > [AGENT_DIR]/team/waits/ci-[PR_NUMBER].log 2>&1
 ```
-
-**Do NOT run it in a call that cannot outlive it.** On Claude Code the Bash tool caps a foreground `timeout` at 600 000 ms, below the script's 900 s budget, so a foreground call is killed mid-poll and the output is lost; backgrounded processes are not subject to that cap. **Never launch it without the redirect**: the workflow reacts to what the script prints.
 
 Script behavior:
 - Phase 1 (discovery): waits up to 90 s for any check to appear.
