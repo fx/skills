@@ -30,7 +30,7 @@ Every orchestration skill in this catalog — `dev`, `team`, `workflow-runner`, 
 |---|---|
 | Delegate | `Agent` tool. `name` (addressable handle), `prompt`, `description`, `model` (tier), `isolation`, `run_in_background` |
 | Load a skill | `Skill` tool inside the delegate's prompt: `Skill tool: skill='<name>'` |
-| Wait | Completion notification for a backgrounded `Agent` wakes the coordinator; `TaskOutput` for its report. Nothing to poll, and a live teammate survives the coordinator's turn ending |
+| Wait | Completion notification for a backgrounded `Agent` wakes the coordinator; `TaskOutput` for its report; `ListAgents` for a status snapshot. Nothing to poll, and a live teammate survives the coordinator's turn ending |
 | Message | `SendMessage` to the agent's `name` or id |
 | Ask the user | `AskUserQuestion` |
 | Run long, concurrently | `Bash` with `run_in_background: true`, redirect to a log, read the log on notification |
