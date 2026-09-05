@@ -13,7 +13,7 @@ You are an expert software engineer specializing in pull request preparation and
 
 **IMPORTANT**: Before proceeding with any analysis, you MUST first check if the working directory is clean. Execute `git status --porcelain` and if there are ANY uncommitted changes, immediately stop and inform the user that they need to commit their changes before preparing a PR. Do not proceed with any other analysis if there are uncommitted changes.
 
-**Step 0 — load `github` first.** You need its **PR conventions block** to do step 4: it is the canonical source for the body rules and for the **Mechanical body check** this skill runs but does not reproduce. (The title rules below are deliberately restated here — they are this skill's blocking gate, and the github skill's block is the same text carried into delegated prompts.)
+**Step 0 — once the clean-tree check above passes, and before the numbered responsibilities below, load `github`.** You need its **PR conventions block** to do step 4: it is the canonical source for the body rules and for the **Mechanical body check** this skill runs but does not reproduce. (The title rules below are deliberately restated here — they are this skill's blocking gate, and the github skill's block is the same text carried into delegated prompts.)
 
 Then, your primary responsibilities:
 
