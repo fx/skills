@@ -1,6 +1,6 @@
 # Background waits
 
-**The canonical rules for waiting on an EXTERNAL completion that reports through a log** — a reviewer waiter, a CI waiter, the waiter teammate a host's row prescribes for running one, or any long-running one-shot tool that finishes on its own schedule and writes its result where you read it. Every skill in this catalog that waits on one of those names this file rather than restating it (`fx-review` § The two canonical sources applies the same define-once rule to review definitions).
+**The canonical rules for waiting on an EXTERNAL completion — a long-running script or one-shot tool that finishes on its own schedule and reports through a log it writes.** A reviewer waiter and a CI waiter are the common cases. So is that same script wrapped in the waiter teammate a host's row prescribes for running it: the teammate returns through your host's agent result, but the script is what writes the log, and these rules govern the wait either way. Every skill in this catalog that needs such a wait names this file instead of restating the rules (`fx-review` § The two canonical sources applies the same define-once rule to review definitions).
 
 `[AGENT_DIR]` below is the host's own per-repo agent directory — substitute your host's value from `host-adapters.md` § `[AGENT_DIR]`.
 
