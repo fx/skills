@@ -40,9 +40,17 @@
 # is a RUNNING or DEAD run — never a finished one. Branch on that line, not on how
 # much output the log happens to hold.
 #
-#   STATUS=COMPLETED  exit = codex's own (0, or 1/2 if codex chose them)
-#                     `codex review` ran to completion. Its findings are on stdout;
-#                     READ THEM. Accompanied by a mandatory `CODEX_EXIT=<n>` line.
+# "LAST" is load-bearing and is enforced, not hoped for: before the abort path emits
+# ERROR it terminates and confirms the death of every descendant that inherited the
+# log's file descriptor, because `codex review` outlives a signalled runner and would
+# otherwise append review prose after the sentinel. See `reap_descendants` below.
+#
+#   STATUS=COMPLETED  exit = codex's own, WHATEVER IT IS — not a fixed set. This
+#                     script passes `PIPESTATUS[0]` through unchanged, so 126, 127
+#                     and 137 are as reachable as 0/1/2 and none of them is given a
+#                     meaning here. `codex review` ran to completion. Its findings
+#                     are on stdout; READ THEM. Accompanied by a mandatory
+#                     `CODEX_EXIT=<n>` line.
 #   STATUS=DRY_RUN    exit 0
 #                     CODEX_REVIEW_DRY_RUN=1 — the resolved command was printed and
 #                     no review ran.
@@ -148,11 +156,86 @@ emit_status() {
     return 1
 }
 
-# STRUCTURAL GUARANTEE: never exit without a STATUS line. `set -e` can abort at any
-# unchecked command, and an abort that printed no STATUS would leave the caller with
-# nothing to branch on — the exact failure mode the contract exists to remove. This
-# trap turns any such abort into a well-formed ERROR.
-trap 'if (( STATUS_EMITTED == 0 )); then emit_status ERROR; exit 4; fi' EXIT
+# ⛔ THE SENTINEL MUST NOT BE WRITTEN WHILE A CHILD CAN STILL WRITE TO THE LOG.
+#
+# `codex review` is a FOREGROUND PIPELINE MEMBER, not a job: when a signal kills this
+# shell, that child is neither signalled nor reaped, it keeps the log file descriptor
+# it inherited, and it appends AFTER the EXIT trap's `STATUS=` line. The log's last
+# line is then review prose, so a caller reading the tail classifies a run that DID
+# finish as "running or dead" — the exact misread the whole contract exists to remove,
+# reintroduced on the signal path. Observed, not theorised.
+#
+# So: terminate every descendant, CONFIRM it is gone, and only then emit.
+#
+# Two shell facts this is built on, both verified here rather than assumed:
+#
+#   1. `wait` IS USELESS ON THE SIGNAL PATH. In an EXIT trap reached because a signal
+#      terminated the shell, bash has already discarded its job table: `wait` with no
+#      operands returns 0 immediately with children still running, and `wait <pid>`
+#      fails with "pid N is not a child of this shell". Verified — a child that
+#      ignores SIGTERM wrote to the log AFTER a trap that had "waited" for it.
+#      `kill -0` still answers correctly for those PIDs, so polling it is the only
+#      mechanism that actually observes the death.
+#   2. ENUMERATION MUST BE BY PID, NEVER BY PATTERN. `pgrep -P <pid>` matches on
+#      parent PID and excludes itself; `pgrep -f 'codex review'` matches its own
+#      command line and spins forever, which is the defect
+#      `dev/references/background-waits.md` forbids outright.
+#
+# This is the script's one soft dependency: with `pgrep` absent the reap becomes a
+# no-op and the late-write hazard returns. Verified that it degrades quietly — the
+# STATUS line and the 128+N exit are unaffected, nothing is printed — rather than
+# aborting the trap. `pgrep` ships with procps-ng on Linux and in the macOS base
+# system, so the degraded path is a fallback, not a case to design around.
+#
+# Deepest-first so a kill never orphans a grandchild that is still writing: a child
+# of `codex` inherits this shell's stderr, which every documented launch redirects
+# into the same log.
+descendants_deepest_first() {
+    local pid="$1" kid
+    for kid in $(pgrep -P "$pid" 2>/dev/null || true); do
+        descendants_deepest_first "$kid"
+        printf '%s\n' "$kid"
+    done
+}
+
+# Every command here is guarded. `set -e` is still in force inside the EXIT trap, and
+# an unguarded failure — `kill` on a PID that already exited is the likely one —
+# would abort the trap BEFORE `emit_status`, leaving no STATUS line at all. Bash does
+# not re-run an EXIT trap that aborted, so there is no second chance.
+reap_descendants() {
+    local pids pid alive i
+    pids=$(descendants_deepest_first $$ 2>/dev/null || true)
+    [[ -n "$pids" ]] || return 0
+
+    for pid in $pids; do kill -TERM "$pid" 2>/dev/null || true; done
+
+    # Bounded: ~4s. An unbounded poll would hang a runner that is already dying,
+    # which is strictly worse than the SIGKILL escalation below.
+    for ((i = 0; i < 40; i++)); do
+        alive=""
+        for pid in $pids; do
+            if kill -0 "$pid" 2>/dev/null; then alive="$alive $pid"; fi
+        done
+        [[ -n "$alive" ]] || return 0
+        sleep 0.1 || true
+    done
+
+    # No confirm loop after SIGKILL, deliberately. It cannot be blocked, so the target
+    # never executes another instruction — the write hazard is over the moment it is
+    # delivered. Polling `kill -0` here would be worse than useless: a killed child we
+    # are unable to reap (the job table is gone, see above) lingers as a zombie, and
+    # `kill -0` reports a zombie as alive, so the loop would burn its whole bound on a
+    # process that is already incapable of writing.
+    for pid in $alive; do kill -KILL "$pid" 2>/dev/null || true; done
+    return 0
+}
+
+# STRUCTURAL GUARANTEE: never exit without a STATUS line, and never emit one a child
+# can still write past. `set -e` can abort at any unchecked command, and an abort that
+# printed no STATUS would leave the caller with nothing to branch on — the exact
+# failure mode the contract exists to remove. This trap turns any such abort into a
+# well-formed ERROR, after silencing anything still holding the log.
+trap 'if (( STATUS_EMITTED == 0 )); then reap_descendants; emit_status ERROR; exit 4; fi' EXIT
 
 finish() {
     local status="$1"
