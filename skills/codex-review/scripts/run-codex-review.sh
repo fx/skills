@@ -40,8 +40,8 @@
 # is a RUNNING or DEAD run — never a finished one. Branch on that line, not on how
 # much output the log happens to hold.
 #
-# "LAST" is load-bearing and is enforced, not hoped for: before the abort path emits
-# ERROR it terminates and confirms the death of every descendant that inherited the
+# "LAST" is load-bearing and is enforced, not hoped for: before the EXIT trap emits
+# anything it terminates and confirms the death of every descendant that inherited the
 # log's file descriptor, because `codex review` outlives a signalled runner and would
 # otherwise append review prose after the sentinel. See `reap_descendants` below.
 #
@@ -50,14 +50,27 @@
 #                     and 137 are as reachable as 0/1/2 and none of them is given a
 #                     meaning here. `codex review` ran to completion. Its findings
 #                     are on stdout; READ THEM. Accompanied by a mandatory
-#                     `CODEX_EXIT=<n>` line.
+#                     `CODEX_EXIT=<n>` line, which carries codex's status even when
+#                     the exit code cannot — see the next paragraph.
 #   STATUS=DRY_RUN    exit 0
 #                     CODEX_REVIEW_DRY_RUN=1 — the resolved command was printed and
 #                     no review ran.
 #   STATUS=ERROR      exit 3 for the documented setup failures below; exit 4 from the
 #                     EXIT trap on an internal abort; 128+N when signal N kills the
-#                     runner (SIGTERM -> 143, SIGHUP -> 129). The review never
-#                     started, or the runner died mid-flight.
+#                     runner (SIGTERM -> 143, SIGHUP -> 129) BEFORE the review
+#                     finished. The review never started, or the runner died
+#                     mid-flight.
+#
+# A SIGNAL AFTER THE REVIEW FINISHED IS `COMPLETED`, AT 128+N. The two questions the
+# two lines answer are different: the exit code says how the RUNNER died, `STATUS=`
+# says whether the REVIEW finished. Between the pipeline returning and the sentinel
+# being written there is a window — the `tee` WARNING, the `CODEX_EXIT=` line, the
+# write itself — in which a signal kills a runner whose review is already complete and
+# already in the log. That log gets `CODEX_EXIT=<codex's own>` and `STATUS=COMPLETED`
+# at exit 128+N: findings to read, not a review to rerun. So `STATUS=COMPLETED` with
+# an exit in 128+N is a normal, well-formed outcome, and it is the ONLY case where the
+# exit code is not codex's own — which is why `CODEX_EXIT=` exists and why the caller
+# reports that number rather than `$?`.
 #
 # ⛔ THE ERROR EXIT CODE IS NOT A FIXED SET — WHICH IS EXACTLY WHY THE CALLER BRANCHES
 # ON THE `STATUS=` LINE AND NOT ON THE NUMBER. The invariant that actually holds, and
@@ -75,10 +88,12 @@
 # dead" case the contract tells the caller to read.
 #
 # STATUS AND THE EXIT CODE ARE DECOUPLED ON PURPOSE. On COMPLETED the exit code is
-# CODEX'S OWN and this script asserts NOTHING about it: `CODEX_EXIT=<n>` is reported
-# and deliberately NOT interpreted, because a non-zero `codex review` exit does not
-# distinguish "the reviewer failed" from "the reviewer had opinions" — read the
-# findings to learn which. 3 and 4 are this script's own codes and are never codex's.
+# CODEX'S OWN — bar the signalled-after-completion case above, where the shell's 128+N
+# wins and `CODEX_EXIT=` is the only place codex's status survives — and this script
+# asserts NOTHING about it: `CODEX_EXIT=<n>` is reported and deliberately NOT
+# interpreted, because a non-zero `codex review` exit does not distinguish "the
+# reviewer failed" from "the reviewer had opinions" — read the findings to learn
+# which. 3 and 4 are this script's own codes and are never codex's.
 #
 # Exit 3 covers exactly: a usage error, `codex` missing from PATH, an unreadable or
 # empty scope prompt, and a failed MCP enumeration. Deliberately not 1 or 2 — those
@@ -143,6 +158,27 @@ PROMPT_SRC="${1:-}"
 # goes through here so the contract can never be partially honoured.
 STATUS_EMITTED=0
 
+# The review's outcome becomes a FACT the instant `pipe_status` is captured, but the
+# sentinel is still several statements away — the `tee` WARNING block, the
+# `CODEX_EXIT=` line, `finish` itself. A signal landing anywhere in that window used
+# to make the EXIT trap write `STATUS=ERROR` for a review that HAD completed and
+# whose findings were already in the log, telling the caller to rerun a review it
+# already holds. That is the same contract inversion the `set -e` guard above the
+# pipeline exists to prevent, reached through a different door.
+#
+# So the outcome is recorded the moment it is known, and the trap reports the record
+# instead of guessing. Empty means "no completed review to report"; any other value is
+# codex's own exit status. The recording is a bare assignment placed immediately after
+# the `PIPESTATUS` capture and BEFORE anything that can block on I/O, because the
+# window it closes is exactly the one where writing to a slow log leaves the process
+# signallable.
+COMPLETION_EXIT=""
+
+# `CODEX_EXIT=` must accompany COMPLETED exactly once. Both the normal path and the
+# trap can reach it — a signal landing between this line and `finish` runs the trap
+# with the line already written — so route both through one emitter that remembers.
+CODEX_EXIT_EMITTED=0
+
 # Write the STATUS line, and report whether it actually got out.
 #
 # stdout can fail — the redirected log's filesystem fills, or its FD errors. Falling
@@ -154,6 +190,18 @@ emit_status() {
     echo "STATUS=$1" && return 0
     echo "STATUS=$1" >&2 && return 0
     return 1
+}
+
+# Write `CODEX_EXIT=<n>` at most once, from whichever path reaches it first. The flag
+# is set ONLY after the write succeeded, for the same reason `STATUS_EMITTED` is: a
+# failed write must not suppress the trap's second attempt. No stderr fallback — a
+# duplicated `CODEX_EXIT=` is worse than a missing one, since the caller reports the
+# number, and `STATUS=COMPLETED` alone still carries the contract.
+emit_codex_exit() {
+    if (( CODEX_EXIT_EMITTED == 0 )); then
+        if echo "CODEX_EXIT=$1"; then CODEX_EXIT_EMITTED=1; fi
+    fi
+    return 0
 }
 
 # ⛔ THE SENTINEL MUST NOT BE WRITTEN WHILE A CHILD CAN STILL WRITE TO THE LOG.
@@ -230,12 +278,35 @@ reap_descendants() {
     return 0
 }
 
-# STRUCTURAL GUARANTEE: never exit without a STATUS line, and never emit one a child
-# can still write past. `set -e` can abort at any unchecked command, and an abort that
-# printed no STATUS would leave the caller with nothing to branch on — the exact
-# failure mode the contract exists to remove. This trap turns any such abort into a
-# well-formed ERROR, after silencing anything still holding the log.
-trap 'if (( STATUS_EMITTED == 0 )); then reap_descendants; emit_status ERROR; exit 4; fi' EXIT
+# Report whatever was RECORDED, never what is guessed. Called only from the EXIT trap,
+# and only after `reap_descendants` — nothing below may run while a child can still
+# append to the log.
+#
+# `emit_status` is left unguarded on both branches, as it has always been: if both the
+# stdout and the stderr write fail there is no way to honour the contract anyway, and
+# `set -e` aborting the trap there is the existing behaviour, not a new one.
+emit_recorded_outcome() {
+    if [[ -n "$COMPLETION_EXIT" ]]; then
+        # The review completed; only the sentinel was outstanding. Exit with codex's
+        # own status to match `finish COMPLETED`. On the signal path that `exit` is
+        # overridden by the shell's 128+N, which is correct and deliberate — see the
+        # header: the exit code reports how the RUNNER died, the STATUS line reports
+        # whether the REVIEW finished, and those are different questions.
+        emit_codex_exit "$COMPLETION_EXIT"
+        emit_status COMPLETED
+        exit "$COMPLETION_EXIT"
+    fi
+    emit_status ERROR
+    exit 4
+}
+
+# STRUCTURAL GUARANTEE: never exit without a STATUS line, never emit one a child can
+# still write past, and never contradict a completion that already happened. `set -e`
+# can abort at any unchecked command, and an abort that printed no STATUS would leave
+# the caller with nothing to branch on — the exact failure mode the contract exists to
+# remove. This trap turns any such abort into a well-formed sentinel, after silencing
+# anything still holding the log.
+trap 'if (( STATUS_EMITTED == 0 )); then reap_descendants; emit_recorded_outcome; fi' EXIT
 
 finish() {
     local status="$1"
@@ -411,6 +482,7 @@ if [[ -n "${CODEX_REVIEW_OUT:-}" ]]; then
     set +e
     codex review "${MCP_OFF[@]}" "${MODEL_OPTS[@]}" "$SCOPE_PROMPT" | tee "$CODEX_REVIEW_OUT"
     pipe_status=("${PIPESTATUS[@]}")
+    COMPLETION_EXIT="${pipe_status[0]}"   # the outcome is now a fact — see the header
     set -e
     # A failed `tee` no longer masquerades as a codex failure (see above) — but left
     # unreported it would be worse: STATUS=COMPLETED, CODEX_EXIT=0, and an ABSENT
@@ -427,11 +499,12 @@ else
     set +e
     codex review "${MCP_OFF[@]}" "${MODEL_OPTS[@]}" "$SCOPE_PROMPT"
     pipe_status=("${PIPESTATUS[@]}")
+    COMPLETION_EXIT="${pipe_status[0]}"   # the outcome is now a fact — see the header
     set -e
 fi
 
 # `finish` is the LAST statement on every path. Nothing may write to stdout or stderr
 # after it, or the `STATUS=` line stops being the log's tail and the contract's one
 # guarantee — read the last line — becomes false.
-echo "CODEX_EXIT=${pipe_status[0]}"
+emit_codex_exit "${pipe_status[0]}"
 finish COMPLETED "${pipe_status[0]}"
