@@ -139,8 +139,9 @@ STATUS_EMITTED=0
 #
 # stdout can fail — the redirected log's filesystem fills, or its FD errors. Falling
 # back to stderr is worth trying because every documented launch redirects `2>&1`
-# into the same log, so the line still reaches the caller. Exactly one of the two
-# writes can succeed, so the log never carries a duplicate STATUS line.
+# into the same log, so the line still reaches the caller. The `&&` short-circuits:
+# the stderr write is attempted ONLY if the stdout write failed, so the log can never
+# carry a duplicate STATUS line.
 emit_status() {
     echo "STATUS=$1" && return 0
     echo "STATUS=$1" >&2 && return 0
@@ -308,9 +309,14 @@ echo ""
 #      the pipeline — `|| true` included — RESETS the array, so PIPESTATUS[0] is then
 #      always 0 and every run looks like codex exited clean. Verified.
 #
-# Codex's status comes from pipe_status[0], never from `$?`: `$?` is the PIPELINE's
-# status, i.e. `tee`'s, so an unwritable CODEX_REVIEW_OUT would be reported as codex
-# exit 1 — indistinguishable from "the reviewer had opinions".
+# Codex's status comes from pipe_status[0], NEVER from `$?`. Under `pipefail` `$?`
+# collapses the whole pipeline into ONE number — the rightmost non-zero status — and
+# that number carries no record of which command produced it. Verified: a clean
+# `codex` plus an unwritable CODEX_REVIEW_OUT gives `$?`=1, and `codex` exiting 1
+# through a healthy `tee` ALSO gives `$?`=1. Same number, opposite meanings — "the
+# reviewer had opinions" and "the reviewer was clean but the file could not be
+# written" are indistinguishable. `PIPESTATUS[0]` is the only way to attribute the
+# status to codex specifically.
 #
 # `STATUS=`/`CODEX_EXIT=` reach stdout ONLY, never CODEX_REVIEW_OUT, because they are
 # emitted AFTER the pipeline: `tee` sees only the pipeline's stdin. Keep it that way.
