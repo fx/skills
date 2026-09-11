@@ -27,14 +27,47 @@
 #    BACKGROUND (`run_in_background: true`) and let the completion notification wake
 #    you. Do NOT poll the output file and do NOT chain sleeps waiting on it — polling
 #    a buffered process teaches you nothing and costs a full context read per poll.
+#    The launch shape, and the discipline that governs it — including never
+#    backgrounding a launch your host has already backgrounded — are the `dev`
+#    skill's `references/background-waits.md`, which is the only place either is
+#    written down. What THIS script owes that discipline is the sentinel it is read
+#    against, below.
 #
-# Exit codes:
-#   0 - Codex ran to completion. Its findings are on stdout; READ THEM. A zero exit
-#       means the review ran, NOT that it found nothing.
-#   3 - Usage error, `codex` missing, or the scope prompt was empty. The review
-#       never started. (Deliberately not 1 or 2 — those are reserved by `codex`
-#       itself, and conflating them would make "the reviewer failed" look like "the
-#       reviewer had opinions".)
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPLETION CONTRACT
+#
+# The LAST line of stdout is always `STATUS=<state>`. A log with NO `STATUS=` tail
+# is a RUNNING or DEAD run — never a finished one. Branch on that line, not on how
+# much output the log happens to hold.
+#
+#   STATUS=COMPLETED  exit = codex's own (0, or 1/2 if codex chose them)
+#                     `codex review` ran to completion. Its findings are on stdout;
+#                     READ THEM. Accompanied by a mandatory `CODEX_EXIT=<n>` line.
+#   STATUS=DRY_RUN    exit 0
+#                     CODEX_REVIEW_DRY_RUN=1 — the resolved command was printed and
+#                     no review ran.
+#   STATUS=ERROR      exit 3 for the documented setup failures below; exit 4 from the
+#                     EXIT trap for any other abort. The review never started, or the
+#                     runner died mid-flight.
+#
+# STATUS AND THE EXIT CODE ARE DECOUPLED ON PURPOSE. On COMPLETED the exit code is
+# CODEX'S OWN and this script asserts NOTHING about it: `CODEX_EXIT=<n>` is reported
+# and deliberately NOT interpreted, because a non-zero `codex review` exit does not
+# distinguish "the reviewer failed" from "the reviewer had opinions" — read the
+# findings to learn which. 3 and 4 are this script's own codes and are never codex's.
+#
+# Exit 3 covers exactly: a usage error, `codex` missing from PATH, an unreadable or
+# empty scope prompt, and a failed MCP enumeration. Deliberately not 1 or 2 — those
+# are reserved by `codex` itself, and conflating them would make "the reviewer
+# failed" look like "the reviewer had opinions".
+#
+# WHY NOT THE FIVE-STATE PROTOCOL the polling waiters in this catalog use: there is
+# no budget here and nothing can time out, so `PENDING` cannot occur; there is no
+# configuration question to answer, so `NOT_CONFIGURED` cannot occur; and
+# `TERMINAL_PASS`/`TERMINAL_FAIL` MUST NOT exist because this script HAS NO VERDICT
+# — `TERMINAL_PASS` would be read as "no findings", which is the exact misread the
+# exit-code notes above were written to prevent.
+# ─────────────────────────────────────────────────────────────────────────────
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # WHY THIS IS A SCRIPT
@@ -82,18 +115,59 @@ CODEX_REVIEW_EFFORT="${CODEX_REVIEW_EFFORT:-medium}"
 
 PROMPT_SRC="${1:-}"
 
+# Emit the trailing STATUS line and exit with the matching code. Every exit path
+# goes through here so the contract can never be partially honoured.
+STATUS_EMITTED=0
+
+# Write the STATUS line, and report whether it actually got out.
+#
+# stdout can fail — the redirected log's filesystem fills, or its FD errors. Falling
+# back to stderr is worth trying because every documented launch redirects `2>&1`
+# into the same log, so the line still reaches the caller. Exactly one of the two
+# writes can succeed, so the log never carries a duplicate STATUS line.
+emit_status() {
+    echo "STATUS=$1" && return 0
+    echo "STATUS=$1" >&2 && return 0
+    return 1
+}
+
+# STRUCTURAL GUARANTEE: never exit without a STATUS line. `set -e` can abort at any
+# unchecked command, and an abort that printed no STATUS would leave the caller with
+# nothing to branch on — the exact failure mode the contract exists to remove. This
+# trap turns any such abort into a well-formed ERROR.
+trap 'if (( STATUS_EMITTED == 0 )); then emit_status ERROR; exit 4; fi' EXIT
+
+finish() {
+    local status="$1"
+    # Mark it emitted ONLY after the write succeeded. Setting the flag first would
+    # make a failed write look like a delivered STATUS and suppress the trap's
+    # fallback — leaving the caller with no status line at all, which is precisely
+    # what this contract exists to prevent.
+    if emit_status "$status"; then STATUS_EMITTED=1; fi
+    # ⛔ NOT a 1:1 status→exit map, unlike the polling waiters in this catalog:
+    # COMPLETED PASSES CODEX'S OWN EXIT CODE THROUGH UNCHANGED via `$2`, which is the
+    # whole point of the CODEX_EXIT contract in the header. Do not "simplify" this
+    # back to a fixed code per status — that silently destroys the pass-through.
+    case "$status" in
+        COMPLETED) exit "${2:-0}" ;;
+        DRY_RUN)   exit 0 ;;
+        ERROR)     exit 3 ;;
+        *)         exit 4 ;;
+    esac
+}
+
 if [[ -z "$PROMPT_SRC" ]]; then
     echo "Usage: $0 <SCOPE_PROMPT_FILE>|-" >&2
     echo "" >&2
     echo "The scope prompt is MANDATORY. Build it per fx-review Step 1." >&2
     echo "A Codex run without one is an incomplete pass — rerun it with a prompt" >&2
     echo "rather than filtering its output by hand." >&2
-    exit 3
+    finish ERROR
 fi
 
 if ! command -v codex >/dev/null 2>&1; then
     echo "Error: \`codex\` is not on PATH. The review never started." >&2
-    exit 3
+    finish ERROR
 fi
 
 if [[ "$PROMPT_SRC" == "-" ]]; then
@@ -101,7 +175,7 @@ if [[ "$PROMPT_SRC" == "-" ]]; then
 else
     if [[ ! -r "$PROMPT_SRC" ]]; then
         echo "Error: scope prompt file not readable: $PROMPT_SRC" >&2
-        exit 3
+        finish ERROR
     fi
     SCOPE_PROMPT=$(cat "$PROMPT_SRC")
 fi
@@ -109,7 +183,7 @@ fi
 if [[ -z "${SCOPE_PROMPT//[[:space:]]/}" ]]; then
     echo "Error: the scope prompt is empty. Refusing to run a promptless review," >&2
     echo "which would report the work this change deliberately did not do." >&2
-    exit 3
+    finish ERROR
 fi
 
 # ── Project-conventions bridge ───────────────────────────────────────────────
@@ -141,13 +215,13 @@ if ! mcp_json=$(codex mcp list --json 2>/dev/null); then
     echo "Error: \`codex mcp list --json\` FAILED, so the set of MCP servers to disable" >&2
     echo "is UNKNOWN. Refusing to run: with servers configured but not disabled, the" >&2
     echo "review can block indefinitely on its first action, emitting nothing." >&2
-    exit 3
+    finish ERROR
 fi
 
 if ! mcp_names=$(printf '%s' "$mcp_json" | jq -r '.[].name' 2>/dev/null); then
     echo "Error: could not parse \`codex mcp list --json\` output, so the set of MCP" >&2
     echo "servers to disable is UNKNOWN. Refusing to run — see above." >&2
-    exit 3
+    finish ERROR
 fi
 
 # A server name is a TOML KEY SEGMENT, and only [A-Za-z0-9_-] may appear bare. A
@@ -200,15 +274,59 @@ if [[ -n "${CODEX_REVIEW_DRY_RUN:-}" ]]; then
     echo ""
     echo "DRY RUN — resolved command:"
     echo "  codex review ${MCP_OFF[*]} ${MODEL_OPTS[*]} <SCOPE_PROMPT (${#SCOPE_PROMPT} chars)>"
-    exit 0
+    finish DRY_RUN
 fi
 
 echo ""
 echo "Running codex review (one-shot, no timeout — this takes many minutes)..."
 echo ""
 
+# ⛔ THE PIPELINE MUST RUN UNDER `set +e`, AND `PIPESTATUS` MUST BE CAPTURED BY THE
+# VERY NEXT STATEMENT. Two ways to get this wrong, both observed:
+#
+#   1. Leaving it under `set -e`. A non-zero `codex review` — which is ordinary, see
+#      the header — aborts here, the EXIT trap fires, and the script reports
+#      STATUS=ERROR for a review that DID complete. That inverts the contract. The
+#      non-zero codex path MUST reach `finish COMPLETED`.
+#   2. `... | tee "$OUT" || true` then reading `${PIPESTATUS[0]}`. ANY command after
+#      the pipeline — `|| true` included — RESETS the array, so PIPESTATUS[0] is then
+#      always 0 and every run looks like codex exited clean. Verified.
+#
+# Codex's status comes from pipe_status[0], never from `$?`: `$?` is the PIPELINE's
+# status, i.e. `tee`'s, so an unwritable CODEX_REVIEW_OUT would be reported as codex
+# exit 1 — indistinguishable from "the reviewer had opinions".
+#
+# `STATUS=`/`CODEX_EXIT=` reach stdout ONLY, never CODEX_REVIEW_OUT, because they are
+# emitted AFTER the pipeline: `tee` sees only the pipeline's stdin. Keep it that way.
+# CODEX_REVIEW_OUT is consumed as review TEXT, where a `STATUS=COMPLETED` line is
+# prose pollution a reader or a downstream grep can mistake for a finding; stdout is
+# the wait log the caller branches on. Writing the sentinel to both would give two
+# tails that can disagree whenever `tee` fails.
 if [[ -n "${CODEX_REVIEW_OUT:-}" ]]; then
+    set +e
     codex review "${MCP_OFF[@]}" "${MODEL_OPTS[@]}" "$SCOPE_PROMPT" | tee "$CODEX_REVIEW_OUT"
+    pipe_status=("${PIPESTATUS[@]}")
+    set -e
+    # A failed `tee` no longer masquerades as a codex failure (see above) — but left
+    # unreported it would be worse: STATUS=COMPLETED, CODEX_EXIT=0, and an ABSENT
+    # review file, so a caller that reads only CODEX_REVIEW_OUT sees an empty review
+    # under a clean status. Name the path. The status stays COMPLETED because the
+    # review DID complete and its findings are on stdout; calling it ERROR would
+    # discard a completed review.
+    if (( ${pipe_status[1]:-0} != 0 )); then
+        echo "WARNING: could not write the review to CODEX_REVIEW_OUT=${CODEX_REVIEW_OUT}"
+        echo "         (tee exited ${pipe_status[1]}). The review itself COMPLETED and its"
+        echo "         findings are on stdout above — read them there, not from that file."
+    fi
 else
+    set +e
     codex review "${MCP_OFF[@]}" "${MODEL_OPTS[@]}" "$SCOPE_PROMPT"
+    pipe_status=("${PIPESTATUS[@]}")
+    set -e
 fi
+
+# `finish` is the LAST statement on every path. Nothing may write to stdout or stderr
+# after it, or the `STATUS=` line stops being the log's tail and the contract's one
+# guarantee — read the last line — becomes false.
+echo "CODEX_EXIT=${pipe_status[0]}"
+finish COMPLETED "${pipe_status[0]}"

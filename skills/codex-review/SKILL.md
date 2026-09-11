@@ -201,6 +201,19 @@ including the self-matching `pgrep -f` loop that has deadlocked a run for 49
 minutes. Codex is a worse case than most: a review of a real branch takes many
 minutes and `codex` buffers, so the capture file stays empty until it finishes.
 
+### Read the `STATUS=` line
+
+The script's last stdout line is always `STATUS=<state>`. Branch on that line, not
+on prose, not on how much output the log holds, and never on how fast the launch
+returned — **a log with no `STATUS=` tail is a running or dead run, never a finished
+one.**
+
+| STATUS | Exit | What to do |
+|---|---|---|
+| `COMPLETED` | codex's own — 0, or 1/2 if `codex` chose them | The review ran to completion. **Read the findings on stdout** and triage them per `fx-review`. A `CODEX_EXIT=<n>` line accompanies it; report the number if you mention it, and do not read a verdict into it — a non-zero `codex` exit does not tell you whether the reviewer failed or merely had opinions, only the findings do. |
+| `DRY_RUN` | 0 | `CODEX_REVIEW_DRY_RUN=1` was set, so no review ran. Confirm the resolved MCP flag set, then launch the real pass. Never record it as a completed review. |
+| `ERROR` | 3 (documented setup failures) or 4 (the runner aborted) | The review never started, or it died mid-flight. Fix what the log names and re-run. **Not a clean pass** — there is no review to converge. |
+
 The script has **no timeout**: Codex is one-shot and its runtime is its own. It
 exits 3 on a usage error (missing or empty scope prompt, `codex` not on PATH) —
 deliberately not 1 or 2, which `codex` itself uses, so "the reviewer failed" never
