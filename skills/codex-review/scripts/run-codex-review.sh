@@ -47,8 +47,24 @@
 #                     CODEX_REVIEW_DRY_RUN=1 — the resolved command was printed and
 #                     no review ran.
 #   STATUS=ERROR      exit 3 for the documented setup failures below; exit 4 from the
-#                     EXIT trap for any other abort. The review never started, or the
-#                     runner died mid-flight.
+#                     EXIT trap on an internal abort; 128+N when signal N kills the
+#                     runner (SIGTERM -> 143, SIGHUP -> 129). The review never
+#                     started, or the runner died mid-flight.
+#
+# ⛔ THE ERROR EXIT CODE IS NOT A FIXED SET — WHICH IS EXACTLY WHY THE CALLER BRANCHES
+# ON THE `STATUS=` LINE AND NOT ON THE NUMBER. The invariant that actually holds, and
+# the only one worth depending on, is that `STATUS=ERROR` is emitted on EVERY one of
+# those paths.
+#
+# `exit 4` in the EXIT trap is effective on the `set -e`/`set -u` abort path it exists
+# for (verified), but it CANNOT override a signal-derived status: a signalled shell
+# runs its EXIT trap — the STATUS line does get out — and still exits 128+N. Verified
+# on TERM/HUP/USR1/USR2/PIPE. Do NOT "fix" this with a SIGTERM/SIGINT trap that forces
+# 4: exiting 143 is correct Unix behaviour and strictly more informative than 4, the
+# forcing would destroy that information, and it would buy nothing because the STATUS
+# invariant above already holds. SIGKILL is the one case with no STATUS line at all —
+# no trap can run — and that is precisely the "no `STATUS=` tail means running or
+# dead" case the contract tells the caller to read.
 #
 # STATUS AND THE EXIT CODE ARE DECOUPLED ON PURPOSE. On COMPLETED the exit code is
 # CODEX'S OWN and this script asserts NOTHING about it: `CODEX_EXIT=<n>` is reported
