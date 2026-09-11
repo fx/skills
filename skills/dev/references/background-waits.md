@@ -31,6 +31,10 @@ Your context does not change the answer — root session, `team` coordinator, an
 
 **Never launch a wait without the redirect.** The caller reacts to what the script prints; without a log there is nothing to read when the wait resolves.
 
+**Never add `&`, `nohup`, or `disown` to a launch your host has already backgrounded.** The shape your host's row prescribes is the whole mechanism; a second backgrounding wraps it in a shell that forks and returns at once, so what comes back is the *wrapper's* exit status in milliseconds rather than the job's. This holds on every host, because it is a property of the extra shell and not of any host's launcher.
+
+**An instant return is not a completion.** Judge a wait by its log's tail, never by how fast the call came back: a log with no `STATUS=` line at its tail is a wait still running or one that died, and reading it then hands you a truncated capture. That has shipped a wrong answer — the instant return was read as the review having finished, and a partial log was reported as a finished review. § Never invent your own wait says what a finished log looks like; § When a wait seems hung is what to check when the tail never arrives.
+
 Launch independent waits **concurrently** — on Claude Code, every call in one message — so they overlap instead of queueing. Where your host's row makes each waiter a delegate, they also spend its concurrency slots; count them before launching a third.
 
 ## Why not the foreground
