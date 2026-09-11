@@ -57,9 +57,16 @@
 #                     no review ran.
 #   STATUS=ERROR      exit 3 for the documented setup failures below; exit 4 from the
 #                     EXIT trap on an internal abort; 128+N when signal N kills the
-#                     runner (SIGTERM -> 143, SIGHUP -> 129) BEFORE the review
-#                     finished. The review never started, or the runner died
-#                     mid-flight.
+#                     runner (SIGTERM -> 143, SIGHUP -> 129) before the outcome is
+#                     RECORDED — not necessarily before the review finished. Recording
+#                     is a separate statement immediately after the pipeline returns
+#                     (COMPLETION_EXIT="${pipe_status[0]}" below), so a signal landing
+#                     in that single-assignment gap reports ERROR for a review that
+#                     had, in fact, already finished. That gap is known and not
+#                     closable in bash: trap dispatch happens between commands, and
+#                     the only deferral primitive (`trap '' SIG`) discards the signal
+#                     instead of queueing it. Outside that gap: the review never
+#                     started, or the runner died mid-flight.
 #
 # A SIGNAL AFTER THE REVIEW FINISHED IS `COMPLETED`, AT 128+N. The two questions the
 # two lines answer are different: the exit code says how the RUNNER died, `STATUS=`
@@ -70,7 +77,9 @@
 # at exit 128+N: findings to read, not a review to rerun. So `STATUS=COMPLETED` with
 # an exit in 128+N is a normal, well-formed outcome, and it is the ONLY case where the
 # exit code is not codex's own — which is why `CODEX_EXIT=` exists and why the caller
-# reports that number rather than `$?`.
+# reports that number rather than `$?`. The one exception is the outcome-recording
+# statement itself: a signal landing there still reports `STATUS=ERROR` for a review
+# that finished — see that row above.
 #
 # ⛔ THE ERROR EXIT CODE IS NOT A FIXED SET — WHICH IS EXACTLY WHY THE CALLER BRANCHES
 # ON THE `STATUS=` LINE AND NOT ON THE NUMBER. The invariant that actually holds, and
