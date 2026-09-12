@@ -31,6 +31,16 @@ Your context does not change the answer — root session, `team` coordinator, an
 
 **Never launch a wait without the redirect.** The caller reacts to what the script prints; without a log there is nothing to read when the wait resolves.
 
+**Never add `&`, `nohup`, or `disown` to a launch your host has already backgrounded.** The shape your host's row prescribes is the whole mechanism. The three break it in three different ways, and only the first is a second backgrounding:
+
+- **`&` returns at once.** It forks the launch into a subshell, so what comes back is the *wrapper's* exit status in milliseconds rather than the job's. This is the one that has shipped a wrong answer: the instant return was read as completion and a truncated log as a finished review.
+- **`nohup` buys nothing.** It does not fork and does not return early — it runs the command in the foreground and passes its exit status through, indistinguishable from no wrapper at all. All it adds is SIGHUP immunity plus a `nohup.out` redirect that engages only when stdout or stderr is a *terminal*, which the mandatory `> log 2>&1` above already rules out. Writing it implies the launch needs a detach it already has.
+- **`disown` makes a live job report success.** It backgrounds nothing and needs an existing job to act on. What it does is drop that job from the shell's table, after which `wait <pid>` returns **immediately with status 0** instead of blocking — so a job still running, or one that exited non-zero, is reported as a clean finish. Same false completion as `&`, by a different route.
+
+This holds on every host: all three are properties of the shell command you added, not of any host's launcher, so no host's row can make them safe.
+
+**An instant return is not a completion.** Judge a wait by its log's tail, never by how fast the call came back: a log with no `STATUS=` line at its tail is a wait still running or one that died, and reading it then hands you a truncated capture. That has shipped a wrong answer — the instant return was read as the review having finished, and a partial log was reported as a finished review. § Never invent your own wait says what a finished log looks like; § When a wait seems hung is what to check when the tail never arrives.
+
 Launch independent waits **concurrently** — on Claude Code, every call in one message — so they overlap instead of queueing. Where your host's row makes each waiter a delegate, they also spend its concurrency slots; count them before launching a third.
 
 ## Why not the foreground
