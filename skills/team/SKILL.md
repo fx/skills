@@ -329,7 +329,7 @@ Every waiter has its own 900 s budget and always exits, so its wake — a notifi
 
 #### Re-launching a `PENDING` waiter
 
-`STATUS=PENDING` means the reviewer or check is still running — not a verdict, not a failure. Relaunch it if you still need that gate, in the same shape as the first launch (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits): backgrounded on Claude Code, a fresh waiter child on Codex.
+`STATUS=PENDING` means the reviewer or check is still running — not a verdict, not a failure. Relaunch it if you still need that gate — **a reviewer waiter at most once per head**: a second `PENDING` abandons that review, and the silence backstop never relaunches it (`[SKILLS_DIR]/dev/references/head-discipline.md` § A review that does not arrive). Relaunch in the same shape as the first launch (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits): backgrounded on Claude Code, a fresh waiter child on Codex.
 
 **Prefer to have other work in flight while it runs.** If you have other PRs to advance, do that and pick the relaunched waiter up on its wake; that is strictly cheapest. Only when you have nothing else to do is it worth relaunching immediately and waiting on it alone. On a host where waiter children occupy concurrency slots, count the relaunch against the limit below before starting it.
 
@@ -354,7 +354,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 | # | Gate | How to verify | Blocking? |
 |---|------|--------------|-----------|
 | 1 | **Required CI checks green** | `gh pr checks <NUMBER>` — every required non-CodeRabbit check must pass | YES |
-| 2 | **Copilot review RECEIVED and feedback RESOLVED** | Invoke `copilot-review` skill — confirm 0 unresolved Copilot threads | YES |
+| 2 | **Copilot review COVERS the head and feedback RESOLVED** | Invoke `copilot-review` skill — a review of the head, a settled review carried across a non-material delta, or an abandonment after 30 min, recorded in the ledger (`[SKILLS_DIR]/dev/references/head-discipline.md`); confirm 0 unresolved Copilot threads | YES |
 | 2b | **CodeRabbit reviewed or correctly degraded** | Invoke `coderabbit-review`: prefer a passing check with received feedback resolved; if CodeRabbit rate-limits, report once, resolve what it already delivered (blocking findings fixed, every posted thread settled), and record `skipped (rate-limited)` without blocking | NO when rate-limited |
 | 3 | **Implementation matches spec/task** | Read the diff and verify against requirements | YES |
 | 4 | **Spec task marked complete** | Check via project-management skill | YES |
@@ -465,7 +465,7 @@ If the flip is missing when you reach the gates anyway:
 
 1. **Do NOT merge.**
 2. **Spawn a focused fix agent** to flip both files. Never commit it yourself — Coordinator Rules below: the coordinator writes no code and creates no commits. Commit message: `docs(changes): mark <NNNN> complete`.
-3. Record the resulting SHA as the new candidate head and **re-enter at step 7 of `[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head**, exactly as any other post-candidate push does: re-cover the delta with the hosted reviewers first — Copilot does not re-review a push on its own — then the CI wait, then the gates. Going straight to CI merges a commit no required reviewer has read.
+3. Record the resulting SHA as the new candidate head and **re-enter at step 7 of `[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head**, exactly as any other post-candidate push does. A status flip alone is a non-material delta, so the hosted reviews carry (`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage): record the carry, then the CI wait, then the gates. If the fix commit touched anything else, re-cover that delta with the hosted reviewers first — Copilot does not re-review a push on its own.
 4. Then merge.
 
 This MUST NOT become a follow-up PR. Doing it post-merge means main spent some window in a wrong state, and the user sees a stale `draft` for every change you ship.
@@ -511,7 +511,7 @@ When all tasks are complete and all PRs merged:
 - **ALWAYS paste the `github` PR conventions block into every spawn prompt whose agent may open or edit a PR** — load that skill before authoring your first prompt. A spawned agent inherits your prompt, not your skills; a rule you do not restate is a rule that does not reach it.
 - **NEVER skip PR inspection** — every PR gets reviewed before marking ready
 - **NEVER merge without completing the MERGE GATE CHECKLIST** — every gate must pass, every time, for every PR
-- **NEVER merge without Copilot review** — always invoke `copilot-review` yourself. No exceptions.
+- **NEVER merge without Copilot coverage** — always invoke `copilot-review` yourself. Coverage is a review of the head, a settled review carried across a non-material delta, or a recorded abandonment after 30 minutes (`[SKILLS_DIR]/dev/references/head-discipline.md`). Never push, close/reopen, or re-add the reviewer to provoke a review.
 - **ALWAYS attempt CodeRabbit when configured, but never block on its rate limits** — invoke `coderabbit-review`; resolve feedback already received, then record `skipped (rate-limited)` and continue immediately if throttled.
 - **NEVER `sleep` or poll on a wait.** Every reviewer and CI wait is a long-running script whose result you reconcile once, on the wake your host provides (notification on Claude Code, a returning `wait_agent` on Codex — **Waiting and reconciliation**). The only timer permitted in a run is one long `ScheduleWakeup` silence backstop. The full wait discipline — what counts as an external completion, and how a hand-rolled wait fails silently and totally — is in `[SKILLS_DIR]/dev/references/background-waits.md`.
 - **ALWAYS run each PR through `[SKILLS_DIR]/dev/references/head-discipline.md`** — § The candidate head for the order, § Evidence is SHA-scoped for what a result proves, § Batch findings before any fix spawn, § Waiter scheduling order for launches, § Reviewer availability is cached for the run for `NOT_CONFIGURED`. Those rules live there and are not restated here; a coordinator that has not read them will reproduce the CI churn this workflow was rewritten to remove.

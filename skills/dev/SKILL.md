@@ -730,7 +730,7 @@ Then invoke each reviewer's resolver to settle its threads, passing its blocking
 
 | Reviewer | Skill | Notes |
 |----------|-------|-------|
-| GitHub Copilot | `copilot-review` | Auto-reviews; we explicitly request via API as a defensive belt. Does NOT re-review on push by default. |
+| GitHub Copilot | `copilot-review` | Auto-reviews; we explicitly request via API as a defensive belt. Does NOT re-review on push by default. A settled review carries across a non-material push; a review absent after 30 min is abandoned (`references/head-discipline.md`). |
 | CodeRabbit | `coderabbit-review` | PR-level only — there is no local pass. Applies when the GitHub App auto-reviews PRs: re-reviews after pushes and exposes state via the `CodeRabbit` check. Classify new feedback in the shared ledger and settle its threads within the bounds below. `STATUS=NOT_CONFIGURED` means the App is absent — report once and skip. |
 
 ##### Run every waiter concurrently
@@ -757,14 +757,14 @@ bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NU
 
 1. Read the log and branch on its `STATUS=` line (each reviewer skill documents its own table; the five states are shared):
    - `TERMINAL_PASS` / `TERMINAL_FAIL` — settled. Do **not** re-run for a better answer.
-   - `PENDING` — not a verdict and not a failure. Re-running is safe if you still need it. **Never** record it as "no findings" or "CI passed".
+   - `PENDING` — not a verdict and not a failure. Re-run **once** if you still need it; a second `PENDING` abandons that review (`references/head-discipline.md` § A review that does not arrive). **Never** record it as "no findings" or "CI passed".
    - `NOT_CONFIGURED` — that reviewer does not apply to this repo. Terminal: report once, proceed without it, never retry.
    - `ERROR` — the wait never started. Report it.
 2. Read its unresolved threads and classify them in the shared ledger **before** invoking any resolver. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
 3. **Fix before you dispatch.** Take every blocking entry this wake produced, together with every other channel's outstanding blocking entries, through **one** Step 6.2 pass, and push once. Then invoke each reviewer's resolver, passing a disposition for every thread that carries a finding — `blocking` annotated `already fixed in <sha>`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions). A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. Handing a resolver an un-fixed `blocking` disposition puts it on its own fixing path, which pushes per reviewer — the churn this ordering exists to prevent.
 4. **After the Step 6.2 push** — that push, not a resolver's, is what moves the head under this ordering — record the new SHA as the candidate head and re-cover it:
    - **Apply 6.1's material-change test to the delta first — including its blocking-finding consequence, which fixes and pushes before any relaunch below.** Where it fires, its delta-scoped Codex re-entry runs *before* the relaunches, so a materially changed diff never reaches Copilot or CodeRabbit with no local pass behind it. Most pushes fall straight through.
-   - **Relaunch the waiter of every reviewer whose evidence the delta invalidated**, and only those. Do not restart a reviewer the delta did not touch merely because `HEAD` changed. **Copilot does not re-review a push on its own** — its waiter must be relaunched, or the fix you just pushed ships unreviewed by it; CodeRabbit re-reviews by itself and its waiter is relaunched only to observe that.
+   - **Relaunch the waiter of every reviewer whose evidence the delta invalidated**, and only those. Do not restart a reviewer the delta did not touch merely because `HEAD` changed, and do not relaunch one whose settled review carries across a non-material delta (`references/head-discipline.md` § Carried review coverage) — record the carry instead. **Copilot does not re-review a push on its own** — for a material delta its waiter must be relaunched, or the fix you just pushed ships unreviewed by it; CodeRabbit re-reviews by itself and its waiter is relaunched only to observe that.
    - On the next wake, inspect only feedback added or changed since that reviewer's previously reviewed SHA, and classify and deduplicate it in the shared ledger.
    - **Any CI wait outstanding for the prior SHA is superseded** (`references/head-discipline.md` § Evidence is SHA-scoped) — stop it and reclaim its slot for the relaunches above (§ Waiter scheduling order).
 5. Stop when the channel has **converged** per `references/scope-contract.md` § Convergence — no blocking finding left unresolved, ledger-wide — confirmed by one latest-delta pass, and every required reviewer thread is settled.
@@ -851,7 +851,7 @@ Pass the failure details from the script output to the skill. The skill will:
 
 **Batch the CI failures with anything else outstanding before that push** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
 
-**After the skill completes and fixes are pushed, record the new SHA as `CANDIDATE_HEAD`, apply 6.1's material-change test to the delta, and re-enter Step 6.3 before Step 7.0.** Where that test fires, its delta-scoped Codex re-entry runs first, and 6.1's blocking-finding consequence governs whatever that re-entry reports; a CI fix that only corrected a line falls straight through it. A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first. Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
+**After the skill completes and fixes are pushed, record the new SHA as `CANDIDATE_HEAD`, apply 6.1's material-change test to the delta, and re-enter Step 6.3 before Step 7.0.** Where that test fires, its delta-scoped Codex re-entry runs first, and 6.1's blocking-finding consequence governs whatever that re-entry reports; a CI fix that only corrected a line falls straight through it. A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first — unless the delta is non-material and its settled review carries (`references/head-discipline.md` § Carried review coverage). Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
 
 ```
 Step 7.1 (wait) → fail → Step 7.2 (batched fix, one push)
@@ -923,7 +923,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 - [ ] Every gate below was verified against `MERGE_HEAD`, and the head has not moved since
 - [ ] **PR title is a conventional-commit subject** (`type(scope): description`) — verify `gh pr view [NUMBER] --json title -q .title | grep -Eq '^(feat|fix|docs|refactor|chore|test|perf|build|ci|style|revert)(\(.+\))?!?: .+'`; a plain prose title FAILS — rename with `gh pr edit [NUMBER] --title "type(scope): …"` BEFORE merging (squash bakes the title into `main`). Also no stray `#<number>`/wave/phase wording.
 - [ ] ALL CI checks green
-- [ ] Copilot review RECEIVED and ALL threads resolved (via `copilot-review` skill — NEVER raw `gh api`)
+- [ ] Copilot review COVERS the merge head — received for it, or a settled review carried across a non-material delta, or abandoned after 30 min, recorded in the ledger (`references/head-discipline.md`) — and ALL its threads resolved (via `copilot-review` skill — NEVER raw `gh api`)
 - [ ] CodeRabbit is passing with all received threads resolved, not configured, or explicitly recorded as `skipped (rate-limited)`. CodeRabbit throttling is optional and never blocks merge.
 - [ ] Zero unresolved **blocking** ledger entries (`references/scope-contract.md` § Blocking) — `required-by-contract`, `regression-caused-by-change`, and any entry blocking by tier; the latest affected delta is verified within the stopping bounds
 - [ ] Every test plan item **settled** (Step 5.5): verified, user-confirmed as a manual pass, or explicitly accepted by the user — as a known failure, or as knowingly unverified. An unanswered `— requires manual testing` is pending, not settled, and blocks
@@ -990,7 +990,7 @@ duvet# A `dev` run MUST obtain explicit approval from the user before merging an
 
 **⚠️ NEVER MERGE WITHOUT USER APPROVAL**
 **⚠️ NEVER MERGE WITHOUT ALL MERGE GATES PASSING (Step 8.1)**
-**⚠️ NEVER MERGE WITHOUT COPILOT REVIEW RECEIVED AND ADDRESSED**
+**⚠️ NEVER MERGE WITHOUT COPILOT COVERAGE (Step 8.1) AND ITS FEEDBACK ADDRESSED**
 
 After this handoff, a later user message such as "merge it" is a standalone mechanical request, not a new `/dev` phase. Recheck the live gates and merge directly in the coordinator session. Do not re-invoke `/dev`, reload its internal skills, or spawn a merge sub-agent.
 
