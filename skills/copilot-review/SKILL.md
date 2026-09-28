@@ -26,12 +26,12 @@ Request, wait for, and resolve GitHub Copilot's PR review on a pull request.
 
 **A Copilot review must be REQUESTED. Do not assume one will appear.** Some repos have a ruleset that auto-requests a review when a PR opens, which makes the first review look automatic — but that is a per-repo setting you cannot count on, and it is **not** the same as re-reviewing later pushes.
 
-**CRITICAL: Copilot does NOT reliably re-review a PR when you push new commits.** Some repos' rulesets enable "review new pushes" and it fires on some pushes and not others. After pushing fixes you MUST run this skill again for the new head SHA — the waiter re-issues the request and, crucially, re-scopes the wait to the new commit.
+**CRITICAL: Copilot does NOT reliably re-review a PR when you push new commits.** Some repos' rulesets enable "review new pushes" and it fires on some pushes and not others. After a **material** push you MUST run this skill again for the new head SHA — the waiter re-issues the request and, crucially, re-scopes the wait to the new commit. After a non-material one, the earlier settled review carries and there is nothing to wait for (`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage).
 
-- **A review of an earlier commit is NOT coverage for the current one.** Coverage is per-head-SHA. `wait-for-copilot-review.sh` enforces this: it only accepts a review whose `commit_id` equals the PR's current `headRefOid`, and it keeps waiting (then reports `STATUS=PENDING`) when the newest review is for an older commit.
-- **"No new feedback appeared" is NOT evidence that code is clean.** Only a *received* review whose `commit_id` equals the head SHA is evidence. Note the converse trap too: because the request API is inert (**D1**), you can never confirm a review "was requested" — so *never* gate your conclusion on that question, and never conclude "not requested, therefore nothing to wait for". Wait for the review itself. This is the single most common way this gate gets falsely reported as passed.
+- **A review of an earlier commit is NOT coverage for the current one — unless it carries.** Coverage is per-head-SHA, with one exception: a settled review whose delta to the head is non-material carries to it (`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage). That judgment is yours, not the script's. `wait-for-copilot-review.sh` enforces the mechanical half: it only accepts a review whose `commit_id` equals the PR's current `headRefOid`, and it keeps waiting (then reports `STATUS=PENDING`) when the newest review is for an older commit.
+- **"No new feedback appeared" is NOT evidence that code is clean.** Only a *received* review is evidence — one whose `commit_id` equals the head SHA, or a settled earlier one carried to it and recorded in the ledger. Note the converse trap too: because the request API is inert (**D1**), you can never confirm a review "was requested" — so *never* gate your conclusion on that question, and never conclude "not requested, therefore nothing to wait for". Wait for the review itself. This is the single most common way this gate gets falsely reported as passed.
 - Copilot review is **completely independent of CI**. They are separate systems. CI passing has NOTHING to do with Copilot.
-- You MUST NOT merge ANY PR until Copilot has reviewed **the commit you intend to merge** and all feedback is resolved.
+- You MUST NOT merge ANY PR until Copilot's slot for **the commit you intend to merge** is filled — a review of it, a settled review carried to it, or a recorded abandonment (`[SKILLS_DIR]/dev/references/head-discipline.md` § A review that does not arrive) — and all feedback it delivered is resolved.
 - No exceptions — not for "first PRs", not for "small PRs", not because "CI isn't set up yet", not because "nothing is configured yet".
 - **NEVER hand-roll `gh api repos/.../reviews` or a GraphQL polling loop to check Copilot status.** Use the script provided by this skill. Hand-rolled loops reliably get two things wrong: they accept a review belonging to a superseded commit, and they re-derive the broken `requested_reviewers` readiness check (**D1/D3**).
 
@@ -53,8 +53,8 @@ the findings. A verdict headline on its own is never a finding.
 `<details><summary>Suppressed comments (N)</summary>` block. Copilot suppressed
 those itself; they open no review thread, and they are overwhelmingly wording,
 casing, and comment-phrasing nits whose cost to chase exceeds their value —
-every one you act on spends a full re-review cycle (see **Every push re-opens the
-gate** below). Do **not** read the block as a matter of routine, do not triage it
+every one you act on spends a full re-review cycle (see **Every material push re-opens
+the gate** below). Do **not** read the block as a matter of routine, do not triage it
 item by item, and never treat its presence as blocking.
 
 The one exception is genuinely narrow: if a suppressed item happens to catch your
@@ -129,6 +129,21 @@ None of the three blocks the gate; `unknown` simply means the script could not
 tell you, which is worth knowing whenever you read output rather than guessing at
 it.
 
+**D6 — nothing revives a Copilot that has stopped reviewing.** On one run Copilot
+posted nothing anywhere in the repository for over seven hours. Every lever was
+tried against a PR awaiting re-review, and none produced a review or even a
+`review_requested` timeline event: the waiter's REST nudge, `gh pr edit
+--add-reviewer @copilot`, removing and re-adding it, closing and reopening the
+PR, GraphQL `requestReviewsByLogin`, and a push made only to retrigger it. The
+cause was an exhausted premium-request quota. GitHub shows that as a notice on the
+PR page only: it is not an issue comment, review, timeline event, check run, commit
+status, or review request, in REST or GraphQL. The billing usage report
+(`/users/{user}/settings/billing/premium_request/usage`) needs the `user` scope and
+reports consumption, not whether requests are being refused. So a stalled Copilot
+cannot be diagnosed from the API. Do not try the levers above; the answer to a review that does not arrive is abandonment after 30
+minutes (`[SKILLS_DIR]/dev/references/head-discipline.md` § A review that does not
+arrive).
+
 ## Triage: the brief cannot reach Copilot
 
 Copilot accepts no prompt, so scope cannot be injected into its review — it will
@@ -138,7 +153,7 @@ it. Copilot's `[nitpick]` prefix is an input to that judgment, never a verdict.
 
 **Two things bite harder here than with any other reviewer:**
 
-**Every push re-opens the gate.** Copilot must then re-review the new head
+**Every material push re-opens the gate.** Copilot must then re-review the new head
 (Step 5), so editing for an immaterial finding costs a full wait cycle *and*
 produces a fresh commit for it to comment on. Push fixes for blocking findings;
 reply-and-resolve the rest without a commit. The one exception is the `REVIEW.md`
@@ -152,7 +167,7 @@ class halfway spends a full Copilot wait to be told about the other half.
 ## When to Use
 
 - After creating a PR (SDLC Step 6.3)
-- **After every push to the PR branch** — including pushes that only fix review feedback. This is not optional and it is the step most often skipped.
+- **After every material push to the PR branch** — including pushes that fix review feedback, when the fix is material. A non-material push carries the settled review instead (`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage); relaunching for it is the wait this rule exists to prevent.
 - Before merging any PR (team coordinator merge gate), against the head commit being merged
 - When user says "check copilot", "wait for copilot", "copilot review"
 
@@ -225,14 +240,14 @@ on STATUS, not on prose.
 |---|---|---|
 | `TERMINAL_PASS` | 0 | A review covers the current head and no Copilot thread is open → **Step 2b**, then Step 4 to confirm. |
 | `TERMINAL_FAIL` | 1 | A review covers the current head and threads remain open (or the count could not be read) → **Step 2b**, then Step 3. Settled — do not re-run for a better answer. |
-| `PENDING` | 2 | No review of the current head arrived within 900 s. **Not a failure and not a clean result.** Re-running is safe. If it still has not arrived, STOP and report: "Copilot review has not arrived for PR #N head `<sha>`. Cannot merge without it." **Never** record this as "no findings". |
+| `PENDING` | 2 | No review of the current head arrived within 900 s. **Not a failure and not a clean result.** Re-run **once**. On a second `PENDING` the review is **abandoned** (`[SKILLS_DIR]/dev/references/head-discipline.md` § A review that does not arrive): record it, report it once, and proceed — do not relaunch again, on a timer or otherwise, and never push, close/reopen, or re-add the reviewer to provoke one. **Never** record this as "no findings". |
 | `NOT_CONFIGURED` | 3 | **Never returned by this script.** Whether Copilot is "configured" has no answerable form — `requested_reviewers` does not work at all (**D1/D3**). Do not branch on it, and do not reinstate any "request again, then re-run" recovery keyed to it. |
 | `ERROR` | 4 | Bad arguments, `gh` too old, PR head unresolvable → report to the user. The wait never started. |
 
 On a settled review the script also prints machine-readable lines; read them rather
 than branching on STATUS alone:
 
-- `REVIEWED_COMMIT_ID=<sha>` and `PR_HEAD_SHA=<sha>` — **verify they match yourself**. This is the one line that genuinely gates: a review of a superseded commit is not coverage.
+- `REVIEWED_COMMIT_ID=<sha>` and `PR_HEAD_SHA=<sha>` — **verify they match yourself**. This is the one line that genuinely gates: a review of a superseded commit is not coverage unless it carries (`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage) — a judgment you make and record, never one the script makes.
 - `UNRESOLVED_THREADS=<n|unknown>` — `unknown` means the read **failed**, not that there are none. The script fails closed on it and reports `TERMINAL_FAIL`; verify the threads yourself.
 - `SUPPRESSED_COMMENTS=1|0|unknown` — **informational only** (**D4**). `1` means a block is present, `0` means the fetch succeeded and found none, `unknown` means the fetch failed so the script cannot say. None of the three blocks the gate. Do not open the block as a matter of routine, and do not re-run the waiter merely to turn `unknown` into a number.
 - The review body is printed too. **Read its verdict headline** and note whether Copilot opened any threads — that pair is what decides the outcome (see **Reading Copilot's Verdict**). STATUS reflects the mechanical thread gate only.
@@ -266,8 +281,8 @@ gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
 ```
 
 **Do not narrow that to `| last`.** Two Copilot reviews of a single commit are
-routine — the waiter nudges on every head move and this skill re-runs it up to 3
-times — and the newest is not necessarily the one carrying the verdict you are
+routine — the waiter nudges on every head move and a `PENDING` waiter is re-run
+once — and the newest is not necessarily the one carrying the verdict you are
 reading. Take all bodies for the commit.
 
 ### Step 3: Resolve Feedback
@@ -354,21 +369,22 @@ below with unresolved Copilot threads still open.
 
 The gate is passed when **both** hold:
 
-1. A Copilot review exists whose `commit_id` equals the PR's current `headRefOid`.
+1. Copilot covers the PR's current `headRefOid`: a review whose `commit_id` equals it, a settled earlier review carried to it, or a recorded abandonment (`[SKILLS_DIR]/dev/references/head-discipline.md`).
 2. Zero unresolved Copilot threads remain.
 
 A zero thread count on its own is not enough — condition (1) is what makes it mean
-anything, because zero threads on a superseded commit says nothing about the code
-being merged. If the count is > 0, re-invoke resolve-pr-feedback. The verdict
+anything, because zero threads on a superseded commit that does not carry says nothing
+about the code being merged. If the count is > 0, re-invoke resolve-pr-feedback. The verdict
 headline does not add a third condition: **Needs a closer look** with zero threads
 passes exactly as **Approval recommended** with zero threads does.
 
 ### Step 5: If Fixes Were Pushed, Start Over
 
-Resolving feedback usually means pushing commits. Those commits are **unreviewed**, and Copilot will not look at them by itself.
+Resolving feedback usually means pushing commits. Those commits are **unreviewed**, and Copilot will not look at them by itself — whether they need it is the carry test's call, below.
 
-**If the head SHA changed** since the review in Step 2, go back to **Step 1** —
-nudge, wait (Step 2), read the verdict (Step 2b), resolve. The loop, its bound and
+**If the head SHA changed** since the review in Step 2, apply `[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage
+first. If the delta is non-material, the review carries: record it and stop here. If
+it is material, go back to **Step 1** — nudge, wait (Step 2), read the verdict (Step 2b), resolve. The loop, its bound and
 its escalation triggers are `fx-review` Step 7; every iteration here costs a
 full Copilot wait cycle, so fix causes rather than instances.
 
@@ -378,13 +394,15 @@ nudging again spends a wait cycle to re-read code nobody changed. **Only a push
 restarts this loop**, which is why only blocking findings should produce one.
 
 Convergence here adds one Copilot-specific condition to the ledger test: every
-thread resolved **on a reviewed head**. A verdict of **Needs a closer look** does
+thread resolved **on a covered head** — reviewed, carried to, or abandoned on. A verdict of **Needs a closer look** does
 not extend the loop, and neither does a suppressed block — treating either as
 unfinished business is how this gate turns into an endless cycle over wording nits
 that Copilot had already declined to raise as threads.
 
 ```bash
-# The gate is only passed when the newest Copilot review covers the current head.
+# Mechanical coverage: the newest Copilot review is of the current head. If this
+# prints NOT covered, the review may still carry (head-discipline.md § Carried review
+# coverage) or have been abandoned (§ A review that does not arrive).
 HEAD_SHA=$(gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid')
 REVIEWED=$(gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
   --jq '[.[] | select(.user.login | startswith("copilot-pull-request-reviewer")) | .commit_id] | last // empty')
@@ -396,17 +414,17 @@ REVIEWED=$(gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
 ## Success Criteria
 
 This skill is complete when ALL of:
-- ✅ Copilot review has been received (script exited 0) **for the current head commit** — `REVIEWED_COMMIT_ID` equals `PR_HEAD_SHA`, checked by you, not for an earlier commit
+- ✅ Copilot's slot is filled **for the current head commit**: a review of it (`REVIEWED_COMMIT_ID` equals `PR_HEAD_SHA`, checked by you), a settled earlier review carried to it across a non-material delta, or an abandonment after 30 minutes of waiting — the latter two recorded in the ledger with both SHAs (`[SKILLS_DIR]/dev/references/head-discipline.md`)
 - ✅ Its verdict headline was read: **Approval recommended** and **Needs a closer look** both pass with no open threads; **Changes recommended** was worked through
 - ✅ All Copilot threads resolved (0 unresolved, **filtered to the Copilot login**)
-- ✅ Any **blocking** findings have been fixed and pushed — **and the resulting head was itself reviewed**. Correct-but-immaterial observations are resolved by reply and produce no push, so they owe no further pass
+- ✅ Any **blocking** findings have been fixed and pushed — **and the resulting head was itself covered** (reviewed, or carried when the fix was non-material). Correct-but-immaterial observations are resolved by reply and produce no push, so they owe no further pass
 
 A suppressed-comments block does **not** appear in that list, in any state
 (**D4**). It is not a criterion, and neither `SUPPRESSED_COMMENTS=1` nor `unknown`
 withholds the gate.
 
-**Never report this gate as passed on the grounds that polling found no new feedback.** Absence of a review is not a clean review, and `STATUS=PENDING` is not a verdict. Silence here is an unasked question, not an answer.
+**Never report this gate as passed on the grounds that polling found no new feedback.** Absence of a review is not a clean review, and `STATUS=PENDING` is not a verdict. Silence here is an unasked question, not an answer — which is why an abandonment is reported as an abandonment, never as a pass.
 
 **Never report this gate as passed on a zero thread count alone.** Zero threads on
 a commit that is not the head says nothing about the code being merged — the
-head-SHA match is what makes the count mean anything.
+head-SHA match, or a recorded carry to the head, is what makes the count mean anything.

@@ -86,7 +86,7 @@ Use this skill only when the user explicitly invokes or names it, or when an act
 | Gate | Verification | Blocking? |
 |------|-------------|-----------|
 | CI checks ALL green | `gh pr checks <NUMBER>` — every check must show `pass` | ⛔ YES |
-| Copilot review RECEIVED **for the commit being merged** | A Copilot review whose `commit_id` equals the PR's current `headRefOid` — see the scoped command below. A review of ANY older commit does NOT satisfy this gate | ⛔ YES |
+| Copilot review COVERS **the commit being merged** | A Copilot review whose `commit_id` equals the PR's current `headRefOid` — see the scoped command below. A review of an older commit satisfies this gate only when carried across a non-material delta, and a review that never arrived only when abandoned after 30 minutes — both recorded with their SHAs (`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage, § A review that does not arrive) | ⛔ YES |
 | Copilot verdict READ | The reviewed body's verdict headline. *Approval recommended* and *Needs a closer look* both pass when no threads are open; *Changes recommended* must be worked through. A suppressed-comments block is ignored by default and gates nothing | ⛔ YES |
 | Copilot comments RESOLVED | All **Copilot-authored** review threads resolved (0 unresolved). Filter on the Copilot login — human threads are out of scope and must never be touched | ⛔ YES |
 | CodeRabbit review attempted (if GitHub App configured) | Prefer a received review; explicit `skipped (rate-limited)` is acceptable | Optional when rate-limited |
@@ -113,9 +113,11 @@ older reviews the PR carries.
 `copilot-review`, which owns the head-SHA-aware waiter. **Do not hand-roll a
 polling loop here.** Hand-rolled loops reliably accept a review of a superseded
 commit and re-derive the broken `requested_reviewers` readiness check. Do NOT merge
-without it.
+without it — unless an earlier settled review carries across a non-material delta, or
+the wait has been abandoned after 30 minutes (`[SKILLS_DIR]/dev/references/head-discipline.md`). Never push, close/reopen, or
+re-add the reviewer to provoke one (`copilot-review` **D6**).
 
-**Incident context:** A "small follow-up" PR was merged without waiting for Copilot review. Copilot found 5 real bugs (timing drift, race conditions, missing tests) that shipped to main. PR size is NEVER a reason to skip review gates.
+**Incident context:** A "small follow-up" PR was merged without waiting for Copilot review. Copilot found 5 real bugs (timing drift, race conditions, missing tests) that shipped to main. PR size is NEVER a reason to skip review gates. That PR had never been reviewed at all; carrying a settled review of the same PR across a non-material delta is a different thing and is not a skip.
 
 ## ⛔ Release PR Prohibition (CRITICAL)
 
@@ -536,11 +538,12 @@ EOF
 **The response to this POST is not evidence of anything.** It returns 200 with an
 empty `requested_reviewers` array regardless, and a `422` is equally
 uninformative — neither tells you whether a review is coming. Issue it and ignore
-the result. The only sound signal is a review whose `commit_id` equals the PR's
-current `headRefOid`; see `copilot-review` ("Known GitHub API Behaviour",
+the result. The only sound signal that a review arrived is a review whose `commit_id`
+equals the PR's current `headRefOid`; whether an older one still covers the head is
+`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage. See `copilot-review` ("Known GitHub API Behaviour",
 D1–D3) and use that skill, which wraps this together with a head-SHA-aware waiter.
 
-**Do this again after every push to the PR branch.** Copilot will not reliably look at new commits on its own, and a stale review must never be read as coverage for the current head.
+**Do this again after every material push to the PR branch.** Copilot will not reliably look at new commits on its own, and a stale review is coverage for the current head only when carried across a non-material delta (`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage).
 
 Other ways a review can be triggered, none of which replace the request above:
 
@@ -577,12 +580,12 @@ PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explic
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
-# Reviews of the CURRENT head — this is coverage.
+# Reviews of the CURRENT head — direct coverage.
 gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
   --jq "[.[] | select(.user.login | startswith(\"copilot-pull-request-reviewer\")) | select(.commit_id == \"${HEAD_SHA}\") | {state, submitted_at}]"
 
-# Every Copilot review with its commit — diagnostic, to see whether a review exists
-# but covers an older commit. NOT a pass signal.
+# Every Copilot review with its commit — shows whether a review covers an older
+# commit. Not a pass signal by itself: it is the input to the carry test.
 gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
   --jq '[.[] | select(.user.login | startswith("copilot-pull-request-reviewer")) | {commit_id, state, submitted_at}]'
 ```
@@ -658,10 +661,10 @@ query {
 Then filter for Copilot status:
 
 ```bash
-# Reviews covering the CURRENT head — the only pass signal
+# Reviews covering the CURRENT head — direct coverage
 jq '.data.repository.pullRequest | .headRefOid as $head | [.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer" and .commit.oid == $head)]'
 
-# All Copilot reviews with their commits — diagnostic only, NOT a pass signal
+# All Copilot reviews with their commits — not a pass signal by itself; input to the carry test
 jq '.data.repository.pullRequest | .headRefOid as $head | [.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer") | {state, oid: .commit.oid, covers_head: (.commit.oid == $head)}]'
 
 # Unresolved Copilot threads
@@ -677,10 +680,10 @@ negative branch on every PR (**D3**).
 | Condition | Meaning |
 |-----------|---------|
 | Review whose `commit_id` == the PR's `headRefOid` | Review completed **for the code you are about to merge**. Read its verdict headline (**D4**) |
-| Review exists, but its `commit_id` is an older commit | **Current head is UNREVIEWED.** Nudge, then wait via `copilot-review` — do not treat this as reviewed |
+| Review exists, but its `commit_id` is an older commit | **Current head is UNREVIEWED** unless that review is settled and the delta is non-material, in which case it carries (`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage). Otherwise nudge, then wait via `copilot-review` |
 | No Copilot review at all | **Nothing has reviewed this PR yet.** Wait via `copilot-review`. This is not "clean", and it is *not* evidence that no review was requested — you cannot determine that at all (**D1**) |
 | Unresolved threads with Copilot author | Feedback needs attention |
-| Zero unresolved threads | Clean **once** a review covers the current head — on an older commit it says nothing about the code being merged |
+| Zero unresolved threads | Clean **once** a review covers the current head, directly or carried — on an older commit that does not carry it says nothing about the code being merged |
 | `reviewRequests` / `requested_reviewers` empty | **Means nothing.** It is always empty. Do not derive any status from it (**D1**) |
 
 ## Bundled References

@@ -158,7 +158,7 @@ Two details of the current skills are stronger than what is specified above, and
 - `dev` checks for zero unresolved review threads from **any** reviewer, human included, not only automated ones. The specified rule is the floor both skills meet.
 - Both skills enumerate a concrete gate list that also covers coverage reporting and a conventional-commit pull request title. Those are real gates today; they are enumerated in the skills and left out of this spec because the list of configured checks is repository configuration, not an authority boundary.
 
-An automated reviewer that reports a rate limit or is not configured produces no threads, so a documented degradation of that kind satisfies the thread requirement without a special case.
+An automated reviewer that reports a rate limit, is not configured, or whose review is abandoned after the skills' documented wait bound produces no threads, so a documented degradation of that kind satisfies the thread requirement without a special case. Threads it did post before the degradation remain subject to the requirement.
 
 ### Enforcement
 

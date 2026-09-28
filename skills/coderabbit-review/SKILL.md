@@ -98,7 +98,7 @@ on STATUS, not on prose.
 |---|---|---|
 | `TERMINAL_PASS` | 0 | Check settled clean, zero unresolved threads → the gate is met. Go to Step 1b only if you still need to read findings. |
 | `TERMINAL_FAIL` | 1 | Settled with a failing conclusion, or unresolved threads remain → **Step 1b**. Do not re-run for a better answer. |
-| `PENDING` | 2 | Still running at budget expiry. **Not a verdict, not a failure.** Re-running is safe and correct if you still need it. Never record it as "no findings". |
+| `PENDING` | 2 | Still running at budget expiry. **Not a verdict, not a failure.** Re-run **once** if you still need it; a second `PENDING` on the same head abandons the review (`[SKILLS_DIR]/dev/references/head-discipline.md` § A review that does not arrive). Never record it as "no findings". |
 | `NOT_CONFIGURED` | 3 | The App is not installed for this repo. **Terminal — report once and proceed without the PR-level gate. Never retry, never wait.** A coordinator running several PRs also caches it per `[SKILLS_DIR]/dev/references/head-discipline.md` § Reviewer availability is cached for the run, rather than re-establishing it on each PR. |
 | `ERROR` | 4 | Bad args or `gh` failure; the wait never started → report. If it identifies a rate/quota limit, take the exception above. |
 

@@ -37,7 +37,8 @@
 #                                  is wrong: observed delivery ranges from 85 s to
 #                                  12 m 42 s, and the ruleset that auto-requests a
 #                                  review fires on some pushes and not others.
-#                                  Re-running is safe and is the correct response.
+#                                  Re-run ONCE; a second PENDING on the same head
+#                                  abandons the review (head-discipline.md).
 #                                  NEVER grounds to conclude the code is clean.
 #   STATUS=NOT_CONFIGURED  exit 3  NEVER RETURNED by this script. Whether Copilot is
 #                                  "configured" has no answerable form — the only
@@ -113,7 +114,7 @@
 #
 #     The check spans EVERY review of the target commit, not just the newest one.
 #     Two reviews of one commit are routine (this script nudges on every head
-#     move, and the skill re-runs it up to 3 times), so reading only the newest
+#     move, and a PENDING run is re-run once), so reading only the newest
 #     body would report on a different review than the one being judged.
 #
 #     What DOES decide the outcome is the review's VERDICT HEADLINE:
@@ -670,7 +671,9 @@ arm_diagnostic_budget
 if stale=$(latest_review_commit); then
     if [[ -n "$stale" && "$stale" != "$head_sha" ]]; then
         echo "Newest Copilot review on this PR covers ${stale:0:7}, which is NOT the current head."
-        echo "That review is not coverage for ${head_sha:0:7}."
+        echo "LAST_REVIEWED_COMMIT_ID=${stale}"
+        echo "It is not coverage for ${head_sha:0:7} unless the delta is non-material and it"
+        echo "carries (dev/references/head-discipline.md § Carried review coverage)."
     elif [[ -z "$stale" ]]; then
         echo "Copilot has never submitted a review on this PR."
     fi
@@ -678,6 +681,7 @@ else
     echo "Could not read this PR's reviews, so whether Copilot has ever reviewed it is"
     echo "UNKNOWN — that API read failed. Do not read this as 'never reviewed'."
 fi
-echo "This is PENDING, not a verdict: re-run to keep waiting. Do NOT read it as"
-echo "'no findings' — nothing has reviewed ${head_sha:0:7} yet."
+echo "This is PENDING, not a verdict: re-run ONCE to keep waiting. A second PENDING on"
+echo "this head abandons the review (head-discipline.md § A review that does not arrive)."
+echo "Do NOT read it as 'no findings' — nothing has reviewed ${head_sha:0:7} yet."
 finish PENDING

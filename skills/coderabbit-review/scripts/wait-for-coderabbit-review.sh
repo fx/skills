@@ -27,8 +27,9 @@
 #                                  either way — do NOT re-run to "get a better
 #                                  answer"; triage what it said.
 #   STATUS=PENDING         exit 2  Still in progress when the budget expired. NOT a
-#                                  verdict and NOT a failure. Re-running is safe and
-#                                  is the correct response if you still need it.
+#                                  verdict and NOT a failure. Re-run ONCE if you still
+#                                  need it; a second PENDING on the same head abandons
+#                                  the review (dev/references/head-discipline.md).
 #   STATUS=NOT_CONFIGURED  exit 3  No CodeRabbit check on this PR after a grace
 #                                  period — the GitHub App is not installed for this
 #                                  repo. TERMINAL. Never retry, never wait: most
@@ -465,5 +466,6 @@ done
 echo ""
 echo "The CodeRabbit check had not settled within ${TIMEOUT}s (${SECONDS}s wall clock)."
 echo "This is NOT a verdict and NOT a failure — the check is still running."
-echo "Re-run to keep waiting. Never record this as 'no findings'."
+echo "Re-run ONCE to keep waiting. A second PENDING on this head abandons the review"
+echo "(head-discipline.md § A review that does not arrive). Never record this as 'no findings'."
 finish PENDING
