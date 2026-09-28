@@ -202,7 +202,7 @@ gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
   --jq "[.[] | select(.user.login | startswith(\"copilot-pull-request-reviewer\")) | select(.commit_id == \"${HEAD_SHA}\") | .body] | join(\"\n\n----- (next review of this commit) -----\n\n\")"
 ```
 
-Empty output means **no Copilot review covers the current head** — that is an unreviewed head, not a clean one. Note this reads *every* review of that commit, not `| last`: two reviews of one commit are routine, so `last` may show a different review than the one being judged.
+Empty output means **no Copilot review is of the current head**. That is an unreviewed head, not a clean one — unless the ledger records a carry (`[SKILLS_DIR]/dev/references/head-discipline.md` § Carried review coverage): then set `HEAD_SHA` to the carried review's commit and read its bodies, since that verdict is the one standing for the head. Note this reads *every* review of that commit, not `| last`: two reviews of one commit are routine, so `last` may show a different review than the one being judged.
 
 `copilot-review`'s waiter does this for you and prints the bodies; prefer it
 over this snippet. Its `SUPPRESSED_COMMENTS=1|0|unknown` line is informational and

@@ -56,7 +56,9 @@ This section scopes CI evidence strictly: a CI result never carries to another S
 Compare the PR's diff at each SHA, not the two commits — after a rebase, `git diff <reviewed> <head>` also contains every commit the base gained:
 
 ```bash
-BASE=origin/main   # the PR's base branch
+BASE_REF=$(gh pr view <PR_NUMBER> --json baseRefName --jq '.baseRefName')   # not always main
+git fetch -q origin "$BASE_REF" <reviewed-sha> <head-sha>   # a pre-force-push SHA may not be local
+BASE="origin/$BASE_REF"
 git range-diff "$(git merge-base "$BASE" <reviewed-sha>)..<reviewed-sha>" \
                "$(git merge-base "$BASE" <head-sha>)..<head-sha>"
 ```
