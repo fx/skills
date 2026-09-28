@@ -320,7 +320,7 @@ After invoking resolver skills, re-query to confirm every thread from a § Suppo
 
 **⛔ Zero new threads is not convergence unless a Copilot review has been RECEIVED for the current head SHA** — or a settled earlier one carries to it, or the wait was abandoned (`[SKILLS_DIR]/dev/references/head-discipline.md`). "Received for the current head" is the *only* evidence of a fresh review — do **not** phrase it as "was requested", and do not try to verify that a request happened: `requested_reviewers` is empirically always empty, so whether a review was requested is not a determinable fact (see `copilot-review` **D1**/**D3**). Issue the nudge because it sometimes helps, then judge convergence solely on the delivered review. Absence of feedback is not evidence of quality.
 
-Verify before declaring the loop converged:
+Verify before declaring the loop converged. `NOT covered` from this check still passes step 6 when the ledger records a carry or an abandonment for this head (`[SKILLS_DIR]/dev/references/head-discipline.md`):
 
 ```bash
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
