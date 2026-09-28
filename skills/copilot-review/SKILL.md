@@ -281,8 +281,8 @@ gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
 ```
 
 **Do not narrow that to `| last`.** Two Copilot reviews of a single commit are
-routine — the waiter nudges on every head move and this skill re-runs it up to 3
-times — and the newest is not necessarily the one carrying the verdict you are
+routine — the waiter nudges on every head move and a `PENDING` waiter is re-run
+once — and the newest is not necessarily the one carrying the verdict you are
 reading. Take all bodies for the commit.
 
 ### Step 3: Resolve Feedback

@@ -114,7 +114,7 @@
 #
 #     The check spans EVERY review of the target commit, not just the newest one.
 #     Two reviews of one commit are routine (this script nudges on every head
-#     move, and the skill re-runs it up to 3 times), so reading only the newest
+#     move, and a PENDING run is re-run once), so reading only the newest
 #     body would report on a different review than the one being judged.
 #
 #     What DOES decide the outcome is the review's VERDICT HEADLINE:
