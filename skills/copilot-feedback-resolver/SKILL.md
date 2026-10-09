@@ -116,7 +116,7 @@ not cover, and for a standalone run.
 | **Nitpick** | Contains `[nitpick]` prefix **and reaches filter 3 and fails it** — in scope, violating no rule, and immaterial. An out-of-scope one exits at filter 1 and is **Deferred**, not this row | Reply with the materiality reasoning and resolve, without editing |
 | **Outdated** | Refers to code that no longer exists | Reply with the explanation, resolve |
 | **Incorrect** | Misreads a deliberate project convention | Reply with the explanation, resolve, record it in `REVIEW.md` |
-| **Valid — blocking** | **Is blocking** per `[SKILLS_DIR]/dev/references/scope-contract.md` § Blocking — which includes a contract blocker, and those never pass through the bar at all. Do not narrow it here | Delegate to coder sub-agent to fix |
+| **Valid — blocking** | **Is blocking** per `[SKILLS_DIR]/dev/references/scope-contract.md` § Blocking — which includes a contract blocker, and those never pass through the bar at all. Do not narrow it here | Delegate to an implementer sub-agent (`dev`, Implementer role) to fix |
 | **Valid — immaterial** | Correct, but would change nothing if it shipped uncorrected | Reply with that reasoning, resolve. **Do not edit** |
 | **Deferred** | Valid but out of scope for this PR | Reply citing the exclusion, resolve. **No edit and no commit** — return the follow-up to the coordinator |
 
@@ -173,9 +173,10 @@ and whether anything was changed (`fx-review` Step 5). Phrasing that works:
   explanation]. Documented in REVIEW.md so future reviews pick it up." The
   `REVIEW.md` entry is required work (`fx-review` Step 6), and Copilot reads
   that file from the head branch, so it takes effect on this PR's next review.
-- **Blocking** — delegate to a coder sub-agent with the PR number and title, the
-  file and line, the comment text, and the thread ID for resolution after the fix.
-  Ensure it pushes and then resolves.
+- **Blocking** — delegate to an implementer sub-agent (it loads `dev` and acts in
+  its Implementer role) with the PR number and title, the file and line, the
+  comment text, and the thread ID for resolution after the fix. Tell it to push;
+  then resolve the thread.
 - **Deferred** — "Valid suggestion, but out of scope for this PR: <the exclusion
   that covers it>. Returned to the coordinator as a follow-up rather than tracked
   here, so this PR is not widened."

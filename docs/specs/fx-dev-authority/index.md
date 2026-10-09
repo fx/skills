@@ -4,6 +4,8 @@
 
 Three skills in this catalog act on a repository with materially different powers. `dev` drives a single change to a merge-ready pull request but does not merge it without the user's approval. `team` runs unattended across a backlog the user approved up front and merges its own pull requests within that approved scope. `spec-writer` writes documentation and nothing else.
 
+`dev` is also loaded in a second role. A coordinator — `dev` itself, `team`, or another workflow — delegates implementation to a sub-agent that loads `dev` in its **Implementer** role; that delegate writes code and commits for the coordinator, and holds none of either coordinator's merge authority.
+
 This spec states the **authority boundaries** of those three skills: who may merge a pull request without asking, what must be true before anyone merges at all, and who may write files and commit. It describes behavior the skills already define today.
 
 ## Background
@@ -14,7 +16,7 @@ So this spec deliberately specifies only the properties that must survive any re
 
 Scope boundaries:
 
-- **In scope:** merge authority and write authority for `dev`, `team`, and `spec-writer`.
+- **In scope:** merge authority and write authority for `dev` (in both its roles), `team`, and `spec-writer`.
 - **Out of scope, deliberately:** the order, names, numbering, or composition of workflow steps; which sub-agent or skill is invoked when; iteration caps, timeouts, retry bounds, and polling intervals; prompt wording and the field list of the Scope Brief; worktree mechanics; every other skill in this catalog.
 
 ## Requirements
@@ -123,6 +125,19 @@ The `team` coordinator MUST NOT implement a task's code itself and MUST route al
 - **WHEN** the coordinator responds
 - **THEN** it spawns an agent to carry out the fix rather than implementing the fix itself
 
+### Implementer Delegates Hold No Merge Authority
+
+Coordinators keep merge authority because they did not write the code they merge (see the two delegation requirements above). The agent that did write it is the one place that separation could leak: an implementer spawned by `team` loads the same skill as `dev`'s coordinator and works for a run that may merge, so it must be stated that neither authority passes down to it.
+
+An agent acting in the `dev` Implementer role MUST NOT merge a pull request, whichever coordinator spawned it.
+
+#### Scenario: A team implementer finishes on a branch whose gates would pass
+
+- **GIVEN** an implementer spawned by a `team` run that is permitted to merge its pull requests
+- **AND** the pull request for the implementer's branch has every merge gate satisfied
+- **WHEN** the implementer completes its job
+- **THEN** it reports its commits to the coordinator and does not merge; the merge decision stays with the coordinator
+
 ### Spec Writer Touches Only the Docs Tree
 
 `spec-writer` produces the documents that later authorize implementation. If it could also implement, the approval step between the two would be doing nothing.
@@ -148,6 +163,8 @@ The `spec-writer` skill MUST NOT create or modify any file outside the `docs/` t
 `dev` and `team` differ on **who decides to merge** and agree on **what must be true to merge**. The user's approval is per-pull-request in `dev` and up-front-and-once in `team`; the verification a pull request must pass is identical in both.
 
 This is why the gate requirements above are written without naming a skill. They are properties of the merge, not of the workflow that reaches it, and a fourth workflow added tomorrow inherits them by default.
+
+A delegate in `dev`'s Implementer role sits beneath both models and holds neither: it never decides to merge, whichever coordinator spawned it.
 
 `spec-writer` sits outside both models. It never opens or merges a pull request; its output is a document that a later `dev` or `team` run implements. Its only authority boundary that needs stating is the write boundary.
 
@@ -194,3 +211,4 @@ The skills contain a great deal of ordering: numbered SDLC steps, review passes,
 | Date | Change | Document |
 |------|--------|----------|
 | 2026-08-09 | Initial spec created — merge and write authority for `dev`, `team`, and `spec-writer`, transcribed from the current skill documents | — |
+| 2026-10-09 | Added Implementer Delegates Hold No Merge Authority — `dev` gains an Implementer role that replaces the removed `coder` skill as the delegate every coordinator sends implementation to | — |

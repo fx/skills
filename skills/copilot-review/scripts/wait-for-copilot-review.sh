@@ -14,6 +14,9 @@
 #    killed mid-poll, printing no STATUS and no exit code. That kill is exactly what
 #    made the old re-run protocol unreachable. Backgrounded processes are not
 #    subject to that cap, which is why the budget can now exceed it.
+#    Headless sessions are the one exception — nothing can wake the caller there,
+#    so it runs this in the FOREGROUND with TIMEOUT_SECONDS below that cap and
+#    relaunches on PENDING (dev/references/host-adapters.md § Headless sessions).
 #
 # The timeout is measured against the WALL CLOCK (bash `SECONDS`), not against
 # accumulated `sleep` time. Each poll also spends 2+ network round-trips, so

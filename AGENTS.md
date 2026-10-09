@@ -27,7 +27,7 @@ Flat only. The [`skills`](https://github.com/vercel-labs/skills) CLI supports ca
 
 Format: `[a-z0-9-]+`, 1–64 chars, no leading/trailing hyphen, no `--`. That satisfies the spec, Codex (≤64 chars), and Pi (which warns but still loads on violation).
 
-**Names are bare by default.** `dev`, `coder`, `planner`, `github` — no vanity prefix, because it costs a keystroke on every invocation and buys nothing when the name is already distinctive.
+**Names are bare by default.** `dev`, `team`, `planner`, `github` — no vanity prefix, because it costs a keystroke on every invocation and buys nothing when the name is already distinctive.
 
 **Prefix `fx-` when a collision is real or likely.** Two triggers, in order:
 
@@ -70,7 +70,7 @@ Do not write descriptions that auto-trigger on generic task semantics — "codin
 
 A workflow's instructions apply only to the request that invoked it and end at its documented handoff. Later standalone requests do not inherit the old workflow's orchestration rules: a status query, branch sync, PR metadata change, or explicitly approved merge is handled directly unless the user starts another workflow.
 
-Internal delegation stays valid — `dev` may name `coder`, `planner`, and the reviewer skills as part of its active lifecycle. That does not authorize those skills to load themselves for unrelated requests.
+Internal delegation stays valid — `dev` may name `planner`, the reviewer skills, and itself in its Implementer role as part of its active lifecycle. That does not authorize those skills to load themselves for unrelated requests.
 
 ## Host portability
 

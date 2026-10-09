@@ -1,6 +1,6 @@
 ---
 name: dev
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Runs the complete attended SDLC lifecycle through requirements, implementation, review, CI, and finalization."
+description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Runs the complete attended SDLC lifecycle through requirements, implementation, review, CI, and finalization, stopping at an unmerged PR; also defines the Implementer role its coordinators delegate implementation to."
 ---
 
 # Dev — SDLC Workflow Skill
@@ -23,9 +23,47 @@ This skill defines the **mandatory** workflow for one explicitly invoked `/dev` 
 - Incidental questions and operations are not new lifecycle stages. Handle status checks, branch synchronization, PR metadata edits, and an explicitly authorized merge directly when they require no substantive implementation judgment.
 - A user may explicitly narrow, waive, or stop a procedural pass. Mandatory correctness, security, privacy, and merge-gate requirements remain in force, but the skill must not argue that its own orchestration mechanics outrank a direct user instruction.
 
+## Roles
+
+`dev` is loaded in exactly one of two roles. Settle which before doing anything else.
+
+**A sub-agent that was spawned with a specific job and told to load `dev` is in the Implementer role, unless its prompt explicitly says to run the Lifecycle.**
+
+### Lifecycle (default)
+
+When the user explicitly invokes `dev`, or `team` runs it for one change. Run Steps 0–8 below for **one** change and **stop at the first PR boundary**: the PR is open, reviewed, CI green, its merge gates verified, and handed to the user (Step 8.4). `dev` **never merges on its own** — a later "merge it" is a standalone user request (Step 8.4). The only workflow that merges autonomously is `team`, which wraps this lifecycle and replaces the Step 8.4 hand-off with its own merge.
+
+Everything from **CRITICAL RULES** to the end of this document is the Lifecycle role's procedure. An Implementer reads only its **Scope Discipline**, **Test Policy**, and task-reporting (sub-agent restriction) sections.
+
+### Implementer
+
+When a coordinator — this skill's own Lifecycle role, `team`, or another workflow that delegates implementation — spawns you with a plan, a fix list, or one focused job and tells you to act in the Implementer role. You are the delegate that CRITICAL RULES below sends implementation to: you write the code and make the commits the coordinator may not.
+
+<!--
+duvet= docs/specs/fx-dev-authority/index.md#implementer-delegates-hold-no-merge-authority
+duvet= type=implication
+duvet# An agent acting in the `dev` Implementer role MUST NOT merge a pull request, whichever coordinator spawned it.
+-->
+
+Do exactly that job:
+
+- **Implement it, run the tests, and make atomic conventional commits** (`type(scope): message`). Include the tracking update your prompt names in the same commit series — never as a separate later commit.
+- **Push only when your prompt says to.** Several coordinators deliberately batch fixes into one push; a push they did not ask for moves the head under evidence they are holding.
+- **Do NOT** create or edit a PR, launch or wait on reviewers or CI, merge anything, or delegate the lifecycle onward, and do **not** run Steps 0–8. Those belong to the coordinator that spawned you. Where your host lets a delegate delegate, you may still spawn helpers *inside* your one job (`references/host-adapters.md` § The coordinator-owns-the-SDLC rule is not a platform limit).
+- **Carry the Scope Brief your prompt gives you; it is binding** (`references/scope-contract.md`). Apply **Scope Discipline** below, with one substitution: you stop and report to your **coordinator**, not the user. Deliver everything unambiguously in scope first — never stop with nothing done.
+- **Report back** the commits you made (SHAs), the tests you ran and their results, and anything you stopped on and why.
+
+Standards that bind the Implementer, in addition to **Test Policy** and **Scope Discipline** below:
+
+- Follow the repository's `AGENTS.md` and every mandatory project rule it names.
+- Test bug fixes first: reproduce the bug with a failing test, then fix it.
+- Match the surrounding code's style, naming, and idiom.
+- Follow security best practices — no secrets, credentials, or private identifiers in code, tests, fixtures, or commit messages.
+- **Commit subjects: no `#<number>`, no waves/phases.** A commit subject auto-links `#N` to PR/issue #N, and it propagates into the PR title (GitHub pre-fills the title from a single commit's subject) and the squash-merge commit subject — so the PR-title rule applies here too: never put `#<number>` (`#4`, `(#4)`, `#123`) in a commit subject unless N is a real PR/issue ref on this repo, and never use a wave/phase/step/change-doc number there. See the `github` skill's "`#<number>` PR-Title Rule".
+
 ## CRITICAL RULES
 
-**Delegate the substantive roles this lifecycle owns — requirements analysis, planning, and implementation — each to its own sub-agent that loads the matching skill. Do not delegate a mechanical operation the coordinator can perform directly.**
+**Delegate the substantive roles this lifecycle owns — requirements analysis, planning, and implementation — each to its own sub-agent that loads the matching skill. Implementation's skill is this one: the implementation sub-agent loads `dev` and acts in its Implementer role. Do not delegate a mechanical operation the coordinator can perform directly.**
 
 ### How to Launch Sub-Agents with Skills
 
@@ -87,7 +125,7 @@ duvet# During an explicitly invoked `dev` lifecycle, the coordinator MUST delega
 - ❌ NEVER create implementation commits yourself
 - ❌ NEVER skip tests (`test.skip`, `it.skip`, `describe.skip` are FORBIDDEN)
 - ❌ NEVER select a skill as an agent type — the delegate loads it from its prompt (in Claude Code: not via `subagent_type`)
-- ✅ ALWAYS delegate requirements analysis, planning, and implementation roles
+- ✅ ALWAYS delegate requirements analysis, planning, and implementation roles — implementation to a sub-agent that loads `dev` in its Implementer role
 - ❌ NEVER delegate review to a reviewing sub-agent — review is Codex, Copilot, and CodeRabbit, each driven by its own skill from the coordinator session
 - ✅ ALWAYS instruct delegated role agents to load their named skills via the Skill tool
 - ✅ ALWAYS perform straightforward status checks, branch synchronization, PR metadata updates, and an explicitly approved merge directly when delegation adds no independent judgment
@@ -102,6 +140,12 @@ duvet# During an explicitly invoked `dev` lifecycle, the coordinator MUST delega
 **Every push invalidates the head-scoped evidence collected before it.** That is why this lifecycle is ordered around a **candidate head** (Step 4.7) rather than pushing whenever something is ready.
 
 `references/head-discipline.md` defines the rules; they are not restated here or in the steps below, which name the section they are applying. Read all five before running this workflow: § The candidate head, § Evidence is SHA-scoped, § Batch findings, § Waiter scheduling order, § Reviewer availability is cached for the run.
+
+### Waiting: settle your session shape first
+
+Every long wait in this lifecycle — reviewer waiters, the CI waiter, sub-agents you spawn — runs in the shape `references/host-adapters.md` § Long waits prescribes, under the discipline in `references/background-waits.md`. **Before the first wait, check whether this session is headless** (`references/host-adapters.md` § Headless sessions): non-interactive, no user to reply mid-run, or a process that exits when your turn ends.
+
+**In a headless session, never end your turn while a sub-agent, reviewer, or CI wait is outstanding.** Run the waiters in the foreground as that section prescribes, relaunching on `STATUS=PENDING`; wait for every sub-agent to return; and carry the lifecycle all the way to the Step 8.4 hand-off before you reply. Every instruction below to "keep working and collect it on a wake" assumes a host that can wake you — headless, nothing will, and ending the turn silently skips every remaining gate. Polling with `sleep` stays forbidden either way.
 
 ### Scope Discipline (STOP rule)
 
@@ -238,7 +282,7 @@ included, not only reviewers. A reviewer without
 it reports the work you deliberately did not do, and every such finding costs a
 full review cycle to filter by hand.
 
-**Then freeze the implementation contract.** If the task is sourced from, names, or discovers a relevant `docs/changes/*.md` file, read it and the spec sections it links. Confirm implementation approval from the conversation or the change's recorded workflow state; if approval is unclear, STOP and ask the user. Record the contract path and approval evidence in the working brief. The change document, its linked specs, and all mandatory project rules form the implementation contract: the plan and coder prompt MUST map work to that contract and MUST NOT infer adjacent product or architecture work.
+**Then freeze the implementation contract.** If the task is sourced from, names, or discovers a relevant `docs/changes/*.md` file, read it and the spec sections it links. Confirm implementation approval from the conversation or the change's recorded workflow state; if approval is unclear, STOP and ask the user. Record the contract path and approval evidence in the working brief. The change document, its linked specs, and all mandatory project rules form the implementation contract: the plan and implementer prompt MUST map work to that contract and MUST NOT infer adjacent product or architecture work.
 
 The coordinator owns one in-memory finding ledger for the run; reviewer sub-agents return findings to the coordinator and MUST NOT mutate the ledger concurrently. Give every finding a stable fingerprint (`category + file + line/range + normalized claim`) and record its source, first-seen revision, classification, materiality tier, disposition, and verification evidence. Classification and materiality are independent fields — see Step 4.5 for how the tier is assigned. The tier is `n/a` for a contract blocker: filter 2 stops before the bar, so a rule violation is never ranked, and inventing a tier for one is the mistake that lets it be argued down. Classify each finding exactly once as:
 
@@ -292,11 +336,11 @@ Agent tool:
 
 ### STEP 4: Implementation
 
-**MANDATORY: Launch a sub-agent that loads the coder skill.**
+**MANDATORY: Launch a sub-agent that loads `dev` in its Implementer role.**
 
 ```
 Agent tool:
-  prompt: "Load the coder skill (Skill tool: skill='coder'), then:
+  prompt: "Load the dev skill (Skill tool: skill='dev') and act in its Implementer role, then:
 
            [PASTE THE STEP 2.5 SCOPE BRIEF VERBATIM HERE]
 
@@ -480,7 +524,7 @@ If any item failed, fold its failures into the Step 4.5 ledger and fix them **wi
 
 ```
 Agent tool:
-  prompt: "Load the coder skill (Skill tool: skill='coder'), then:
+  prompt: "Load the dev skill (Skill tool: skill='dev') and act in its Implementer role, then:
 
            [PASTE THE STEP 2.5 SCOPE BRIEF VERBATIM HERE]
 
@@ -506,7 +550,7 @@ Record every item's result — they are written into the PR body in Step 5, alre
 
 1. Every blocking ledger entry from Step 4.5 is resolved and the local Codex review has converged.
 2. Step 4.6 recorded a result for every non-manual test plan item.
-3. **Whatever tracks this work is already committed** — the `[DOC_PATH]` identified in Step 4, plus any index the project keeps in step with it. **Skip this if `[DOC_PATH]` is `none`**: a repo with no change documents, task list, or index has nothing to commit here, and the gate is satisfied by that fact rather than blocked by it. Where there is one and it is missing from the diff, send the Step 4 coder back for it **now**, before the push (the coordinator never authors it — see CRITICAL RULES); it must never become a post-gate commit.
+3. **Whatever tracks this work is already committed** — the `[DOC_PATH]` identified in Step 4, plus any index the project keeps in step with it. **Skip this if `[DOC_PATH]` is `none`**: a repo with no change documents, task list, or index has nothing to commit here, and the gate is satisfied by that fact rather than blocked by it. Where there is one and it is missing from the diff, send the Step 4 implementer back for it **now**, before the push (the coordinator never authors it — see CRITICAL RULES); it must never become a post-gate commit.
 4. **Whatever the project generates is regenerated and committed** — lockfiles, snapshots, generated sources. Same conditional: a project that generates none of these skips this too.
 
 Then push and record the SHA:
@@ -618,6 +662,8 @@ Please test these and let me know the results.
 
 **Post the request, then keep working.** Launch Step 6.3's reviewer waiters and continue; collect the user's answer on a wake rather than idling for it, so their reply and the reviewers' latency overlap instead of stacking. Items still unanswered are annotated `— requires manual testing`, and the user's confirmation is collected before the Step 8.1 merge gates.
 
+**Headless, there is no one to answer mid-run** (`references/host-adapters.md` § Headless sessions). Do not stop the run for it: leave those items `— requires manual testing`, carry on through Step 7, and list them in the Step 8.4 report as what the user must verify before merging. They still block the merge gates.
+
 #### 5.5.3 Update the PR body
 
 ```bash
@@ -692,7 +738,7 @@ Record the revision each re-run reviewed, the same way Step 4.5 does, so the nex
 
 **Where the delta-scoped pass this test triggers reports a blocking finding, that finding goes through one 6.2 pass and its push before any hosted waiter is launched or relaunched, and the resulting push re-applies this test to its own delta.** A blocking finding in hand is a head you already know must change, and `references/head-discipline.md` § Waiter scheduling order **rule 0** forbids starting a hosted reviewer on one — the reviewer would spend a full cycle on a diff that will not survive. This consequence travels with the test: it holds at every site that applies it, it is stated here with the test and nowhere else, and a site added later inherits it for the same reason the test itself is stated universally.
 
-The coordinator MUST classify and deduplicate these findings — the integration findings above, and anything a delta-scoped Codex re-run reported — in the Step 2.5 ledger before invoking a coder. Pass every **blocking** entry to implementation and nothing else (`references/scope-contract.md` § Blocking) — which includes a `follow-up/out-of-scope` entry blocking by tier, and excludes an entry that is not blocking. Select on blocking, never on the tier: `n/a` marks a contract blocker (filter 2 stopped before the bar) just as it marks a filter-1 exclusion, so dropping every `n/a` entry drops every mandatory rule violation.
+The coordinator MUST classify and deduplicate these findings — the integration findings above, and anything a delta-scoped Codex re-run reported — in the Step 2.5 ledger before invoking an implementer. Pass every **blocking** entry to implementation and nothing else (`references/scope-contract.md` § Blocking) — which includes a `follow-up/out-of-scope` entry blocking by tier, and excludes an entry that is not blocking. Select on blocking, never on the tier: `n/a` marks a contract blocker (filter 2 stopped before the bar) just as it marks a filter-1 exclusion, so dropping every `n/a` entry drops every mandatory rule violation.
 
 #### 6.2 Batched Fix Pass
 
@@ -700,7 +746,7 @@ The coordinator MUST classify and deduplicate these findings — the integration
 
 ```
 Agent tool:
-  prompt: "Load the coder skill (Skill tool: skill='coder'), then:
+  prompt: "Load the dev skill (Skill tool: skill='dev') and act in its Implementer role, then:
 
            [PASTE THE STEP 2.5 SCOPE BRIEF VERBATIM HERE]
 
@@ -744,6 +790,7 @@ Then invoke each reviewer's resolver to settle its threads, passing its blocking
 ```bash
 # Claude Code spelling: both in ONE message, both run_in_background: true.
 # On another host, same two waiters, that host's shape (§ Long waits).
+# Headless session: foreground, per host-adapters.md § Headless sessions.
 mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh [PR_NUMBER] \
      > [AGENT_DIR]/team/waits/copilot-[PR_NUMBER].log 2>&1
@@ -809,7 +856,7 @@ CANDIDATE_HEAD=$(gh pr view [PR_NUMBER] --json headRefOid --jq '.headRefOid')
 
 #### 7.1 Wait for CI Checks to Start and Complete
 
-**⛔ Run the bundled CI check script as a long wait** — `references/host-adapters.md` § Long waits for the shape, `references/background-waits.md` for the rule — redirecting to a log file and reading that log on the wake. On Claude Code that is `run_in_background: true` plus the completion notification:
+**⛔ Run the bundled CI check script as a long wait** — `references/host-adapters.md` § Long waits for the shape, `references/background-waits.md` for the rule — redirecting to a log file and reading that log on the wake. On Claude Code that is `run_in_background: true` plus the completion notification; in a headless session it is a foreground run instead (`references/host-adapters.md` § Headless sessions):
 
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
@@ -846,7 +893,7 @@ Skill tool: skill="resolve-ci-failures"
 
 Pass the failure details from the script output to the skill. The skill will:
 1. Analyze failure logs and identify root causes
-2. Delegate fixes to a sub-agent with the coder skill
+2. Delegate fixes to a sub-agent that loads `dev` in its Implementer role
 3. Push the fixes
 
 **Batch the CI failures with anything else outstanding before that push** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
@@ -955,7 +1002,7 @@ Confirm in the diff:
 - If this PR completes the whole change document, its Status is `complete`
 - `docs/index.yml` and `docs/index.md` agree with it
 
-**A missing tracking update here is a Step 4 defect, and fixing it costs a full re-verification cycle.** Have a coder sub-agent write and push it anyway — the docs must not lie on `main` — then treat the new SHA as a candidate head: re-run Step 7 and re-verify Step 8.1 against it (`references/head-discipline.md` § The candidate head). Do not merge on the gates you collected for the parent commit.
+**A missing tracking update here is a Step 4 defect, and fixing it costs a full re-verification cycle.** Have an implementer sub-agent (`dev`, Implementer role) write and push it anyway — the docs must not lie on `main` — then treat the new SHA as a candidate head: re-run Step 7 and re-verify Step 8.1 against it (`references/head-discipline.md` § The candidate head). Do not merge on the gates you collected for the parent commit.
 
 **`(PR #N)` annotations are optional and never worth a commit.** The PR number is unknown when tracking is written in Step 4; add it only if some other batched push happens to be going out anyway. A tracking line without it is not a defect — the merge commit links the two.
 
@@ -991,6 +1038,8 @@ duvet# A `dev` run MUST obtain explicit approval from the user before merging an
 **⚠️ NEVER MERGE WITHOUT USER APPROVAL**
 **⚠️ NEVER MERGE WITHOUT ALL MERGE GATES PASSING (Step 8.1)**
 **⚠️ NEVER MERGE WITHOUT COPILOT REVIEW RECEIVED AND ADDRESSED**
+
+**This hand-off is the first PR boundary, and the Lifecycle role ends here.** When `team` is running this lifecycle, it replaces this step with its own merge once the Step 8.1 gates pass (`team` § What team adds to dev); `dev` on its own never does.
 
 After this handoff, a later user message such as "merge it" is a standalone mechanical request, not a new `/dev` phase. Recheck the live gates and merge directly in the coordinator session. Do not re-invoke `/dev`, reload its internal skills, or spawn a merge sub-agent.
 
@@ -1029,7 +1078,7 @@ After this handoff, a later user message such as "merge it" is a standalone mech
 |-------|--------|
 | Sub-agent fails | Retry once with adjusted params, then STOP and report |
 | Git conflict | STOP, report to user, wait for resolution |
-| Tests fail | coder sub-agent fixes, rerun until pass |
+| Tests fail | Implementer sub-agent fixes, rerun until pass |
 | Auth fails | STOP, request `gh auth login` |
 
 ---
@@ -1043,7 +1092,7 @@ All sub-agents are launched via the Agent tool. Each loads its skill via the Ski
 | 2 | Requirements Analyzer | `requirements-analyzer` |
 | 3 | Planner | `planner` |
 | 3,8 | Issue Updater | `issue-updater` |
-| 4,4.6.4,6.2 | Coder | `coder` (Step 4 also writes the task-tracking update; Step 6.2 is ONE batched fix pass, not one per finding) |
+| 4,4.6.4,6.2 | Implementer | `dev`, in its **Implementer** role (Step 4 also writes the task-tracking update; Step 6.2 is ONE batched fix pass, not one per finding) |
 | 4.5 | Pre-PR Self-Review | `codex-review` (local `codex`, the ONLY local reviewer) — initial pass complete, then one batched fix; blocking findings resolved, latest affected delta verified |
 | 4.6.2 | Browser Verification | `verify-web-change` (pre-PR, against the branch) |
 | 5 | PR Preparer | `pr-preparer` |
@@ -1059,6 +1108,8 @@ Agent tool:
   description: "[summary]"
 ```
 
+An implementation spawn names the role as well: `Load the dev skill (Skill tool: skill='dev') and act in its Implementer role, then: [task]`.
+
 ---
 
 ## Success Criteria
@@ -1067,7 +1118,7 @@ Workflow complete when ALL true:
 - ✅ Feature branch created from main
 - ✅ Requirements documented
 - ✅ Plan created
-- ✅ Code implemented with atomic commits, task tracking included
+- ✅ Code implemented by an Implementer sub-agent (`dev`, Implementer role) with atomic commits, task tracking included
 - ✅ Pre-PR Codex review completed (or permitted degradation documented), findings classified in the shared ledger, blocking findings resolved, and the latest affected delta verified within the stopping bounds
 - ✅ Browser and programmatic test-plan verification done BEFORE the PR was opened
 - ✅ Candidate head frozen and recorded before hosted review and CI (Step 4.7)

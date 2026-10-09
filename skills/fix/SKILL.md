@@ -53,7 +53,7 @@ Before ANY implementation:
 2. **Write the most concise failing test** that reproduces the bug:
    ```
    Agent tool:
-     prompt: "Load the coder skill (Skill tool: skill='coder'), then:
+     prompt: "Load the dev skill (Skill tool: skill='dev') and act in its Implementer role, then:
 
               Write a FAILING test that reproduces this bug:
 
@@ -78,7 +78,7 @@ When implementing the fix:
 
 ```
 Agent tool:
-  prompt: "Load the coder skill (Skill tool: skill='coder'), then:
+  prompt: "Load the dev skill (Skill tool: skill='dev') and act in its Implementer role, then:
 
            Fix this bug. The failing test is at [TEST PATH].
 
