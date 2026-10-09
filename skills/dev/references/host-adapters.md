@@ -14,7 +14,7 @@ Every orchestration skill in this catalog — `dev`, `team`, `workflow-runner`, 
 |---|---|---|
 | 1 | **Delegate** | Work runs in a *separate context* with its own instructions, at a chosen capability tier, and reports back |
 | 2 | **Load a skill** | The delegate begins with a named skill's full instructions in context |
-| 3 | **Wait** | The coordinator can block on one or more delegates and read each result. **Whether a finished delegate wakes the coordinator, or the coordinator must ask, is host-specific — check your row before writing a wait loop or omitting one** |
+| 3 | **Wait** | The coordinator can block on one or more delegates and read each result. **Whether a finished delegate wakes the coordinator, or the coordinator must ask, is host-specific — check your row before writing a wait loop or omitting one.** A headless session changes the answer on every host (§ Headless sessions) |
 | 4 | **Message** | A correction reaches a *running* delegate without restarting it |
 | 5 | **Ask the user** | Execution stops until a human answers; the answer is not inferred |
 | 6 | **Run long, concurrently** | A multi-minute command runs without blocking the coordinator, and its output is retrievable |
@@ -41,13 +41,13 @@ Capabilities that shape orchestration here:
 - **Delegates cannot themselves delegate.** One implicit, session-scoped team; teammates cannot spawn teammates. This is why the coordinator owns every SDLC step rather than handing one agent the whole lifecycle.
 - **No per-spawn reasoning effort.** Effort is inherited from the session (`effortLevel` / `CLAUDE_EFFORT`). The tier selects a model; it does not select how hard the delegate thinks.
 - **The `small` tier carries a 200k context ceiling** — a feature for read-heavy roles, since it bounds context growth for free.
-- A foreground `Bash` timeout is capped below the 900 s waiter budget, which is why waiters *must* be backgrounded.
+- A foreground `Bash` timeout is capped below the 900 s waiter budget, which is why waiters *must* be backgrounded — except in a headless session, which runs them in the foreground on a shorter budget (§ Headless sessions).
 
 ### Codex
 
 | Op | Mapping |
 |---|---|
-| Delegate | `spawn_agent` — `task_name`, `message`, `fork_turns`, and (only with `fork_turns` set) `model` / `reasoning_effort`. Returns the canonical name `/root/<task_name>`. **`task_name` accepts only lowercase letters, digits, and underscores** — a hyphenated handle is rejected outright, so `coder-0105a` must be spelled `coder_0105a` |
+| Delegate | `spawn_agent` — `task_name`, `message`, `fork_turns`, and (only with `fork_turns` set) `model` / `reasoning_effort`. Returns the canonical name `/root/<task_name>`. **`task_name` accepts only lowercase letters, digits, and underscores** — a hyphenated handle is rejected outright, so `impl-0105a` must be spelled `impl_0105a` |
 | Load a skill | Name the skill in the child's `message` **and give the absolute path to its `SKILL.md`** — there is no `Skill` tool, the child just reads the file |
 | Wait | `wait_agent` (explicit, takes `timeout_ms`); `list_agents` for a status snapshot |
 | Message | `send_message` (delivers without triggering a turn), `followup_task` (delivers and triggers one), `interrupt_agent` to stop one |
@@ -78,6 +78,33 @@ Every reviewer and CI waiter in this catalog runs to a 900 s budget and prints a
 | Codex | There is no completion notification and `exec_command` yields after at most 30 s, so a single call cannot span the budget. **Delegate the waiter to a teammate** — `spawn_agent` a small-tier child whose only job is to run the script and report its `STATUS=` line, then `wait_agent` on that child with a `timeout_ms` of minutes. That converts ~30 collection reads at full coordinator context into one blocking wait, and the child pays the context cost. Re-reading the `exec_command` session yourself is the fallback when delegation is unavailable, and it is the only case in this catalog where a bounded re-read is the correct behaviour rather than the forbidden one. |
 
 The rule the skills state — *never spend coordinator turns on a timer* — is unchanged by either row. What changes is which mechanism satisfies it.
+
+**Both rows assume an interactive session.** In a headless one, § Headless sessions below overrides the Claude Code row.
+
+### Headless sessions
+
+**Headless is a session shape, not a host**, and it overrides the wake-based rows above. Treat the session as headless when any of these holds:
+
+- your instructions say the run is non-interactive, unattended, or one-shot;
+- there is no user who can reply mid-run — nothing you ask will be answered before you finish;
+- ending your turn ends the process, so nothing can wake you later.
+
+If you cannot tell, treat it as headless: waiting in the foreground on an interactive host costs some idle time, while ending the turn on a headless one silently skips every gate still ahead. Observed: an agent running non-interactively followed "end your turn and let the notification wake you", ended its turn, and so skipped every review and CI gate it had been told to wait for.
+
+**The rule: never end the turn while a teammate, reviewer, or CI wait is outstanding.**
+
+- **Run each waiter script in the foreground**, blocking, with a budget below the host's foreground ceiling — every waiter takes `[TIMEOUT_SECONDS]` as its second argument. Keep the redirect to a log and read the `STATUS=` line when the call returns, exactly as for a backgrounded run. **Relaunch on `STATUS=PENDING`.** Foreground chunks are one wait: keep relaunching until together they cover the budget a single background run would have had (900 s), and only a `PENDING` at the end of that is the `PENDING` a skill's status table describes.
+- **Wait for every teammate to return** before you reply — spawn it in the foreground, or block on it with the host's wait primitive.
+- **Finish the whole workflow before replying**: `dev` to its Step 8.4 hand-off, `team` through its last merge and shutdown.
+- **Ask the user (op 5) is unavailable mid-run.** Where a skill would stop to ask, finish everything the question does not block, then put the question in your final report.
+- **Polling is still forbidden.** No `sleep` loops and no hand-rolled waits (`background-waits.md`); the bundled waiter scripts, run as above, are the only waits.
+
+The "never block in the foreground — end your turn and let the notification wake you" rule applies only to sessions that can be woken.
+
+| Host | Headless spelling |
+|---|---|
+| Claude Code | Foreground `Bash` (no `run_in_background`) with `timeout: 600000`, and the waiter's `[TIMEOUT_SECONDS]` at `540` so its bounded diagnostic tail still lands inside the call. Spawn teammates without `run_in_background` so the `Agent` call returns their result; spawn independent ones in one message so they run together. No `ScheduleWakeup` — nothing is left alive to wake. |
+| Codex | Unchanged: the Codex row above already blocks, through a waiter child and `wait_agent`, and ending the turn already ends the run. Its consequence is the rule above — every `wait_agent` runs before you reply. |
 
 ### `[AGENT_DIR]` — the in-repo agent directory
 
@@ -127,4 +154,4 @@ The **fields** of a delegate call, which every host needs in some spelling:
 
 On Claude Code that is also enforced by the platform, since delegates cannot delegate. **On a host where they can — Codex — it remains the rule anyway**, for the reason that motivated it in the first place: an agent told to run a whole lifecycle inlines the implementation instead of delegating it, fills its context, and skips the later stages. That failure is about prompt scope, not about capability, so a host that permits the nesting does not remove it.
 
-What *does* change on such a host: a delegate may legitimately spawn helpers **within its one focused job** — a coder fanning out reads across a large tree, say. That is not the same as handing it the lifecycle, and the rule does not forbid it.
+What *does* change on such a host: a delegate may legitimately spawn helpers **within its one focused job** — an implementer fanning out reads across a large tree, say. That is not the same as handing it the lifecycle, and the rule does not forbid it.

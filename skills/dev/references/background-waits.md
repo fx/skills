@@ -14,13 +14,15 @@ A skill that waits still documents its **own** invocation — which script, whic
 
 The line is **who signals completion**: if something outside your command will tell you it finished, run it as a long wait and wait for that signal. If nothing will, and you are gating the next line of your own script, a bounded in-command poll is right.
 
-**An ordinary delegate is not one of these either, and nothing below applies to waiting on one.** A coder, a verify agent, a reviewer sub-agent — anything whose result your host hands back to you directly — reports through its own agent result, not through a log you read. The only teammate this file governs is the **waiter** child a host's row prescribes for running a wait script and reporting its `STATUS=` line.
+**An ordinary delegate is not one of these either, and nothing below applies to waiting on one.** An implementer, a verify agent, a reviewer sub-agent — anything whose result your host hands back to you directly — reports through its own agent result, not through a log you read. The only teammate this file governs is the **waiter** child a host's row prescribes for running a wait script and reporting its `STATUS=` line.
 
-**Where your host requires a blocking wait on outstanding teammates before your turn ends, that wait is mandatory and is not the polling forbidden below.** On Codex, ending the turn kills every live child, so `wait_agent` on each outstanding teammate is the host's own blocking primitive and skipping it destroys the run. `host-adapters.md` § Long waits and op 3 are canonical for which hosts require it and how; read your row there before deciding whether to wait on a delegate at all.
+**Where your host requires a blocking wait on outstanding teammates before your turn ends, that wait is mandatory and is not the polling forbidden below.** On Codex, ending the turn kills every live child, so `wait_agent` on each outstanding teammate is the host's own blocking primitive and skipping it destroys the run. `host-adapters.md` § Long waits and op 3 are canonical for which hosts require it and how; read your row there before deciding whether to wait on a delegate at all. **A headless session requires it on every host** — nothing will wake you once your turn ends, so you wait on every outstanding teammate before replying (`host-adapters.md` § Headless sessions).
 
 ## The rule
 
 **⛔ Never `sleep`-loop, poll, or hand-roll a wait of your own on one of these.** Every such wait runs in the shape your host's row prescribes in `host-adapters.md` § Long waits, redirecting stdout and stderr to a log file, and you read that log when the wait resolves. On Claude Code that shape is `run_in_background: true` with the completion notification as your only scheduling mechanism; on Codex it is a small-tier teammate that runs the script and reports its `STATUS=` line, with `wait_agent` on that teammate. **Where your host's row prescribes a blocking primitive — Codex's `wait_agent` — calling it IS this rule, not an exception to it**; what is forbidden is the wait you invent, never the one the host hands you. Take the shape from the table, not from the example syntax in a skill.
+
+**In a headless session the shape is different, and the rule is not.** Nothing can wake you, so the waiter runs in the foreground on a budget below the host's ceiling and is relaunched on `STATUS=PENDING`, and you never end your turn while a wait is outstanding (`host-adapters.md` § Headless sessions holds the detection test and each host's spelling). That foreground run is the host's prescribed shape for the session, not a wait you invented; a `sleep` loop is still forbidden.
 
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
@@ -46,6 +48,8 @@ Launch independent waits **concurrently** — on Claude Code, every call in one 
 ## Why not the foreground
 
 **Every host with a row in `host-adapters.md` § Long waits** caps the call that holds a wait below the 900 s budget these scripts run to, so on those hosts a wait held in the calling turn is *guaranteed* to be cut off mid-poll, printing no `STATUS` and no exit code — which is exactly what used to force blind re-runs. That table names each ceiling and the shape that survives it. A host whose row establishes no ceiling is not covered by this paragraph — but read the row before concluding that, because the reason travels: 900 s is a long time to hold one call open, and a host that cannot is the common case, not the exception.
+
+**A headless session is the one place a foreground wait is required**, and it survives the ceiling the only way it can: by passing the waiter a budget below it and relaunching on `PENDING` (`host-adapters.md` § Headless sessions). Never hold the default 900 s budget in the foreground.
 
 Polling the log yourself is no better: a buffered tool writes nothing until it finishes, so an early read teaches you nothing and costs a full context read every time. For a coordinator this is the single most expensive thing you can do — every wake re-reads the largest context in the team, and it gets more expensive with every turn added.
 

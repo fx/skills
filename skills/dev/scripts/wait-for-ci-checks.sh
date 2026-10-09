@@ -10,6 +10,9 @@
 #    which is BELOW this script's budget — a foreground call is guaranteed to be
 #    killed mid-poll, printing no STATUS and no exit code. Backgrounded processes
 #    are not subject to that cap.
+#    Headless sessions are the one exception — nothing can wake the caller there,
+#    so it runs this in the FOREGROUND with TIMEOUT_SECONDS below that cap and
+#    relaunches on PENDING (dev/references/host-adapters.md § Headless sessions).
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # STATUS PROTOCOL (shared by every wait script in this catalog)

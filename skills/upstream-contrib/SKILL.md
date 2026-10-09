@@ -180,11 +180,11 @@ The CI workflow is the authoritative list of what must pass. Record them as `UPS
 
 ### 2.3 Implement
 
-Delegate to the `coder` skill:
+Delegate to an implementer — a sub-agent that loads `dev` in its Implementer role:
 
 ```
 Agent tool:
-  prompt: "Load the coder skill (Skill tool: skill='coder'), then:
+  prompt: "Load the dev skill (Skill tool: skill='dev') and act in its Implementer role, then:
 
            In the [UPSTREAM_SLUG] repo at [UPSTREAM_DIR], implement [DESCRIPTION].
 
@@ -237,7 +237,7 @@ Run the consumer's own build and tests against the linked upstream. Failures her
 
 ```
 Agent tool:
-  prompt: "Load the coder skill (Skill tool: skill='coder'), then:
+  prompt: "Load the dev skill (Skill tool: skill='dev') and act in its Implementer role, then:
 
            In [CONSUMER_ROOT], switch the local implementation over to the new
            API from [UPSTREAM_PKG] (currently linked to a local build).

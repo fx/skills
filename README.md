@@ -11,7 +11,7 @@ Installable into Claude Code, Codex, Cursor, OpenCode, and 70+ other agents via 
 npx skills add fx/skills --skill '*' -g
 
 # Just the lifecycle
-npx skills add fx/skills --skill dev --skill coder --skill planner --skill fx-review
+npx skills add fx/skills --skill dev --skill planner --skill fx-review
 
 # List first
 npx skills add fx/skills --list
@@ -23,13 +23,12 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 
 | Skill | Purpose |
 |---|---|
-| `dev` | Runs the complete attended SDLC lifecycle through requirements, implementation, review, CI, and finalization. |
-| `team` | Runs an explicitly requested coordinated multi-agent, multi-task implementation workflow. |
+| `dev` | Runs the complete attended SDLC lifecycle through requirements, implementation, review, CI, and finalization, stopping at an unmerged PR; also defines the Implementer role its coordinators delegate implementation to. |
+| `team` | Wraps `dev`: runs its lifecycle for every change in the approved scope, unattended, and merges each PR itself once the merge gates pass. |
 | `fix` | Runs a test-first bug-fix lifecycle and then enters the explicitly requested SDLC workflow. |
 | `workflow-runner` | Runs an explicitly selected workflow through its own completion criteria without stopping between phases. |
 | `requirements-analyzer` | Analyzes supplied implementation requirements, repository context, and acceptance criteria. |
 | `planner` | Creates a detailed implementation plan from supplied requirements and scope. |
-| `coder` | Implements code changes while following the supplied scope and project conventions; PR creation remains a separate lifecycle stage. |
 | `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows. |
 | `codex-review` | Runs a scoped one-shot Codex CLI branch review as an external review adapter. |
 | `copilot-review` | Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review. |
