@@ -28,8 +28,10 @@
 #   FX_INSTRUCTIONS_PRESENT=<subset of: AGENTS.md REVIEW.md; a symlink is suffixed "(symlink)">
 #   NATIVE_SPECS=<directories holding at least one .md>
 #   NATIVE_TRACKING=<tracker files> [task-tracking:<value from a plain AGENTS.md>]
-#   NATIVE_REVIEW_RULES=<.github/copilot-instructions.md if plain> <AGENTS.md if plain
-#                       and it has a review heading other than the fx "## Code Review Rules" pointer>
+#   NATIVE_REVIEW_RULES=<AGENTS.md if plain and it has a review heading other than the
+#                       fx "## Code Review Rules" pointer> <.github/copilot-instructions.md if plain>
+#                       (in that order: fx-review Step 6 writes to the first entry, and
+#                       AGENTS.md reaches every reviewer where the Copilot file reaches one)
 #   NATIVE_CHANGELOG=<files/dirs> [generated-by:<release-please|semantic-release|changesets>]
 #   DOCS_SITE=<config files/dirs>
 #
@@ -122,13 +124,15 @@ fi
 echo "NATIVE_TRACKING=$(join "${tracking[@]+"${tracking[@]}"}")"
 
 review=()
-is_plain .github/copilot-instructions.md && review+=(.github/copilot-instructions.md)
-# The fx "## Code Review Rules" section is a pointer to REVIEW.md, not a rules
-# section — never count it as a native review-rules file.
+# AGENTS.md first: fx-review Step 6 appends to the first entry, and AGENTS.md is
+# read by Codex, Copilot and CodeRabbit where copilot-instructions.md reaches
+# Copilot alone. The fx "## Code Review Rules" section is a pointer to REVIEW.md,
+# not a rules section — never count it as a native review-rules file.
 if is_plain AGENTS.md && grep -iE '^#+[[:space:]].*review' AGENTS.md 2>/dev/null \
         | grep -qviE '^##[[:space:]]+Code Review Rules[[:space:]]*$'; then
     review+=(AGENTS.md)
 fi
+is_plain .github/copilot-instructions.md && review+=(.github/copilot-instructions.md)
 echo "NATIVE_REVIEW_RULES=$(join "${review[@]+"${review[@]}"}")"
 
 changelog=()

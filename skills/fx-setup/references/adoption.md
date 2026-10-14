@@ -24,7 +24,7 @@ The check is `fx-setup`'s `scripts/check-docs-layout.sh`; a `SKILL.md` runs it a
 | `FX_INSTRUCTIONS_PRESENT` | Which of `AGENTS.md` and `REVIEW.md` exist; a symlink is suffixed `(symlink)` |
 | `NATIVE_SPECS` | Existing spec, ADR, RFC, design or proposal directories holding at least one `.md` — `docs/specs` among them only when the docs layer is not adopted, plus the directory adr-tools' `.adr-dir` names |
 | `NATIVE_TRACKING` | Existing tracker files (`TODO.md`, `ROADMAP.md`, …, and `docs/tasks.md` when the docs layer is not adopted), plus `task-tracking:<value>` when a plain `AGENTS.md` names one |
-| `NATIVE_REVIEW_RULES` | `.github/copilot-instructions.md`, and `AGENTS.md` when it has a review heading other than the fx `## Code Review Rules` pointer |
+| `NATIVE_REVIEW_RULES` | In this order: `AGENTS.md` when it has a review heading other than the fx `## Code Review Rules` pointer, then `.github/copilot-instructions.md`. The order is the write preference — `AGENTS.md` reaches Codex, Copilot and CodeRabbit, the Copilot file only Copilot — so `fx-review` Step 6 takes the first entry |
 | `NATIVE_CHANGELOG` | Changelog files or fragment directories, plus `generated-by:<tool>` when release tooling owns them |
 | `DOCS_SITE` | Docs-site configuration (MkDocs, Docusaurus, mdBook, Sphinx, VitePress) |
 
