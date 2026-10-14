@@ -13,7 +13,7 @@
 
 ## Running the check
 
-The check is `fx-setup`'s `scripts/check-docs-layout.sh`; a `SKILL.md` runs it as `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh`. It takes no arguments, resolves the repository root itself, never writes, never reads through a symlink at any depth — a symlinked ancestor such as `docs -> /elsewhere` makes every path under it absent, never adopted — and always exits 0.
+The check is `fx-setup`'s `scripts/check-docs-layout.sh`; a `SKILL.md` runs it as `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh`. It takes no arguments, resolves the repository root itself, never writes, never reads through a symlink at any component, ancestors and the final one alike — `docs -> /elsewhere` makes every path under it absent and `docs/tasks.md -> /elsewhere` makes that file absent, never adopted — and always exits 0.
 
 | Key | Meaning |
 |---|---|
@@ -27,7 +27,9 @@ The check is `fx-setup`'s `scripts/check-docs-layout.sh`; a `SKILL.md` runs it a
 | `NATIVE_REVIEW_RULES` | In this order: `AGENTS.md` when it has a review heading other than the fx `## Code Review Rules` pointer, then `.github/copilot-instructions.md`. The order is the write preference — `AGENTS.md` reaches Codex, Copilot and CodeRabbit, the Copilot file only Copilot — so `fx-review` Step 6 takes the first entry |
 | `NATIVE_CHANGELOG` | Changelog files or fragment directories, plus `generated-by:<tool>` when release tooling owns them |
 | `DOCS_SITE` | Docs-site configuration (MkDocs, Docusaurus, mdBook, Sphinx, VitePress) |
-| `WARNING` | One key, notes joined by ` \| `, printed only when there is a note. `could not enter <root>; nothing was checked` — every other key is then at its default (`not-adopted`, empty lists), a default and not a finding, so report the warning instead of acting on the values. `<path> is a symlink; nothing under it was read` — a symlinked ancestor; everything under it was treated as absent. `<path> leaves the repository; not read` — an absolute or `..` path, such as an `.adr-dir` pointing outside |
+| `WARNING` | One key, notes joined by ` \| `, printed only when there is a note. `could not enter <root>; nothing was checked` — every other key is then at its default (`not-adopted`, empty lists), a default and not a finding, so report the warning instead of acting on the values. `<path> is a symlink; not read` — the probed path itself is a link. `<path> is a symlink; nothing under it was read` — a symlinked ancestor. `<dir> contains symlinks; they were not read` — a scanned directory holds links, which were skipped. `<path> leaves the repository; not read` — an absolute or `..` path, such as an `.adr-dir` pointing outside |
+
+**A symlinked path is absent, in every key, with one exception.** `FX_DOCS`: a linked marker is no marker, so a link never makes the layer adopted. `FX_DOCS_MISSING`: a linked docs-layer path is listed as missing. `NATIVE_*` and `DOCS_SITE`: a linked path is omitted. The exception is the instruction layer: a linked `AGENTS.md` or `REVIEW.md` is listed in `FX_INSTRUCTIONS_PRESENT` as `<file>(symlink)` — found by `lstat`, never read — and makes `FX_INSTRUCTIONS` `partial`, never `adopted`, because `fx-upgrade` M1 has to find it to migrate it. Every link also adds its `WARNING` note.
 
 Every run prints every key in this order, on every exit path — `FX_DOCS_MISSING` only when `FX_DOCS=adopted`, `WARNING` only when it has a note.
 

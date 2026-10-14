@@ -14,12 +14,20 @@
 #   - Resolves the repository root itself; every check is relative to that root,
 #     so a run from a subdirectory prints the same values as a run from the root.
 #   - Never writes anything, anywhere.
-#   - Never reads through a symlink, at any depth. Every probe goes through safe(),
-#     which rejects a path that is absolute, contains "..", or has a symlink at
-#     any ancestor component below the root: `docs -> /elsewhere` makes every
-#     docs/... probe absent, never adopted. The final component is then checked
-#     too: content checks run only on regular files (is_plain), and directories
-#     are only listed when they are real directories (is_dir).
+#   - Never reads through a symlink, at any component. Every probe goes through
+#     safe(), which rejects a path that is absolute, contains "..", or has a
+#     symlink at ANY component below the root — ancestors and the final one —
+#     and notes it in WARNING. A rejected path is absent, per key:
+#       FX_DOCS           a symlinked marker (docs/index.yml, docs/changes, or an
+#                         ancestor) is no marker: never adopted on a link.
+#       FX_DOCS_MISSING   a symlinked docs-layer path is listed as missing.
+#       FX_INSTRUCTIONS*  the one place a link is named in a value: a symlinked
+#                         AGENTS.md / REVIEW.md is listed as "<file>(symlink)",
+#                         found by lstat only and never read, and makes the layer
+#                         partial, never adopted. fx-upgrade migrates it.
+#       NATIVE_*, DOCS_SITE  a symlinked path is omitted.
+#     Directory scans (find) never follow links; a link found inside a scanned
+#     directory is noted, not read.
 #   - Always exits 0. A missing file is an answer, not an error.
 #   - Every exit path prints every key below, through the one emit function. A
 #     caller parsing the output never has to tell "key missing" from "empty".
@@ -43,8 +51,10 @@
 #   WARNING=<note>[ | <note>]...
 #                       (printed only when there is a note: "could not enter <root>;
 #                       nothing was checked" — every value above is then a default,
-#                       not a finding — or "<path> is a symlink; nothing under it
-#                       was read", or "<path> leaves the repository; not read")
+#                       not a finding — or "<path> is a symlink; not read",
+#                       "<path> is a symlink; nothing under it was read" (an
+#                       ancestor), "<dir> contains symlinks; they were not read",
+#                       or "<path> leaves the repository; not read")
 #
 # GitHub issues are deliberately not checked: that needs the network. A caller
 # that needs a tracker runs `gh repo view --json hasIssuesEnabled` itself.
@@ -91,10 +101,10 @@ if [ -z "$REPO_ROOT" ] || ! cd "$REPO_ROOT" 2>/dev/null; then
     emit
 fi
 
-# A probe path is safe when it is relative, has no ".." component, and no ancestor
-# component (every component but the last) is a symlink. -f/-d/-e on a/b/c follow a
-# symlinked a or b silently, so checking only the last component reads through
-# them; a path that fails here is absent, with a WARNING note naming why.
+# A probe path is safe when it is relative, has no ".." component, and NO component
+# — ancestors and the final one — is a symlink. -f/-d/-e follow a link at any
+# component silently, so every test below runs only after safe() passed; a path
+# that fails is absent, with a WARNING note naming the link.
 safe() {
     local p=$1 acc="" c i n
     case "$p" in
@@ -103,21 +113,27 @@ safe() {
     local -a parts
     IFS='/' read -ra parts <<<"$p"
     n=${#parts[@]}
-    for ((i = 0; i < n - 1; i++)); do
+    for ((i = 0; i < n; i++)); do
         c=${parts[i]}
         [ -z "$c" ] || [ "$c" = . ] && continue
         acc=${acc:+$acc/}$c
-        if [ -L "$acc" ]; then note "$acc is a symlink; nothing under it was read"; return 1; fi
+        if [ -L "$acc" ]; then
+            if [ "$i" -eq $((n - 1)) ]; then note "$acc is a symlink; not read"
+            else note "$acc is a symlink; nothing under it was read"; fi
+            return 1
+        fi
     done
     return 0
 }
-# -e follows symlinks, so a dangling link reads as absent. Always pair it with -L.
-exists()   { safe "$1" && { [ -e "$1" ] || [ -L "$1" ]; }; }
-is_plain() { safe "$1" && [ -f "$1" ] && [ ! -L "$1" ]; }
-is_dir()   { safe "$1" && [ -d "$1" ] && [ ! -L "$1" ]; }
+exists()   { safe "$1" && [ -e "$1" ]; }
+is_plain() { safe "$1" && [ -f "$1" ]; }
+is_dir()   { safe "$1" && [ -d "$1" ]; }
+# find never follows links (no -L); note any link a scan of a real directory meets,
+# so a link inside it is reported rather than silently skipped.
+scan_links() { [ -n "$(find "$1" -maxdepth "$2" -type l -print -quit 2>/dev/null)" ] && note "$1 contains symlinks; they were not read"; return 0; }
 # A real directory holding at least one markdown file, at most two levels down
-# (docs/specs/<name>/index.md, docs/adr/0001-x.md). find does not follow symlinks.
-has_md()   { is_dir "$1" && [ -n "$(find "$1" -maxdepth 2 -type f -name '*.md' -print -quit 2>/dev/null)" ]; }
+# (docs/specs/<name>/index.md, docs/adr/0001-x.md).
+has_md()   { is_dir "$1" && scan_links "$1" 2 && [ -n "$(find "$1" -maxdepth 2 -type f -name '*.md' -print -quit 2>/dev/null)" ]; }
 
 join() { local out="" x; for x in "$@"; do [ -n "$x" ] && out="${out:+$out }$x"; done; printf '%s' "$out"; }
 
@@ -127,7 +143,7 @@ join() { local out="" x; for x in "$@"; do [ -n "$x" ] && out="${out:+$out }$x";
 FX_DOCS=not-adopted
 if is_plain docs/index.yml; then
     FX_DOCS=adopted
-elif is_dir docs/changes && [ -n "$(find docs/changes -maxdepth 1 -type f -name '[0-9][0-9][0-9][0-9]-*.md' -print -quit 2>/dev/null)" ]; then
+elif is_dir docs/changes && scan_links docs/changes 1 && [ -n "$(find docs/changes -maxdepth 1 -type f -name '[0-9][0-9][0-9][0-9]-*.md' -print -quit 2>/dev/null)" ]; then
     FX_DOCS=adopted
 fi
 
@@ -142,15 +158,19 @@ if [ "$FX_DOCS" = adopted ]; then
 fi
 
 # ── instruction layer ─────────────────────────────────────────────────────────
+# A symlinked file is named "(symlink)" — found by lstat, never read — so fx-upgrade
+# can migrate it; it makes the layer partial, never adopted.
 present=()
+plain=0
 for f in AGENTS.md REVIEW.md; do
-    if [ -L "$f" ]; then present+=("$f(symlink)")
+    if is_plain "$f"; then present+=("$f"); plain=$((plain + 1))
+    elif [ -L "$f" ]; then present+=("$f(symlink)")
     elif exists "$f"; then present+=("$f")
     fi
 done
-if is_plain AGENTS.md && is_plain REVIEW.md; then
+if [ "$plain" -eq 2 ]; then
     FX_INSTRUCTIONS=adopted
-elif ! exists AGENTS.md && ! exists REVIEW.md; then
+elif [ ${#present[@]} -eq 0 ]; then
     FX_INSTRUCTIONS=not-adopted
 else
     FX_INSTRUCTIONS=partial
@@ -198,9 +218,11 @@ NATIVE_REVIEW_RULES=$(join "${review[@]+"${review[@]}"}")
 changelog=()
 for f in CHANGELOG.md CHANGES.md HISTORY.md; do is_plain "$f" && changelog+=("$f"); done
 for d in .changeset changelog.d newsfragments; do is_dir "$d" && changelog+=("$d/"); done
+releaserc=0
+for f in .releaserc*; do exists "$f" && releaserc=1; done
 if exists release-please-config.json || exists .release-please-manifest.json; then
     changelog+=("generated-by:release-please")
-elif [ -n "$(find . -maxdepth 1 -name '.releaserc*' -print -quit 2>/dev/null)" ]; then
+elif [ "$releaserc" = 1 ]; then
     changelog+=("generated-by:semantic-release")
 elif exists .changeset/config.json; then
     changelog+=("generated-by:changesets")
