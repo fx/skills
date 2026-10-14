@@ -50,7 +50,10 @@ gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status" \
 ```
 
 Exclude `codecov/*` contexts and the `CodeRabbit` check — their references own
-them.
+them. **Excluded is not dropped, and never flaky or infrastructure:** list each
+failing excluded check under "Owned by another source" in the hand-off, so the
+caller routes it to that source instead of reading a failed run with no CI finding
+as a transient one.
 
 If you read checks through `gh pr checks` instead, select
 `bucket == "fail" or bucket == "cancel"`. It has no field for a run's final
@@ -99,6 +102,7 @@ pushed first.
 CI failures — head <sha>
 - <check> (<workflow>): <category> — <root cause, file:line> — evidence: <annotation or log excerpt>
 Reported, not fixed: <check>: infrastructure | flaky — <evidence>
+Owned by another source: <check> → coderabbit | codecov | none
 Base-branch conflict: yes | no
 ```
 

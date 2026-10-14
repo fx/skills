@@ -66,6 +66,7 @@ produces tests nobody asked for.
 | Comment shows 0 missing lines and the patch % meets the threshold | Clean |
 | Comment shows any missing lines, even with a passing status | Coverage gap |
 | No comment, but a `codecov/*` status is `failure` or `error` | Coverage gap |
+| Comment clean, but a `codecov/*` status is `failure` or `error` — usually `codecov/project` | Not a patch gap and not flaky: report it as Codecov's, with the status description, for the user's decision. The failing check still gates the merge |
 | No Codecov data at all | § Not configured |
 
 ## Locate the uncovered lines

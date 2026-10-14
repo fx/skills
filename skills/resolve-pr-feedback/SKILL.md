@@ -182,6 +182,12 @@ unsettled. Detecting it by threads alone reports it absent, skips its reference
 and its `## Converged` condition, and lets the run report settled over a review
 that never finished.
 
+**A failing check excluded from `ci` is its owner's, and is reported against that
+owner even when the owner is not in `sources:`** — a failing `CodeRabbit` check
+under `sources: ci,codecov` is reported as CodeRabbit's, not dropped. Excluding it
+from CI without naming it leaves a failed run with no failure anyone owns, which
+the caller then reads as flaky or infrastructure.
+
 **Load `references/<source>.md` for each source that is present and in `sources:`
 scope — and only those.** An unscoped run also loads `references/copilot.md` when
 Copilot is absent, for its convergence condition: Copilot review is mandatory
@@ -371,6 +377,7 @@ none. If threads remain, report which reviewers still have open feedback.
 - coderabbit: present (check <state>, 3 unresolved threads) | absent | not requested
 - codecov: present (patch 65%, threshold 80% from codecov.yml) | absent | not requested
 - ci: present (2 failed checks) | absent | not requested
+- Failing checks owned by another source: <check> → <source> (<present | not requested>) | none
 - Uncategorised automated reviewers: <name>: <n> unresolved — no reference here (or "none seen")
 
 ### Loaded references
