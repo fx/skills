@@ -136,13 +136,15 @@ uploads coverage; every open Codecov thread is settled either way.
 - **Coverage gaps returned** — the § Hand-off set went to the caller's batched
   fix, or the standalone implementer pushed `<sha>`: next action "wait on CI for
   `<sha>`, then invoke with `codecov`" (`dev` 7.1 → 7.2).
-- **`configured, no report on head <sha>`** (§ Configured) — first report: next
-  action "re-run the CI wait once for `<sha>`, then invoke with `codecov`"
-  (`dev` 7.2).
+- **`configured, no report on head <sha>`** (§ Configured) — first report after a
+  `TERMINAL_PASS` or `TERMINAL_FAIL` CI verdict: next action "re-run the CI wait
+  once for `<sha>`, then invoke with `codecov`" (`dev` 7.2). After
+  `NOT_CONFIGURED` there is no CI to re-wait, so it is the hand-back below at once.
 - **`not configured`** — absent; gates nothing.
 - **Hand-back**, the user's decision:
   - **Codecov did not report on this head** — `configured, no report` reported a
-    second time, after the caller's one re-wait, with no failed `codecov/*`
+    second time, after the caller's one re-wait, or once on a head with no CI at
+    all, with no failed `codecov/*`
     status (a failed one is a coverage gap, § Assess). Report "Codecov did not
     report on head `<sha>`" with any status states; not a pass, not a gap.
   - **A `codecov/*` status fails with no patch gap** (§ Assess).

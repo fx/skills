@@ -432,7 +432,8 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/coderabbit-review/scr
 # LATER — once the reviewers above have converged on this head:
 Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> \
         > [AGENT_DIR]/team/waits/ci-<PR_NUMBER>.log 2>&1
-# On its terminal verdict — TERMINAL_PASS too — `dev` Step 7.2: `resolve-pr-feedback`
+# On its terminal verdict — TERMINAL_PASS and NOT_CONFIGURED too; PENDING twice and
+# ERROR are hand-backs to the user — `dev` Step 7.2: `resolve-pr-feedback`
 # with `sources: ci,codecov`. It is the only Codecov pass in the lifecycle.
 
 # On each wake — a notification, or the wait_agent that returns: read the log,
@@ -455,7 +456,7 @@ Waiters exist for Copilot and CodeRabbit only, and those are the only two this w
 
 Apply `dev` Steps 2.5 and 6.3 as the canonical reviewer policy: maintain the coordinator-owned finding ledger, fix every **blocking** finding and only those (`[SKILLS_DIR]/dev/references/scope-contract.md` § Blocking — the class name does not decide it; a reviewer-originated Material or Substantive entry blocks whatever its class), and rerun only reviewer state invalidated by the latest delta. Do not restart every reviewer after each push or seek zero suggestions. Settle all required threads within the bounded remediation rounds. **If CodeRabbit reports a rate/quota limit or cooldown at any point, stop its loop immediately, report once, record `skipped (rate-limited)`, and continue without waiting or escalating — after fixing the blocking findings it already delivered and settling every thread it already posted.** The degradation waives only the passes that never ran (`coderabbit-review`, rate-limit rule), never work already on the PR. Copilot must still satisfy its mandatory review gate.
 
-If CodeRabbit is not configured (its waiter reports `STATUS=NOT_CONFIGURED`, exit 3), report once and proceed — that status is terminal, so never retry or wait it out. Do not silently skip ordinary failures; the optional exception is specifically for CodeRabbit throttling.
+If CodeRabbit is not configured (its waiter reports `STATUS=NOT_CONFIGURED`, exit 3), report once and proceed — that status is terminal, so never retry or wait it out — after settling any CodeRabbit thread already on the PR (`coderabbit-review`'s `NOT_CONFIGURED` row). Do not silently skip ordinary failures; the optional exception is specifically for CodeRabbit throttling.
 
 ### Browser Verification Gate (Gate 6)
 

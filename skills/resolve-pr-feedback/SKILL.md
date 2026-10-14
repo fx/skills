@@ -403,7 +403,7 @@ state as it stands is the answer, and the caller's loop acts on it.
 | Copilot absent, stale or `configured, no report on head` | "request and wait for Copilot on `<sha>`" — Copilot review is mandatory | `copilot-review` Steps 1–2; `dev` 6.3 |
 | CodeRabbit check pending, or `configured, no report on head` | "wait on CodeRabbit for `<sha>`" | `coderabbit-review` Step 1; `dev` 6.3 |
 | CI `configured, no report on head` (checks pending) | "wait on CI for `<sha>`" | `dev` 7.1 |
-| Codecov `configured, no report on head` | "re-run the CI wait once for `<sha>`, then re-invoke with `codecov`" | `dev` 7.2 |
+| Codecov `configured, no report on head` | after a `TERMINAL_*` CI verdict: "re-run the CI wait once for `<sha>`, then re-invoke with `codecov`"; on a head with no CI (`NOT_CONFIGURED`): the "did not report on head" hand-back at once | `dev` 7.2 |
 | A reference's hand-back | "hand-back: `<reason>`" — the user's decision | the caller, then the user |
 
 **Standalone** — the user invoked this skill — end with that list addressed to

@@ -99,8 +99,8 @@ on STATUS, not on prose.
 | `TERMINAL_PASS` | 0 | Check settled clean, zero unresolved threads → the gate is met. Go to Step 1b only if you still need to read findings. |
 | `TERMINAL_FAIL` | 1 | Settled with a failing conclusion, or unresolved threads remain → **Step 1b**; where Step 1b finds no unresolved CodeRabbit thread, **Step 1c**. Do not re-run for a better answer. |
 | `PENDING` | 2 | Still running at budget expiry. **Not a verdict, not a failure.** Re-running once is safe and correct if you still need it; `PENDING` again on that re-run is a hand-back: "CodeRabbit check still pending on head `<sha>`." Never record it as "no findings". |
-| `NOT_CONFIGURED` | 3 | The App is not installed for this repo. **Terminal — report once and proceed without the PR-level gate. Never retry, never wait.** A coordinator running several PRs also caches it per `[SKILLS_DIR]/dev/references/head-discipline.md` § Reviewer availability is cached for the run, rather than re-establishing it on each PR. |
-| `ERROR` | 4 | Bad args or `gh` failure; the wait never started → report. If it identifies a rate/quota limit, take the exception above. |
+| `NOT_CONFIGURED` | 3 | The App is not installed for this repo. **Terminal — report once and proceed without the PR-level gate. Never retry, never wait.** A CodeRabbit thread already on the PR — from before the App was removed — is still settled: Step 1b, then Step 2 (`resolve-pr-feedback`, `sources: coderabbit`, which reports it `not configured` with the threads settled). A coordinator running several PRs also caches it per `[SKILLS_DIR]/dev/references/head-discipline.md` § Reviewer availability is cached for the run, rather than re-establishing it on each PR. |
+| `ERROR` | 4 | Bad args or `gh` failure; the wait never started → report — a hand-back to the user, never Step 1b. If it identifies a rate/quota limit, take the exception above. |
 
 `UNRESOLVED_THREADS=unknown` means the read **failed**, not that there are none;
 the script fails closed on it. Verify the threads yourself with Step 1b's query

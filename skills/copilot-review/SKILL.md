@@ -225,9 +225,9 @@ on STATUS, not on prose.
 |---|---|---|
 | `TERMINAL_PASS` | 0 | A review covers the current head and no Copilot thread is open → **Step 2b**, then Step 4 to confirm. |
 | `TERMINAL_FAIL` | 1 | A review covers the current head and threads remain open (or the count could not be read) → **Step 2b**, then Step 3. Settled — do not re-run for a better answer. Where the count could not be read, Step 3's paginated read is the check; if it fails too, after one retry, hand back "Copilot threads unreadable on head `<sha>`" — never a zero, never another wait. |
-| `PENDING` | 2 | No review of the current head arrived within 900 s. **Not a failure and not a clean result.** Re-running is safe. If it still has not arrived, STOP and report: "Copilot review has not arrived for PR #N head `<sha>`. Cannot merge without it." **Never** record this as "no findings". |
+| `PENDING` | 2 | No review of the current head arrived within 900 s. **Not a failure and not a clean result.** Re-running is safe. If it still has not arrived, STOP and report — a hand-back to the user, never Step 3: "Copilot review has not arrived for PR #N head `<sha>`. Cannot merge without it." **Never** record this as "no findings". |
 | `NOT_CONFIGURED` | 3 | **Never returned by this script.** Whether Copilot is "configured" has no answerable form — `requested_reviewers` does not work at all (**D1/D3**). Do not branch on it, and do not reinstate any "request again, then re-run" recovery keyed to it. |
-| `ERROR` | 4 | Bad arguments, `gh` too old, PR head unresolvable → report to the user. The wait never started. |
+| `ERROR` | 4 | Bad arguments, `gh` too old, PR head unresolvable → report to the user — a hand-back, never Step 3. The wait never started. |
 
 On a settled review the script also prints machine-readable lines; read them rather
 than branching on STATUS alone:
