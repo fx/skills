@@ -206,7 +206,7 @@ Create a comprehensive requirements document:
 
 Your requirements end with an outline the implementer can work from step by step.
 
-- **Contract first.** With an approved change document, its task list is the plan: map every outline step onto a task in it, and add no step no task covers — new work needs an approved amendment first (`dev` Step 2.5 freezes that contract). Without one, the Scope Brief is the contract.
+- **Contract first.** With an approved contract document — an fx change document, or in a repo that has not adopted the fx docs layout the native design or decision document the request or issue names (`dev` Step 2.5 confirms its approval) — its task list or plan section is the plan: map every outline step onto a task in it, and add no step no task covers — new work needs an approved amendment first (`dev` Step 2.5 freezes that contract). Without one, the Scope Brief is the contract.
 - **Every step traces to the request, an approved change document, or a spec it links** — and names which. A step you cannot trace does not go in.
 - **Atomic and ordered.** Each step is one commit-sized change: the files it touches, what changes, and the tests that prove it.
 - **Flag several PRs** when the work needs them, with the reason. Several PRs where one was implied is a stop-and-report (`[SKILLS_DIR]/dev/references/scope-contract.md` § The sprawl stop rule), not a plan to carry on with.

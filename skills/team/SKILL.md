@@ -116,6 +116,8 @@ Before spawning anything, write down the **Scope Brief**. It is what every teamm
 
 **Every implementer prompt, every verify prompt, and every reviewer invocation MUST include this brief verbatim.** A reviewer that does not know what was asked for reports the work the team deliberately did not do, and the coordinator pays for it in filtering time on every PR.
 
+**Run the docs-layout check once for the whole run, now** — `dev` Step 2.5's `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh` — and record its output with the brief; every change's Step 2.5 reuses it rather than re-running it (`fx-setup` → `references/adoption.md` § Running the check).
+
 ### The sprawl STOP rule for autonomous runs
 
 <!--
@@ -288,11 +290,11 @@ Two constraints worth knowing rather than rediscovering:
 
 **Implementation steps** (planning, coding, testing) → Spawn focused agents. For any implementer that will run **concurrently** with another, give it an isolated worktree via STEP 2.5 and start its prompt with the worktree preamble — do NOT rely on `isolation: "worktree"` (it's a no-op for teammates; see the prohibition above). Give each agent ONLY its specific job — the change doc path, spec path, plan, and acceptance criteria. Do NOT tell it to follow the full SDLC. Always pass the handle (see above).
 
-**Tracking updates ride in the implementation commit** (`[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head). Every implementer prompt MUST tell it to check off, in the same commit series as the code, the tracking items its own PR completes (`docs/tasks.md`, the change doc's task list). The Status-flip split below is the same rule applied to the one field that must not flip early.
+**Tracking updates ride in the implementation commit** (`[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head). Every implementer prompt MUST tell it to check off, in the same commit series as the code, the tracking items its own PR completes (the tracking doc the approved scope names — in an fx-adopted repo, `docs/tasks.md` or the change doc's task list). The Status-flip split below is the same rule applied to the one field that must not flip early.
 
 **A tracking-only commit later in the lifecycle is a defect, not an alternative.** It is not impossible — the recovery path below exists for exactly that — but it costs what this ordering was written to avoid: the push moves the head, so it re-enters at step 7 of § The candidate head and re-spends the hosted-review and CI cycles it invalidated. Treat one as an implementer prompt that was missing this instruction, and fix the prompt for the next PR.
 
-When you spawn the implementer for the FINAL piece of a change, your prompt MUST include: "This is the final implementing PR for <change>. In the same commit, flip `**Status:** draft` → `**Status:** complete` in `docs/changes/<NNNN>-*.md` AND flip `status: draft` → `status: complete` for that change's entry in `docs/index.yml`. Sync `docs/index.md` if present." For every NON-final implementer on the same change, your prompt MUST include: "Leave the change-doc `**Status:**` field and `docs/index.yml` entry untouched — the final PR flips them." This split prevents rebase-conflict storms across multi-PR changes and ensures the final PR carries the Status flip atomically.
+**In an fx-adopted repo** (`dev` Step 2.5 recorded `FX_DOCS=adopted`), when you spawn the implementer for the FINAL piece of a change, your prompt MUST include: "This is the final implementing PR for <change>. In the same commit, flip `**Status:** draft` → `**Status:** complete` in `docs/changes/<NNNN>-*.md` AND flip `status: draft` → `status: complete` for that change's entry in `docs/index.yml`. Sync `docs/index.md` if present." For every NON-final implementer on the same change, your prompt MUST include: "Leave the change-doc `**Status:**` field and `docs/index.yml` entry untouched — the final PR flips them." This split prevents rebase-conflict storms across multi-PR changes and ensures the final PR carries the Status flip atomically. For a native contract document, flip its own status field only if it has one and its convention sets it on implementation, under the same final-PR-only rule; otherwise there is nothing to flip.
 
 **⛔ Every spawn prompt that may open or edit a PR MUST carry the PR conventions block verbatim (BLOCKING).** Load `github` BEFORE you author your first spawn prompt, and paste its **"PR conventions block"** into the prompt of every agent that might run `gh pr create` or `gh pr edit` — a PR preparer, or any other agent you let touch PR metadata. Implementers never do: the Implementer role opens and edits no PR. A convention that lives only in a skill nobody loads does not survive delegation: a spawned agent inherits your prompt, not your skills.
 
@@ -397,7 +399,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 | 2 | **Copilot review RECEIVED and feedback RESOLVED** | Invoke `copilot-review` skill — confirm 0 unresolved Copilot threads | YES |
 | 2b | **CodeRabbit reviewed or correctly degraded** | Invoke `coderabbit-review`: prefer a passing check with received feedback resolved; if CodeRabbit rate-limits, report once, resolve what it already delivered (blocking findings fixed, every posted thread settled), and record `skipped (rate-limited)` without blocking | NO when rate-limited |
 | 3 | **Implementation matches spec/task** | Read the diff and verify against requirements | YES |
-| 4 | **Spec task marked complete** | Check via project-management skill | YES |
+| 4 | **Spec task marked complete** | Per `dev` Step 8.2 — the `[DOC_PATH]` diff check; N/A when `[DOC_PATH]` is `none` | YES |
 | 5 | **PR description is clear** | Read PR body | YES |
 | 5b | **PR title is clean AND conventional** | Title (a) is a conventional-commit subject — run the canonical check from the `github` skill's "Use Conventional Formats" (a plain prose title with no `type:` prefix FAILS) — AND (b) has NO stray `#<number>` (only a real PR/issue ref) and NO wave/phase/step/change-doc number. Fix with `gh pr edit <N> --title "type(scope): …"` before merge — squash bakes the title into `main` | YES |
 | 5c | **PR body is NOT hard-wrapped** | Run the canonical **"Mechanical body check"** from the `github` skill — it exempts lists, tables and code blocks, judges only prose, and exits 1 printing `HARD-WRAPPED` when prose clusters in the 60-100 column band. Do NOT substitute a `sort -rn \| head` on line lengths: the longest lines are usually exempt ones, so it passes a body whose prose is entirely wrapped. Fix with `gh pr edit <N> --body-file <file>` and re-run before merging | YES |
@@ -490,6 +492,8 @@ duvet# The size, triviality, or follow-up status of a pull request MUST NOT be t
 
 ## PRE-MERGE: Change-Doc Status Flip (BLOCKING)
 
+**Scope:** this section applies when the change document is an fx change doc (`dev` Step 2.5 recorded `FX_DOCS=adopted`). A native contract document follows STEP 3's native-document rule; with no contract document, this section does not apply.
+
 **The FINAL PR for a change document MUST mark the change `complete` IN that PR — NOT in a follow-up.** A change doc still showing `**Status:** draft` after its last implementing PR merges is a bug; the docs lie about state and the index is out of sync with reality on `main`.
 
 There are two places to flip:
@@ -526,8 +530,8 @@ If a single PR is only a partial implementation of its change doc (more PRs to c
 
 When all tasks are complete and all PRs merged:
 
-1. Verify all spec tasks are marked done (load `project-management` to check)
-2. **Verify every implemented change is `status: complete`** on `main` — check both `docs/changes/<NNNN>-*.md` front-matter AND `docs/index.yml`. If any are still `draft`, you missed the pre-merge gate; open a corrective PR right now (the goal is the gate catches it pre-merge, but if it slipped, fix it before declaring done).
+1. Verify all spec tasks are marked done — `dev` Step 8.2's check against each PR's `[DOC_PATH]`; skip where it was `none`
+2. **In an fx-adopted repo,** **verify every implemented change is `status: complete`** on `main` — check both `docs/changes/<NNNN>-*.md` front-matter AND `docs/index.yml`. If any are still `draft`, you missed the pre-merge gate; open a corrective PR right now (the goal is the gate catches it pre-merge, but if it slipped, fix it before declaring done).
 3. Send shutdown requests to all active teammates (refer to each by `name`); each teammate approves and exits gracefully
 4. **Tear down every worktree created in STEP 2.5.** For each one, in order: remove the `node_modules` symlink first (so `git worktree remove` doesn't traverse into the shared deps), then `git worktree remove --force <path>`, then `git worktree prune`. Delete the branch with `git branch -D <branch>` only if it's unmerged/abandoned (a merged PR's branch is already gone from origin). Confirm `git worktree list` shows only the main repo and `git status` is clean before continuing.
 
@@ -563,10 +567,10 @@ When all tasks are complete and all PRs merged:
 - **NEVER mark a teammate's PR as ready** until you've inspected it
 - **ALWAYS own Copilot review and CI monitoring** — reading the result and classifying it are coordinator responsibilities, never a sub-agent's. Launch their waiters concurrently in your host's shape (§ Long waits); where that shape is a waiter child, it reports `STATUS=` and nothing more.
 - **ALWAYS pass a deliberate tier to every spawn** — see the size table in STEP 3. Implementers are `large`; never downgrade them. On Codex that also requires `fork_turns: "none"`, or the override is rejected and the teammate silently inherits your model.
-- **ALWAYS use `project-management`** to verify task tracking
+- **ALWAYS verify task tracking per `dev` Step 8.2**, never by loading `project-management` — an implementation run checks the tracking its own PRs wrote; it does not manage the backlog
 - **ALWAYS run the full merge gate checklist** even for "trivial" or "follow-up" PRs
 - **NEVER merge without browser verification** — spawn a verify agent if needed. CI alone does NOT catch runtime errors.
-- **NEVER merge the FINAL PR of a change doc with `Status: draft` still in the diff.** The flip to `complete` rides in that PR, in both `docs/changes/<NNNN>-*.md` and `docs/index.yml`. If the implementer forgot, send a fix agent to their branch, then re-enter hosted review and CI on the new head before merging (§ The candidate head). Do NOT defer to a follow-up PR. See PRE-MERGE: Change-Doc Status Flip above.
+- **In an fx-adopted repo,** **NEVER merge the FINAL PR of a change doc with `Status: draft` still in the diff.** The flip to `complete` rides in that PR, in both `docs/changes/<NNNN>-*.md` and `docs/index.yml`. If the implementer forgot, send a fix agent to their branch, then re-enter hosted review and CI on the new head before merging (§ The candidate head). Do NOT defer to a follow-up PR. See PRE-MERGE: Change-Doc Status Flip above.
 
 ## Handling Agent Issues
 

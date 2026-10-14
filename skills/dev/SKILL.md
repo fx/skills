@@ -283,7 +283,7 @@ included, not only reviewers. A reviewer without
 it reports the work you deliberately did not do, and every such finding costs a
 full review cycle to filter by hand.
 
-**Then freeze the implementation contract.** If the task is sourced from, names, or discovers a relevant `docs/changes/*.md` file, read it and the spec sections it links. Confirm implementation approval from the conversation or the change's recorded workflow state; if approval is unclear, STOP and ask the user. Record the contract path and approval evidence in the working brief. The change document, its linked specs, and all mandatory project rules form the implementation contract: the implementation outline and implementer prompt MUST map work to that contract and MUST NOT infer adjacent product or architecture work.
+**Then freeze the implementation contract.** If the task is sourced from, names, or discovers a relevant `docs/changes/*.md` file, read it and the spec sections it links. Confirm implementation approval from the conversation or the change's recorded workflow state; if approval is unclear, STOP and ask the user. Record the contract path and approval evidence in the working brief. The change document, its linked specs, and all mandatory project rules form the implementation contract: the implementation outline and implementer prompt MUST map work to that contract and MUST NOT infer adjacent product or architecture work. **Run the docs-layout check once, here** — `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh` — and record its output in the working brief with the contract path; Steps 4, 5, 8.2 and 8.4 read it from there (`fx-setup` → `references/adoption.md` § Running the check). Where it reports `FX_DOCS=not-adopted`, the contract document is the native design or decision document the request or issue names, and its approval evidence is that convention's own signal (an ADR marked `Accepted`, an RFC merged or labelled approved) or the user's word. No document named: the Scope Brief alone is the contract.
 
 The coordinator owns one in-memory finding ledger for the run; reviewer sub-agents return findings to the coordinator and MUST NOT mutate the ledger concurrently. Give every finding a stable fingerprint (`category + file + line/range + normalized claim`) and record its source, first-seen revision, classification, materiality tier, disposition, and verification evidence. Classification and materiality are independent fields — see Step 4.5 for how the tier is assigned. The tier is `n/a` for a contract blocker: filter 2 stops before the bar, so a rule violation is never ranked, and inventing a tier for one is the mistake that lets it be argued down. Classify each finding exactly once as:
 
@@ -324,19 +324,25 @@ Agent tool:
            - Treat the approved change document as the implementation contract
            - Do not implement non-blocking findings, or expand product/architecture, without an approved amendment (an entry blocking by tier is fixed whatever its class)
            - TASK TRACKING RIDES WITH THE IMPLEMENTATION: if [DOC_PATH or 'none']
-             tracks this work, mark the items this change actually completes
-             (- [x] Task name), and if this change completes the whole document
-             flip its Status to complete and sync docs/index.yml and docs/index.md.
-             Same commit series as the code — never a separate later commit.
+             tracks this work, mark the items this change actually completes, in
+             that document's own format (- [x] Task name in a change doc or task
+             list), and if this change completes the whole document flip its
+             Status to complete — plus, only when Step 2.5 recorded
+             FX_DOCS=adopted, sync docs/index.yml and docs/index.md. In a native
+             document, mark completion only in a field it already has, in its own
+             vocabulary. Same commit series as the code — never a separate later
+             commit.
            - Do NOT create PR"
   description: "Implement changes"
 ```
 
-Identify `[DOC_PATH]` before spawning — the change document or task list named in the request, or:
+Identify `[DOC_PATH]` before spawning: the change document or task list the request names, or — **only when Step 2.5 recorded `FX_DOCS=adopted`** — the result of:
 
 ```bash
 grep -rl "keyword from task" docs/changes/ docs/tasks.md 2>/dev/null || true
 ```
+
+**Not adopted:** `[DOC_PATH]` is the tracker the request or issue names, else `none`. Do not grep native files for keyword matches — checking off a roadmap line by guess is a guess, not best effort. Issue-tracked work closes through `Closes #N` in the PR body (Step 5).
 
 **Tracking updates belong here, not at finalization** — they ride with the implementation at step 1 of `references/head-discipline.md` § The candidate head, where step 5 later confirms none is outstanding. Nothing about them needs the PR to exist.
 
@@ -537,22 +543,12 @@ Record the candidate head in the ledger. From here on `references/head-disciplin
 
 **⛔ NEVER use the `--draft` flag. NEVER create draft PRs.** Draft PRs have repeatedly been used as an excuse to skip downstream steps (reviewer waits, CI monitoring, CodeRabbit/Copilot resolution). The SDLC ALWAYS executes the full review/CI cycle from PR creation onward — opening as draft defeats this. If the work isn't ready for review, don't open the PR yet.
 
-**Before creating the PR, identify related spec and change documents:**
-
-```bash
-# Find related change documents (check if task was sourced from a change doc)
-ls docs/changes/ 2>/dev/null
-# Find related specs
-ls docs/specs/ 2>/dev/null
-cat docs/index.yml 2>/dev/null
-```
-
-If the work was driven by a specific change document or spec, note the paths for inclusion in the PR description.
+**Take the related contract and spec paths from the working brief** — Step 2.5 recorded them, whatever convention they follow — and link them in the body.
 
 **Before `gh pr create`, confirm every item** — this is the checklist the old preparer prompt carried:
 - **The head.** The branch is already pushed at its candidate head (Step 4.7). Commit or amend nothing; the PR is created on that exact SHA.
 - **The title** follows the PR conventions block: a conventional-commit subject whose type comes from the dominant change; lowercase after the colon, imperative, no trailing period; no `#<number>` unless N is a real PR or issue on this repo that the PR references, and never a `(#N)` suffix; no wave, phase, step, or change-doc number, slug or path — even when the PR finalizes a change doc, reference the doc by path in the body only (`github` § The `#<number>` PR-Title Rule). A title taken from the task, an issue or the branch name is reformed, never passed through.
-- **The body** follows the block: why; `Closes #N` for the issue this run started from, if any; the related spec/change docs as repo-relative paths (e.g. `docs/specs/auth/` or `docs/changes/0003-add-oauth.md`); breaking changes and non-obvious decisions; and the Step 4.6 **Test plan with its recorded results** — verified items `- [x]`, failures the user accepted `- [ ] … — FAILED: <reason> (accepted by user)`, manual-only items `- [ ] … — requires manual testing`. An unaccepted failure never reaches here; Step 4.6.4 escalates it instead.
+- **The body** follows the block: why; `Closes #N` for the issue this run started from, if any; the contract and spec paths Step 2.5 recorded, as repo-relative paths; breaking changes and non-obvious decisions; and the Step 4.6 **Test plan with its recorded results** — verified items `- [x]`, failures the user accepted `- [ ] … — FAILED: <reason> (accepted by user)`, manual-only items `- [ ] … — requires manual testing`. An unaccepted failure never reaches here; Step 4.6.4 escalates it instead.
 - **No draft language** — no "draft", "WIP" or "for review" anywhere in the title or body.
 
 Write the body to a file, run the Mechanical body check against that file, then create the PR:
@@ -936,19 +932,21 @@ will fail on a non-draft PR.
 **Task tracking is written in Step 4 and confirmed in Step 4.7. This step verifies it; it does not push.**
 
 ```bash
-git diff main --name-only | grep -E 'docs/(changes/|tasks\.md|index\.ya?ml|index\.md)' || true
+git diff main --name-only -- "[DOC_PATH]"
+# only when Step 2.5 recorded FX_DOCS=adopted:
+git diff main --name-only -- docs/index.yml docs/index.md
 ```
 
 Confirm in the diff:
-- Items this PR actually completes are checked off (`- [ ]` → `- [x]`); items it did not address are untouched
-- If this PR completes the whole change document, its Status is `complete`
-- `docs/index.yml` and `docs/index.md` agree with it
+- Items this PR actually completes are checked off (`- [ ]` → `- [x]`) in the document's own format; items it did not address are untouched
+- If this PR completes the whole change document, its status field — where it has one — says so
+- Adopted only: `docs/index.yml` and `docs/index.md` agree with it
 
 **A missing tracking update here is a Step 4 defect, and fixing it costs a full re-verification cycle.** Have an implementer sub-agent (`dev`, Implementer role) write and push it anyway — the docs must not lie on `main` — then treat the new SHA as a candidate head: re-run Step 7 and re-verify Step 8.1 against it (`references/head-discipline.md` § The candidate head). Do not merge on the gates you collected for the parent commit.
 
 **`(PR #N)` annotations are optional and never worth a commit.** The PR number is unknown when tracking is written in Step 4; add it only if some other batched push happens to be going out anyway. A tracking line without it is not a defect — the merge commit links the two.
 
-If no relevant tracking doc exists, skip this step.
+If `[DOC_PATH]` is `none`, skip this step.
 
 #### 8.4 Report to User
 
@@ -960,6 +958,8 @@ Changes:
 
 Awaiting your approval to merge.
 ```
+
+If Step 2.5 recorded a layer as not adopted and a step was skipped or redirected because of it, append the matching block from `fx-setup` → `references/adoption.md` § Report — once, here, not at each step.
 
 <!--
 duvet= docs/specs/fx-dev-authority/index.md#dev-runs-require-user-approval-before-merge
