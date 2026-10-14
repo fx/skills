@@ -99,7 +99,7 @@ Deliberately uncovered: <path:lines> — <why>
 
 ## Not configured
 
-No status, comment or annotation on the head: check for `codecov.yml` /
+No status, comment or annotation on the PR at all: check for `codecov.yml` /
 `.codecov.yml` and for `codecov/codecov-action` in `.github/workflows/`, report
 "Codecov does not appear to be configured for this repository", and treat the
 source as absent — not as a failure.
@@ -112,4 +112,17 @@ untestable), and the head's `codecov/*` statuses pass — read after the CI wait
 for that head reached a terminal verdict, since Codecov reports only once CI
 uploads coverage. That wait is `dev` Step 7.1's under a coordinator and
 `resolve-pr-feedback` Step 5's on a standalone run, where it runs every cycle,
-pushed or not.
+pushed or not. Every open Codecov thread is settled either way.
+
+It hands back, never loops, when:
+
+- **Codecov did not report on this head** — the CI wait reached a terminal
+  verdict for the head and no Codecov comment names it (§ Collect's stale-comment
+  rule), and no `codecov/*` status on it has failed (a failed one is a coverage
+  gap, § Assess). Report "Codecov did not report on head `<sha>`" with any status
+  states; it is not a pass and not a coverage gap. Waiting again cannot change
+  it: Codecov's input was CI, and CI is done.
+- **A `codecov/*` status fails with no patch gap** (§ Assess) — report it as
+  Codecov's for the user's decision.
+- **Gaps remain after the one fix iteration** (§ Hand-off to Step 3) — report
+  them for the user's decision.

@@ -114,3 +114,14 @@ that wait is the caller's (`dev` Step 7.1) and `resolve-pr-feedback` never runs
 one; on a standalone unscoped run, `resolve-pr-feedback` Step 5 runs `dev`'s CI
 waiter itself on every cycle, pushed or not, because no one else will and the
 condition otherwise has no action that can satisfy it.
+
+It hands back, never loops, when the wait for the current head reports:
+
+- **`TERMINAL_FAIL` with nothing fixable** — every failure is flaky or
+  infrastructure (§ Categorise), or owned by another source (§ Select the
+  failing checks): report them with the evidence.
+- **`NOT_CONFIGURED`** — after § Conflict check: a conflict goes back as the
+  blocking finding it is; otherwise report "no CI ran on head `<sha>`", which is
+  not a pass.
+- **`PENDING` again on its re-run, or `ERROR`** — report the wait as unfinished
+  or failed; never read either as a verdict.

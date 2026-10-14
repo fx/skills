@@ -96,10 +96,16 @@ presented as a concrete-looking value instead of an obvious absence.
 
 "Received" is the only condition — never "was requested": the request API is
 inert, so whether a request happened is not a determinable fact (`copilot-review`
-**D1**). After a push Copilot does not re-review on its own: nudge it through
-`copilot-review` Step 1, fire-and-forget, and judge only the delivered review. No
-push, no nudge — a cycle that only replied and resolved left the head where a
-review already covers it.
+**D1**). **The action that satisfies it:** whenever no Copilot review covers the
+head — after a push, since Copilot does not re-review on its own, or because it
+never reviewed this head — nudge it through `copilot-review` Step 1,
+fire-and-forget, wait with `copilot-review`'s waiter, and judge only the delivered
+review. A head a review already covers needs no nudge.
+
+**Hand back** when that waiter reports `PENDING` again on its re-run —
+`copilot-review`'s `PENDING` row: "Copilot review has not arrived for head
+`<sha>`" — or `ERROR`, with its message. Copilot is mandatory, so this is a
+hand-back to the caller, never a pass and never another cycle.
 
 A *Needs a closer look* verdict with zero open threads passes, and a suppressed
 block never extends the loop.

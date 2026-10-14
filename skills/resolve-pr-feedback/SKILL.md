@@ -162,14 +162,15 @@ rather than dropping it** — list the reviewer and its open threads as
 uncategorised, so the caller knows a merge gate is left for it to settle by hand.
 Silently omitting them is what makes a clean report here read as a clean PR.
 
-**(b) Reviews, checks, statuses and comments on the head:**
+**(b) Reviews, checks, statuses and comments:**
 
 ```bash
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
-# Unfiltered reads — the table below selects each source by author login or check name.
+# Unfiltered reads — the table below selects each source by author login or check
+# name, and keeps only what is about HEAD_SHA (a review's commit_id, a comment's SHA).
 gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews"           # copilot, coderabbit reviews
 gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/check-runs"       # CodeRabbit check, ci
 gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status"                              # codecov/*, CodeRabbit, ci (combined status)
@@ -177,12 +178,31 @@ gh api --paginate --slurp "/repos/${REPO_NWO}/issues/${PR_NUMBER}/comments"     
 gh pr view "$PR_NUMBER" --json mergeable,mergeStateStatus                           # ci: base-branch conflict
 ```
 
-| Source | Present when |
+**Presence is defined here, once, and every other section uses this definition.**
+A source is present on exactly two kinds of signal:
+
+- **Threads — PR-wide.** An unresolved thread (a) categorised to the source. A
+  thread is settled whatever head it was raised on, so it makes the source
+  present for Steps 2–4 regardless of `HEAD_SHA`.
+- **Head evidence — head-scoped.** A signal *about `HEAD_SHA`*, per the table
+  below. It makes the source present for Step 5's convergence test, which is a
+  claim about this head and nothing else.
+
+| Source | Head evidence — on `HEAD_SHA` only |
 |---|---|
-| copilot | A review on the PR whose `user.login` is one of Copilot's § Supported Reviewers logins — never the bare `Copilot` — or a thread (a) categorised copilot |
-| coderabbit | A check run or status named `CodeRabbit` on `HEAD_SHA` in any state, a review or issue comment whose `user.login` is one of CodeRabbit's § Supported Reviewers logins, or a thread (a) categorised coderabbit |
-| codecov | A status context on `HEAD_SHA` starting `codecov/`, an issue comment whose `user.login` is one of Codecov's § Supported Reviewers logins, or a thread (a) categorised codecov |
+| copilot | A review by a Copilot login (§ Supported Reviewers) whose `commit_id` equals `HEAD_SHA` |
+| coderabbit | A check run or status named `CodeRabbit` on `HEAD_SHA`, in any state; a review by a CodeRabbit login whose `commit_id` equals `HEAD_SHA`; a comment by a CodeRabbit login that names `HEAD_SHA` |
+| codecov | A status context starting `codecov/` on `HEAD_SHA`; a comment by a Codecov login that names `HEAD_SHA` — `references/codecov.md` § Collect's stale-comment rule decides that, not the comment's presence |
 | ci | A check run on `HEAD_SHA` concluded `failure`, `cancelled`, `timed_out` or `action_required`, or a status is `failure` / `error` — **excluding `codecov/*` and the `CodeRabbit` check**, which their own references own; or the head has no checks at all and `mergeable` is `CONFLICTING` |
+
+**A review or comment about an older commit is not presence.** A source whose
+only signals are head evidence for another commit — a review with another
+`commit_id`, a comment naming another SHA — and which has no unresolved thread is
+**stale**: report it as `stale: last seen on <sha>`, load nothing for it, and do
+not read it as absent (it reported on this PR) or as settled (it has not reported
+on this head). Counting historical evidence as presence loads a reference whose
+`## Converged` condition needs evidence on this head that may never come, and an
+unscoped run then loops on it.
 
 **Every review, comment and thread signal counts only under its source's own
 login** — § Supported Reviewers for a REST `user.login`, (a)'s categorisation for a
@@ -190,13 +210,10 @@ thread. The fetches in (b) are unfiltered; an unfiltered count marks Copilot
 present on a human's review and loads a reference for a source that never
 reported.
 
-**Presence is any signal the source emits, never threads alone.** A source that
-reports through a check, a status or a comment is present before it posts a
-thread, and often without ever posting one: a pending or failed `CodeRabbit`
-check, or a rate-limit comment, with no threads is CodeRabbit present and
-unsettled. Detecting it by threads alone reports it absent, skips its reference
-and its `## Converged` condition, and lets the run report settled over a review
-that never finished.
+**Head evidence counts without threads.** A pending or failed `CodeRabbit` check on
+`HEAD_SHA` with no thread is CodeRabbit present and unsettled; detecting by
+threads alone reports it absent, skips its `## Converged` condition, and lets the
+run report settled over a review that never finished.
 
 **A failing check excluded from `ci` is its owner's, and is reported against that
 owner even when the owner is not in `sources:`** — a failing `CodeRabbit` check
@@ -205,12 +222,15 @@ from CI without naming it leaves a failed run with no failure anyone owns, which
 the caller then reads as flaky or infrastructure.
 
 **Load `references/<source>.md` for each source that is present and in `sources:`
-scope — and only those.** An unscoped run also loads `references/copilot.md` when
-Copilot is absent, for its convergence condition: Copilot review is mandatory
+scope — and only those; a stale source loads nothing.** An unscoped run also
+loads `references/copilot.md` when Copilot is absent or stale, for its
+convergence condition: Copilot review is mandatory
 (`copilot-review`), and a head it has not reviewed is unreviewed, not settled.
 
-Report every source as `present`, `absent` or `not requested`. **Absent is not a
-clean result**: it means nothing from that source on this head, never that it is
+Report every source as `present` (naming which kind — `threads`, `head`, or
+both), `stale: last seen on <sha>`, `absent` or `not requested`. **Neither absent
+nor stale is a clean result**: absent means nothing from that source on this PR's
+head or threads, stale means it has not reported on this head — never that it is
 settled.
 
 ## Step 2: Triage
@@ -289,12 +309,19 @@ Unscoped, loop:
    head: the push created unreviewed commits, every reference's evidence is keyed
    to the old SHA, and Copilot does not re-review on its own
    (`references/copilot.md` § Converged). If the cycle only replied and resolved,
-   the head did not move and a review of it already exists, so the reviewer waits
-   below are skipped — **the CI wait is not**.
-2. **Wait on that head:**
-   - **Only after a push:** `copilot-review` for Copilot, `coderabbit-review` for
-     CodeRabbit.
-   - **Every cycle, pushed or not:** `dev`'s CI waiter, for the current head:
+   the head did not move.
+2. **Wait on that head for every loaded source that has no terminal head evidence
+   for it yet** — after a push that is every one; without a push it is whichever
+   never reported on this head. A source whose head evidence is already terminal
+   is not waited on again.
+   - **Copilot:** no Copilot review with `commit_id` equal to the head → nudge and
+     wait through `copilot-review` (`references/copilot.md` § Converged). Waiting
+     only after a push leaves a head Copilot never reviewed unreviewed forever.
+   - **CodeRabbit:** no terminal `CodeRabbit` check on the head →
+     `coderabbit-review`'s waiter (`references/coderabbit.md` § Waiting,
+     re-review and convergence).
+   - **CI and Codecov — every cycle, pushed or not:** `dev`'s CI waiter, for the
+     current head:
 
      ```bash
      bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> > <log> 2>&1
@@ -310,23 +337,35 @@ Unscoped, loop:
    `[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits for the shape).
    Read the CI waiter the way `dev` Step 7.1 does: act only where `PR_HEAD_SHA=`
    equals the current head, and branch on its `STATUS=` per that step's table —
-   `PENDING` is waited again, never read as a pass, and `NOT_CONFIGURED` goes to
-   `references/ci.md` § Conflict check. **Never hand-roll a polling loop in their
-   place:** it only observes, never requests, and accepts a result for a
-   superseded commit.
+   `PENDING` is waited on once more and then handed back, never read as a pass,
+   and `NOT_CONFIGURED` goes to `references/ci.md` § Conflict check. **Never
+   hand-roll a polling loop in their place:** it only observes, never requests,
+   and accepts a result for a superseded commit.
 3. Re-run Step 1 in full on the current head, **after** step 2's waits are
    terminal — threads, reviews, checks, statuses and comments — and re-triage
-   every unresolved thread, including the ones the last push created. The breakdown query below counts threads by reviewer; it cannot
-   feed Step 2, which needs a disposition per thread.
+   every unresolved thread, including the ones the last push created. The
+   breakdown query below counts threads by reviewer; it cannot feed Step 2, which
+   needs a disposition per thread.
 4. **A reference loaded on an earlier cycle stays loaded until its `## Converged`
-   condition holds.** Detection reads a moment: a CI fix's new head has no failed
-   check until CI finishes, and a source that has not reported yet reads absent.
+   condition holds or it hands back** — even where this head now reads it stale.
+   Detection reads a moment: a CI fix's new head has no failed check until CI
+   finishes, and a source that has not reported yet reads absent.
    Dropping the reference there drops the only condition that would have caught
    the fix not working.
 5. Stop when `fx-review` Step 7's ledger test holds **and** every loaded
    reference's `## Converged` condition holds on a head that was actually
    reviewed — each on the evidence step 2's waiters produced for that head.
-   Otherwise go back through § Step 2 to § Step 4.
+   **Also stop when a loaded reference's `## Converged` section hands back** —
+   its waiter ran out, its source did not report on this head, or its own
+   iteration limit is reached: report that source's reason under "Handed back"
+   and return. A hand-back is not convergence and the report never calls it
+   settled. Otherwise go back through § Step 2 to § Step 4.
+6. **A cycle that changed nothing ends the loop.** If a cycle pushed nothing and
+   its waits produced no new terminal evidence for the head, every condition is
+   where it was and the next cycle cannot differ: stop and hand back each unmet
+   condition with its reason. With `fx-review` Step 7's iteration bound, this is
+   what makes every state terminate — no condition is ever re-tested on unchanged
+   evidence.
 
 **⛔ Zero new threads is not convergence unless a Copilot review has been RECEIVED
 for the current head SHA** (`references/copilot.md` § Converged).
@@ -398,9 +437,9 @@ none. If threads remain, report which reviewers still have open feedback.
 ## PR #123 Feedback Summary — head <sha>
 
 ### Detection
-- copilot: present (2 unresolved threads) | absent | not requested
-- coderabbit: present (check <state>, 3 unresolved threads) | absent | not requested
-- codecov: present (patch 65%, threshold 80% from codecov.yml) | absent | not requested
+- copilot: present (head review; 2 unresolved threads) | stale: last seen on <sha> | absent | not requested
+- coderabbit: present (head check <state>; 3 unresolved threads) | stale: last seen on <sha> | absent | not requested
+- codecov: present (head: patch 65%, threshold 80% from codecov.yml) | stale: last seen on <sha> | absent | not requested
 - ci: present (2 failed checks) | absent | not requested
 - Failing checks owned by another source: <check> → <source> (<present | not requested>) | none
 - Uncategorised automated reviewers: <name>: <n> unresolved — no reference here (or "none seen")
@@ -412,10 +451,12 @@ none. If threads remain, report which reviewers still have open feedback.
 - Threads settled: <n> (<count per disposition>)
 - Returned to the caller for its batched fix: <blocking set | none>
 - Reported, not fixed: <flaky / infrastructure / untestable | none>
+- Handed back: <source>: <the reference's hand-back reason> | none
 - Proposed review rules: <rule text | none>
 
 ### Final Status
 - Settled sources: <list> (no other reviewer categorised)
+- Not reviewed on this head: <source>: stale, last seen on <sha> | handed back — <reason> | none
 - Left for the caller: <uncategorised reviewer>: <n> threads still gating the merge (settle by hand)
 ```
 
@@ -426,16 +467,17 @@ would read as full coverage.
 
 ## Success Criteria
 
-1. Every in-scope source detected and reported `present`, `absent` or `not
-   requested`; only present sources' references loaded (plus Copilot's for an
-   unscoped run's convergence).
+1. Every in-scope source detected under Step 1's two-kind presence definition and
+   reported `present`, `stale`, `absent` or `not requested`; only present
+   sources' references loaded (plus Copilot's for an unscoped run's convergence).
 2. Every in-scope thread from a categorised reviewer triaged, replied to and
    resolved — every author matched exactly against § Supported Reviewers' logins,
    Copilot never on the bare `Copilot`. Suppressed comments open no thread and are not part of this
    (`copilot-review` **D4**).
 3. Coordinator-owned: nothing edited, committed or pushed here; the blocking set
    returned. Standalone: one implementer, one push.
-4. Unscoped: converged per Step 5, on a head that was actually reviewed.
+4. Unscoped: converged per Step 5 on a head that was actually reviewed, or
+   handed back with each source's reported reason — never a loop.
 5. The report names which reviewers the verdict covers.
 
 ## Error Handling

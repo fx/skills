@@ -114,7 +114,20 @@ The waiter, rate-limit degradation and `NOT_CONFIGURED` handling are
 nudge.
 
 CodeRabbit's condition for `resolve-pr-feedback` Step 5: the most recent
-`CodeRabbit` check is terminal with `success` (or `skipped` / `neutral` where the
-repo configures that), and zero unresolved CodeRabbit threads —
-`coderabbit-review` Step 3, conditions 1–2. The ledger condition is `fx-review`
-Step 7.
+`CodeRabbit` check **on the current head** is terminal with `success` (or
+`skipped` / `neutral` where the repo configures that), and zero unresolved
+CodeRabbit threads — `coderabbit-review` Step 3, conditions 1–2. The ledger
+condition is `fx-review` Step 7. **The action that satisfies it** is
+`coderabbit-review`'s waiter on that head.
+
+It ends one of three other ways, each per `coderabbit-review`, and none of them
+loops:
+
+- **`NOT_CONFIGURED`** — no `CodeRabbit` check appears on the head. Settle every
+  CodeRabbit thread already open, then the check half no longer applies: report
+  "CodeRabbit did not review this head" and treat the condition as threads-only.
+- **Rate-limited** — settle every thread it already posted, fix its blocking
+  findings, record `skipped (rate-limited)`; the condition is met as degraded
+  (`coderabbit-review` § CodeRabbit is optional when rate-limited).
+- **`PENDING` again on a re-run, or an `ERROR` that is not a rate limit** — hand
+  back: "CodeRabbit check still pending on head `<sha>`", or the error.
