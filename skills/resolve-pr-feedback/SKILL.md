@@ -160,6 +160,7 @@ PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explic
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
+# Unfiltered reads — the table below selects each source by author login or check name.
 gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews"           # copilot, coderabbit reviews
 gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/check-runs"       # CodeRabbit check, ci
 gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status"                              # codecov/*, CodeRabbit, ci (combined status)
@@ -169,10 +170,16 @@ gh pr view "$PR_NUMBER" --json mergeable,mergeStateStatus                       
 
 | Source | Present when |
 |---|---|
-| copilot | It has any review or any thread on the PR |
-| coderabbit | A check run or status named `CodeRabbit` exists on `HEAD_SHA` in any state, `coderabbitai[bot]` posted a review or comment on the PR, or it has a thread |
-| codecov | A status context on `HEAD_SHA` starts `codecov/`, `codecov[bot]` or `codecov-commenter` commented, or it has a thread |
+| copilot | A review on the PR whose `user.login` starts with `copilot-pull-request-reviewer` — never the bare `Copilot` — or a thread (a) categorised copilot |
+| coderabbit | A check run or status named `CodeRabbit` on `HEAD_SHA` in any state, a review or issue comment whose `user.login` is `coderabbitai[bot]`, or a thread (a) categorised coderabbit |
+| codecov | A status context on `HEAD_SHA` starting `codecov/`, an issue comment whose `user.login` is `codecov[bot]` or `codecov-commenter`, or a thread (a) categorised codecov |
 | ci | A check run on `HEAD_SHA` concluded `failure`, `cancelled`, `timed_out` or `action_required`, or a status is `failure` / `error` — **excluding `codecov/*` and the `CodeRabbit` check**, which their own references own; or the head has no checks at all and `mergeable` is `CONFLICTING` |
+
+**Every review, comment and thread signal counts only under its source's own
+login** — § Supported Reviewers for a REST `user.login`, (a)'s categorisation for a
+thread. The fetches in (b) are unfiltered; an unfiltered count marks Copilot
+present on a human's review and loads a reference for a source that never
+reported.
 
 **Presence is any signal the source emits, never threads alone.** A source that
 reports through a check, a status or a comment is present before it posts a
