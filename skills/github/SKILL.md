@@ -102,8 +102,11 @@ review of a superseded commit as coverage for the code you are about to merge:
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
-gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq "[.[] | select(.user.login | IN(\"copilot-pull-request-reviewer\", \"copilot-pull-request-reviewer[bot]\")) | select(.commit_id == \"${HEAD_SHA}\")] | length"
+set -o pipefail   # a failed read must not print a count
+# Every page, counted once: --jq would count per page
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+  | jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | select(.commit_id == $head)] | length' \
+  || echo "READ FAILED: reviews — not a count"
 ```
 
 A result of `0` means **the commit you are about to merge is UNREVIEWED**, whatever
@@ -580,14 +583,18 @@ PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explic
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
-# Reviews of the CURRENT head — this is coverage.
-gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq "[.[] | select(.user.login | IN(\"copilot-pull-request-reviewer\", \"copilot-pull-request-reviewer[bot]\")) | select(.commit_id == \"${HEAD_SHA}\") | {state, submitted_at}]"
+set -o pipefail   # a failed read must not print an empty list
+
+# Reviews of the CURRENT head — this is coverage. Every page: --jq would run per page.
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+  | jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | select(.commit_id == $head) | {state, submitted_at}]' \
+  || echo "READ FAILED: reviews — not evidence"
 
 # Every Copilot review with its commit — diagnostic, to see whether a review exists
 # but covers an older commit. NOT a pass signal.
-gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq '[.[] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | {commit_id, state, submitted_at}]'
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+  | jq '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | {commit_id, state, submitted_at}]' \
+  || echo "READ FAILED: reviews — not evidence"
 ```
 
 Or via GraphQL — include `commit { oid }`, otherwise the result is unscoped and

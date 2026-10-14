@@ -56,25 +56,31 @@ REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 set -o pipefail   # a failed gh read must fail the pipeline, never print an empty "none found"
 
-# Check runs on the head commit
+# Check runs on the head commit: CI's failures, and the failures other sources own
 gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/check-runs" \
-  | jq '[.[].check_runs[] | select(.conclusion as $c | ["failure","cancelled","timed_out","action_required"] | index($c)) | {name, id, conclusion, html_url}]' \
+  | jq '[.[].check_runs[] | select(.conclusion as $c | ["failure","cancelled","timed_out","action_required"] | index($c))]
+        | {ci:    [.[] | select(.name != "CodeRabbit" and (.name | startswith("codecov/") | not)) | {name, id, conclusion, html_url}],
+           owned: [.[] | select(.name == "CodeRabbit") | "\(.name) → coderabbit"]
+                + [.[] | select(.name | startswith("codecov/")) | "\(.name) → codecov"]}' \
   || echo "READ FAILED: check runs — not evidence"
 
 # Legacy commit statuses on the head (combined status, not a list endpoint)
 gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status" \
-  --jq '[.statuses[] | select(.state == "failure" or .state == "error") | {context, description, target_url}]' \
+  --jq '[.statuses[] | select(.state == "failure" or .state == "error")]
+        | {ci:    [.[] | select(.context != "CodeRabbit" and (.context | startswith("codecov/") | not)) | {context, description, target_url}],
+           owned: [.[] | select(.context == "CodeRabbit") | "\(.context) → coderabbit"]
+                + [.[] | select(.context | startswith("codecov/")) | "\(.context) → codecov"]}' \
   || echo "READ FAILED: commit status — not evidence"
 ```
 
-`[]` is "no failing check"; a `READ FAILED` line is not — retry once, then hand
-back the failed read (§ State on head).
+`ci` is CI's set — empty means no failing CI check; a `READ FAILED` line is not
+that, so retry once, then hand back the failed read (§ State on head).
 
-Exclude `codecov/*` contexts and the `CodeRabbit` check — their references own
-them. **Excluded is not dropped, and never flaky or infrastructure:** list each
-failing excluded check under "Owned by another source" in the hand-off, so the
-caller routes it to that source instead of reading a failed run with no CI finding
-as a transient one.
+`owned` holds the failures the filters keep out of `ci`: the `CodeRabbit` check
+and every `codecov/*` context, which their references own. **Excluded is not
+dropped, and never flaky or infrastructure:** list each under "Owned by another
+source" in the hand-off, so the caller routes it to that source instead of reading
+a failed run with no CI finding as a transient one.
 
 If you read checks through `gh pr checks` instead, select
 `bucket == "fail" or bucket == "cancel"`. It has no field for a run's final

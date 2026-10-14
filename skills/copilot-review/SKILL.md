@@ -261,11 +261,15 @@ If you do need the bodies directly — scoped to the reviewed head so you do not
 read a stale review's body, and across **every** review of that commit:
 
 ```bash
+PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
-HEAD_SHA=$(gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid')
+HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+set -o pipefail   # a failed gh read must fail the pipeline, never print an empty "none found"
 
-gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
-  --jq "[.[] | select(.user.login | IN(\"copilot-pull-request-reviewer\", \"copilot-pull-request-reviewer[bot]\")) | select(.commit_id == \"${HEAD_SHA}\") | .body] | join(\"\n\n----- (next review of this commit) -----\n\n\")"
+# Every page: --jq would run per page, and the head's review may not be on the first
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+  | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")' \
+  || echo "READ FAILED: reviews — not evidence"
 ```
 
 **Do not narrow that to `| last`.** Two Copilot reviews of a single commit are
@@ -390,9 +394,13 @@ that Copilot had already declined to raise as threads.
 
 ```bash
 # The gate is only passed when the newest Copilot review covers the current head.
-HEAD_SHA=$(gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid')
-if REVIEWED=$(gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
-    --jq '[.[] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | .commit_id] | last // empty'); then
+PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
+REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
+HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+set -o pipefail   # a failed gh read must fail the pipeline, never print an empty "none found"
+# Every page, then `last`: --jq would take the last review of each page.
+if REVIEWED=$(gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+    | jq -r '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | .commit_id] | last // empty'); then
   [[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
     && echo "covered: $HEAD_SHA" \
     || echo "NOT covered — head=$HEAD_SHA reviewed=${REVIEWED:-none}"

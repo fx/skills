@@ -33,14 +33,18 @@ gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/statuses" \
   | jq '[.[][] | select(.context | startswith("codecov/")) | {context, state, description, target_url}]' \
   || echo "READ FAILED: statuses — not evidence"
 
-# 2. The latest Codecov PR comment
+# 2. The latest Codecov PR comment — only if it names the head (short SHA)
 gh api --paginate --slurp "/repos/${REPO_NWO}/issues/${PR_NUMBER}/comments" \
-  | jq -r '[.[][] | select(.user.login == "codecov[bot]" or .user.login == "codecov-commenter")] | last | .body // empty' \
+  | jq -r --arg h "${HEAD_SHA:0:7}" '[.[][] | select(.user.login | IN("codecov[bot]", "codecov-commenter"))] | last
+        | if . == null then empty
+          elif (.body | contains($h)) then .body
+          else "STALE: the latest Codecov comment does not name head \($h) — not evidence" end' \
   || echo "READ FAILED: comments — not evidence"
 
-# 3. Line annotations
+# 3. Line annotations on the head commit only
 gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/comments" \
-  | jq '[.[][] | select(.user.login == "codecov[bot]" or .user.login == "codecov-commenter") | {path, line: (.line // .original_line), body}]' \
+  | jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("codecov[bot]", "codecov-commenter")) | select(.commit_id == $head)
+        | {path, line: (.line // .original_line), commit_id, body}]' \
   || echo "READ FAILED: annotations — not evidence"
 ```
 
@@ -48,9 +52,11 @@ Empty output from a read that succeeded is "nothing from Codecov there"; a
 `READ FAILED` line is not — retry once, then hand it back. Treating it as empty
 sends a configured Codecov to § Configured, or a covered head to a gap.
 
-Codecov edits one comment in place. Confirm it names the head commit before using
-it — a report on an older commit is not evidence about this head (`dev`'s
-`references/head-discipline.md` § Evidence is SHA-scoped).
+Codecov edits one comment in place, so read 2 prints its body only when it names
+the head's short SHA, and a `STALE:` line otherwise; read 3 keeps only annotations
+whose `commit_id` is the head. A report on an older commit is not evidence about
+this head (`dev`'s `references/head-discipline.md` § Evidence is SHA-scoped), and
+an old annotation would steer the fix to lines this head may no longer have.
 
 ## Assess
 
