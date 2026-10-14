@@ -39,7 +39,7 @@ bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh
 ```
 
 - **`FX_DOCS=adopted`** → the workflows below apply as written. A missing `docs/tasks.md` is created from `references/tasks-md-template.md` when the first orphan task needs it (`fx-setup` → `references/adoption.md` § Partial adoption).
-- **`FX_DOCS=not-adopted`** → use the repo's own tracker, in this order: the `AGENTS.md` `task-tracking:` value (§ External Task Tracking), a `NATIVE_TRACKING` file, then open GitHub issues (`gh repo view --json hasIssuesEnabled`). Edit a tracker file only in its own format — checkbox, heading or table, whatever it already uses. Never create `docs/`, `docs/tasks.md` or `docs/changes/`. Report once per run with the docs-layer block from adoption.md § Report.
+- **`FX_DOCS=not-adopted`** → use the repo's own tracker, in this order: the `AGENTS.md` `task-tracking:` value (§ External Task Tracking), a `NATIVE_TRACKING` file, then open GitHub issues (`gh repo view --json hasIssuesEnabled`). Edit a tracker file only in its own format — checkbox, heading or table, whatever it already uses. Any tracker path you write or create passes adoption.md § Who gates on what's inside-the-repository rule first. Never create `docs/`, `docs/tasks.md` or `docs/changes/`. Report once per run with the docs-layer block from adoption.md § Report.
 
 ## Task Source Priority
 

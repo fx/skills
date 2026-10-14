@@ -209,9 +209,12 @@ review.**
    block with the exact rule text in the report, followed by the instruction-layer
    block from `fx-setup` → `references/adoption.md` § Report.
 
-- **A symlinked `REVIEW.md` is never written through** — writing follows the link to
-  its target, possibly outside the repository. Treat it as case 3 and name the
-  symlink in the report.
+- **No target is written through a symlink at any depth** — writing follows the
+  link to its target, possibly outside the repository. That covers a
+  symlinked `REVIEW.md` or `AGENTS.md`, and for `.github/copilot-instructions.md`
+  the `.github` directory as well as the file (`fx-setup` →
+  `references/adoption.md` § Who gates on what). Treat a failing target as case 3
+  and name the symlink in the report.
 - **Never create `REVIEW.md` or `.github/copilot-instructions.md`, and never run
   `fx-setup` or `fx-upgrade` from a review** — they scaffold `docs/`, `AGENTS.md`
   and `.coderabbit.yaml`, and burying one review rule in a large unrelated diff is

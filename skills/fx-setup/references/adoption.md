@@ -13,7 +13,7 @@
 
 ## Running the check
 
-The check is `fx-setup`'s `scripts/check-docs-layout.sh`; a `SKILL.md` runs it as `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh`. It takes no arguments, resolves the repository root itself, never writes, never reads through a symlink, and always exits 0.
+The check is `fx-setup`'s `scripts/check-docs-layout.sh`; a `SKILL.md` runs it as `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh`. It takes no arguments, resolves the repository root itself, never writes, never reads through a symlink at any depth — a symlinked ancestor such as `docs -> /elsewhere` makes every path under it absent, never adopted — and always exits 0.
 
 | Key | Meaning |
 |---|---|
@@ -27,9 +27,9 @@ The check is `fx-setup`'s `scripts/check-docs-layout.sh`; a `SKILL.md` runs it a
 | `NATIVE_REVIEW_RULES` | In this order: `AGENTS.md` when it has a review heading other than the fx `## Code Review Rules` pointer, then `.github/copilot-instructions.md`. The order is the write preference — `AGENTS.md` reaches Codex, Copilot and CodeRabbit, the Copilot file only Copilot — so `fx-review` Step 6 takes the first entry |
 | `NATIVE_CHANGELOG` | Changelog files or fragment directories, plus `generated-by:<tool>` when release tooling owns them |
 | `DOCS_SITE` | Docs-site configuration (MkDocs, Docusaurus, mdBook, Sphinx, VitePress) |
-| `WARNING` | Printed only when the repository root could not be entered. Every other key is still printed, at its default (`not-adopted`, empty lists) — a default, not a finding; report the warning instead of acting on the values |
+| `WARNING` | One key, notes joined by ` \| `, printed only when there is a note. `could not enter <root>; nothing was checked` — every other key is then at its default (`not-adopted`, empty lists), a default and not a finding, so report the warning instead of acting on the values. `<path> is a symlink; nothing under it was read` — a symlinked ancestor; everything under it was treated as absent. `<path> leaves the repository; not read` — an absolute or `..` path, such as an `.adr-dir` pointing outside |
 
-Every run prints every key in this order, on every exit path — `FX_DOCS_MISSING` only when `FX_DOCS=adopted`, `WARNING` only on failure.
+Every run prints every key in this order, on every exit path — `FX_DOCS_MISSING` only when `FX_DOCS=adopted`, `WARNING` only when it has a note.
 
 GitHub issues are not checked — that needs the network. A caller that needs a tracker runs `gh repo view --json hasIssuesEnabled` itself.
 
@@ -49,6 +49,7 @@ GitHub issues are not checked — that needs the network. A caller that needs a 
 
 - **Docs-layer writers gate on `FX_DOCS`:** `spec-writer`, `project-management`, and `dev`/`team` task tracking.
 - **Instruction-layer writers gate on the one file they would write**, never on `FX_INSTRUCTIONS`: `fx-review` Step 6 on `REVIEW.md`; `codex-review` on `REVIEW.md` before it reports a missing Codex pointer; `resolve-pr-feedback`'s CodeRabbit reference on `REVIEW.md` before it checks `filePatterns`.
+- **Every writer writes only inside the repository, never through a symlink.** Before writing or creating any target — a docs-layer file, a native spec or tracker, a review-rules file — check its path from `REPO_ROOT` down: it is relative, has no `..` component, and **no component is a symlink, ancestors included** (`[ -L ]` on each of `.github` and `.github/copilot-instructions.md`, not the file alone). A path that fails is not a target: write nothing, name the path in the report, and take the skill's next fallback. Checking only the last component lets `docs -> /elsewhere` turn a write to `docs/changes/` into a write outside the repository. Paths the check above reports already pass this; the rule binds every path a writer chooses or creates itself. Writers cite this rule; none restates it.
 - **Completing an adopted docs layer is not adoption.** Where `FX_DOCS=adopted` and `FX_DOCS_MISSING` names a path, the skill that owns that path may create it inside `docs/` when it first needs it (§ Partial adoption).
 
 ## Partial adoption

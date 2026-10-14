@@ -14,8 +14,12 @@
 #   - Resolves the repository root itself; every check is relative to that root,
 #     so a run from a subdirectory prints the same values as a run from the root.
 #   - Never writes anything, anywhere.
-#   - Never reads through a symlink. Content checks run only on regular files
-#     (is_plain), and directories are only listed when they are real directories.
+#   - Never reads through a symlink, at any depth. Every probe goes through safe(),
+#     which rejects a path that is absolute, contains "..", or has a symlink at
+#     any ancestor component below the root: `docs -> /elsewhere` makes every
+#     docs/... probe absent, never adopted. The final component is then checked
+#     too: content checks run only on regular files (is_plain), and directories
+#     are only listed when they are real directories (is_dir).
 #   - Always exits 0. A missing file is an answer, not an error.
 #   - Every exit path prints every key below, through the one emit function. A
 #     caller parsing the output never has to tell "key missing" from "empty".
@@ -36,8 +40,11 @@
 #                       AGENTS.md reaches every reviewer where the Copilot file reaches one)
 #   NATIVE_CHANGELOG=<files/dirs> [generated-by:<release-please|semantic-release|changesets>]
 #   DOCS_SITE=<config files/dirs>
-#   WARNING=<reason>    (printed only when the root could not be entered; every
-#                       value above is then a default, not a finding)
+#   WARNING=<note>[ | <note>]...
+#                       (printed only when there is a note: "could not enter <root>;
+#                       nothing was checked" — every value above is then a default,
+#                       not a finding — or "<path> is a symlink; nothing under it
+#                       was read", or "<path> leaves the repository; not read")
 #
 # GitHub issues are deliberately not checked: that needs the network. A caller
 # that needs a tracker runs `gh repo view --json hasIssuesEnabled` itself.
@@ -72,16 +79,42 @@ emit() {
     exit 0
 }
 
+# Accumulate one note per distinct reason into the single WARNING key.
+note() {
+    case " | $WARNING | " in *" | $1 | "*) return ;; esac
+    WARNING="${WARNING:+$WARNING | }$1"
+}
+
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P 2>/dev/null)
 if [ -z "$REPO_ROOT" ] || ! cd "$REPO_ROOT" 2>/dev/null; then
     WARNING="could not enter ${REPO_ROOT:-the repository root}; nothing was checked"
     emit
 fi
 
+# A probe path is safe when it is relative, has no ".." component, and no ancestor
+# component (every component but the last) is a symlink. -f/-d/-e on a/b/c follow a
+# symlinked a or b silently, so checking only the last component reads through
+# them; a path that fails here is absent, with a WARNING note naming why.
+safe() {
+    local p=$1 acc="" c i n
+    case "$p" in
+        /*|..|../*|*/..|*/../*) note "$p leaves the repository; not read"; return 1 ;;
+    esac
+    local -a parts
+    IFS='/' read -ra parts <<<"$p"
+    n=${#parts[@]}
+    for ((i = 0; i < n - 1; i++)); do
+        c=${parts[i]}
+        [ -z "$c" ] || [ "$c" = . ] && continue
+        acc=${acc:+$acc/}$c
+        if [ -L "$acc" ]; then note "$acc is a symlink; nothing under it was read"; return 1; fi
+    done
+    return 0
+}
 # -e follows symlinks, so a dangling link reads as absent. Always pair it with -L.
-exists()   { [ -e "$1" ] || [ -L "$1" ]; }
-is_plain() { [ -f "$1" ] && [ ! -L "$1" ]; }
-is_dir()   { [ -d "$1" ] && [ ! -L "$1" ]; }
+exists()   { safe "$1" && { [ -e "$1" ] || [ -L "$1" ]; }; }
+is_plain() { safe "$1" && [ -f "$1" ] && [ ! -L "$1" ]; }
+is_dir()   { safe "$1" && [ -d "$1" ] && [ ! -L "$1" ]; }
 # A real directory holding at least one markdown file, at most two levels down
 # (docs/specs/<name>/index.md, docs/adr/0001-x.md). find does not follow symlinks.
 has_md()   { is_dir "$1" && [ -n "$(find "$1" -maxdepth 2 -type f -name '*.md' -print -quit 2>/dev/null)" ]; }
