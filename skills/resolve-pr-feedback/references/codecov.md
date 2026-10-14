@@ -2,9 +2,9 @@
 
 `resolve-pr-feedback` loads this file whenever `codecov` is in its `sources:` —
 `dev` Step 7.2 always names it — and on an unscoped run when its Step 1 detection
-finds Codecov present. It holds Codecov's mechanics only. The procedure — Scope Brief, triage, dispositions,
-review-rule entries, convergence — is `fx-review` Steps 1–8, and none of it is
-restated here.
+finds Codecov present. It holds Codecov's mechanics only. The procedure — Scope Brief, triage, dispositions, review-rule entries — is
+`fx-review` Steps 1–8, and none of it is restated here; Step 7's convergence
+loop is the caller's, never `resolve-pr-feedback`'s (its § One round).
 
 ## Identify
 
@@ -94,8 +94,9 @@ Deliberately uncovered: <path:lines> — <why>
 - **Untestable code** — error handlers, platform-specific branches: document which
   lines and why, and report them for the user's decision. Never add a meaningless
   test to hit a number.
-- **One fix iteration.** If coverage still fails after one push, report the
-  remaining gaps instead of looping.
+- **One fix iteration**, counted by the caller (`dev` Step 7.2). If coverage
+  still fails after that push, report the remaining gaps — § State on head's
+  hand-back — rather than a second fix.
 
 ## Configured
 
@@ -118,31 +119,31 @@ done | grep -qv '^0$' && echo "codecov/* status on an earlier commit"
 - **None holds** → `not configured`: report "Codecov does not appear to be
   configured for this repository". Absent, and not a failure.
 - **Any holds** → `configured, no report on head <sha>`. Codecov reports only
-  after CI uploads coverage, so the head's CI wait must be terminal first;
-  where it already is, re-run that wait once — it also waits on `codecov/*`
-  statuses that appeared since — and re-read. Still nothing is § Converged's
-  "did not report on this head" hand-back, never a pass and never absent.
+  after CI uploads coverage, so this is never a pass and never absent. The one
+  re-wait that gives a late `codecov/*` status its chance is the caller's
+  (`dev` Step 7.2): it re-runs the CI wait once and invokes this skill again.
+  Reported a second time, it is § State on head's hand-back.
 
-## Converged
+## State on head
 
-Codecov's condition for `resolve-pr-feedback` Step 5: the Codecov comment for the
-current head shows zero missing lines (or every remaining gap is user-accepted as
-untestable), and the head's `codecov/*` statuses pass — read after the CI wait
-for that head reached a terminal verdict, since Codecov reports only once CI
-uploads coverage. That wait is `dev` Step 7.1's under a coordinator and
-`resolve-pr-feedback` Step 5's on a standalone run, where it runs every cycle,
-pushed or not. Every open Codecov thread is settled either way.
+Report Codecov as exactly one, for `resolve-pr-feedback` Step 5. All of them are
+read only after the head's CI wait was terminal, since Codecov reports once CI
+uploads coverage; every open Codecov thread is settled either way.
 
-It hands back, never loops, when:
-
-- **Codecov did not report on this head** — the CI wait reached a terminal
-  verdict for the head and no Codecov comment names it (§ Collect's stale-comment
-  rule), and no `codecov/*` status on it has failed (a failed one is a coverage
-  gap, § Assess). Report "Codecov did not report on head `<sha>`" with any status
-  states; it is not a pass and not a coverage gap. § Configured's one re-wait has
-  already given a late status its chance; waiting further cannot change it:
-  Codecov's input was CI, and CI is done.
-- **A `codecov/*` status fails with no patch gap** (§ Assess) — report it as
-  Codecov's for the user's decision.
-- **Gaps remain after the one fix iteration** (§ Hand-off to Step 3) — report
-  them for the user's decision.
+- **`clean on head <sha>`** — the Codecov comment for the head shows zero missing
+  lines (or every remaining gap is user-accepted as untestable), and the head's
+  `codecov/*` statuses pass.
+- **Coverage gaps returned** — the § Hand-off set went to the caller's batched
+  fix, or the standalone implementer pushed `<sha>`: next action "wait on CI for
+  `<sha>`, then invoke with `codecov`" (`dev` 7.1 → 7.2).
+- **`configured, no report on head <sha>`** (§ Configured) — first report: next
+  action "re-run the CI wait once for `<sha>`, then invoke with `codecov`"
+  (`dev` 7.2).
+- **`not configured`** — absent; gates nothing.
+- **Hand-back**, the user's decision:
+  - **Codecov did not report on this head** — `configured, no report` reported a
+    second time, after the caller's one re-wait, with no failed `codecov/*`
+    status (a failed one is a coverage gap, § Assess). Report "Codecov did not
+    report on head `<sha>`" with any status states; not a pass, not a gap.
+  - **A `codecov/*` status fails with no patch gap** (§ Assess).
+  - **Gaps remain after the one fix iteration** (§ Hand-off to Step 3).

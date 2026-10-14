@@ -770,5 +770,5 @@ This ensures the same mistake is never repeated.
 
 ## Integration with Other Skills
 
-- **resolve-pr-feedback**: Settles automated review threads (Copilot, CodeRabbit, Codecov) and diagnoses failing CI
+- **resolve-pr-feedback**: Settles one round of automated review threads (Copilot, CodeRabbit, Codecov) and diagnoses failing CI; its caller owns every wait and re-request
 - **dev** Step 5: PR creation, under the PR conventions block above

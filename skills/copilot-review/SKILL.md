@@ -303,7 +303,7 @@ unresolved Copilot thread on the head, triages each one you did not dispose of,
 and replies to and resolves every Copilot thread. Under a coordinator it returns
 the blocking set unfixed for the coordinator's one batched fix; run standalone,
 it fixes the blocking set once and pushes once. **It settles only Copilot's
-threads, and it does not loop** — Steps 4–5 below are the loop. CodeRabbit's
+threads, runs one round, and never nudges, waits or re-requests** (its § One round) — Steps 4–5 below are the loop, and the re-request its report names after a push is this skill's Step 5. CodeRabbit's
 threads are `coderabbit-review`'s.
 
 ### Step 4: Confirm Resolution
@@ -312,7 +312,7 @@ After resolve-pr-feedback completes, verify zero unresolved **Copilot** threads
 remain. The filter on the Copilot login is required, not cosmetic: this gate is
 scoped to Copilot, and `github` forbids touching human review threads at all
 — so counting every unresolved thread makes one open human comment permanently
-unsatisfiable and loops `resolve-pr-feedback` forever:
+unsatisfiable, and this step would re-invoke `resolve-pr-feedback` forever:
 
 ```bash
 OWNER="${REPO_NWO%%/*}"

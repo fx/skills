@@ -1,11 +1,10 @@
 # Copilot
 
 `resolve-pr-feedback` loads this file whenever `copilot` is in its `sources:`, and
-on every unscoped run — for the convergence condition below even when Copilot has
-posted nothing.
-It holds Copilot's mechanics only. The procedure — Scope Brief, triage,
-dispositions, review-rule entries, convergence — is `fx-review` Steps 1–8, and
-none of it is restated here.
+on an unscoped run when its Step 1 detection finds Copilot present.
+It holds Copilot's mechanics only. The procedure — Scope Brief, triage, dispositions, review-rule entries — is
+`fx-review` Steps 1–8, and none of it is restated here; Step 7's convergence
+loop is the caller's, never `resolve-pr-feedback`'s (its § One round).
 
 ## Identify
 
@@ -24,8 +23,8 @@ reports nothing to do and the merge gate stays unsatisfiable.
 
 Copilot review is mandatory (`copilot-review`), so it is always configured and is
 never reported `not configured`. With no Copilot review of the head, report
-`configured, no report on head <sha>`: scoped, `copilot-review`'s loop nudges and
-waits; unscoped, § Converged's action does.
+`configured, no report on head <sha>`: next action "request and wait for Copilot
+on `<sha>`" — `copilot-review` Steps 1–2, never this skill.
 
 ## Read the verdict of the current head's reviews
 
@@ -49,7 +48,7 @@ Empty output means **no Copilot review covers the head** — unreviewed, not
 clean. This reads every review of that commit, not `| last`: two reviews of one
 commit are routine. Confirm the command succeeded before reading silence; an
 empty result from a failed fetch looks exactly like a review with an empty body.
-Prefer `copilot-review`'s waiter, which prints these bodies for you.
+Where the caller has a `copilot-review` waiter log, it already prints these bodies.
 
 A `Suppressed comments` block in the review body opens no thread and is ignored
 by default (`copilot-review` **D4**). An absolutely-dire suppressed item that is
@@ -80,10 +79,10 @@ review.
 Every push costs a full Copilot wait cycle: sweep the class before any push
 (`fx-review` Step 4), and let only blocking findings produce one.
 
-## Converged
+## State on head
 
-Copilot's condition for `resolve-pr-feedback` Step 5: a Copilot review
-**received for the current head**, and zero unresolved Copilot threads on it.
+Copilot's state for `resolve-pr-feedback` Step 5 turns on one fact — a Copilot
+review **received for the current head** — read with:
 
 ```bash
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
@@ -101,18 +100,19 @@ The `// empty` is load-bearing: without it a PR with no Copilot review prints th
 literal `null`, which then gets compared against a SHA — an unreviewed head
 presented as a concrete-looking value instead of an obvious absence.
 
-"Received" is the only condition — never "was requested": the request API is
-inert, so whether a request happened is not a determinable fact (`copilot-review`
-**D1**). **The action that satisfies it:** whenever no Copilot review covers the
-head — after a push, since Copilot does not re-review on its own, or because it
-never reviewed this head — nudge it through `copilot-review` Step 1,
-fire-and-forget, wait with `copilot-review`'s waiter, and judge only the delivered
-review. A head a review already covers needs no nudge.
+"Received" is the only test — never "was requested": the request API is inert, so
+whether a request happened is not a determinable fact (`copilot-review` **D1**).
+Report Copilot as exactly one:
 
-**Hand back** when that waiter reports `PENDING` again on its re-run —
-`copilot-review`'s `PENDING` row: "Copilot review has not arrived for head
-`<sha>`" — or `ERROR`, with its message. Copilot is mandatory, so this is a
-hand-back to the caller, never a pass and never another cycle.
-
-A *Needs a closer look* verdict with zero open threads passes, and a suppressed
-block never extends the loop.
+- **`clean on head <sha>`** — covered, and zero unresolved Copilot threads. A
+  *Needs a closer look* verdict with zero open threads is clean, and a suppressed
+  block never makes it otherwise.
+- **Threads settled, re-review due** — this round pushed `<sha>`. Copilot does not
+  re-review a push on its own: next action "request and wait for Copilot on
+  `<sha>`" (`copilot-review` Step 5 → Steps 1–2; `dev` 6.3 per-reviewer step 4).
+- **`configured, no report on head <sha>`** — not covered, whether Copilot never
+  reviewed this head or reviewed only an older one: the same next action. Copilot
+  is mandatory, so this is never clean.
+- **Hand-back** — the caller's waiter ended `PENDING` again or `ERROR`
+  (`copilot-review`'s `PENDING` row: "Copilot review has not arrived for head
+  `<sha>`"), or the thread count stayed unreadable after one retry.

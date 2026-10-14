@@ -1,6 +1,6 @@
 ---
 name: resolve-pr-feedback
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Settles automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions only for the sources present on the PR; any other configured reviewer is settled by hand by the caller."
+description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Settles one round of automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions for the sources requested or present, then reports and returns; it never waits or re-requests a review, and any other configured reviewer is settled by hand by the caller."
 ---
 
 # Resolve PR Feedback
@@ -10,12 +10,13 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > every skill referenced below is installed as a sibling there.
 
 **⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
-canonical review procedure. This skill is the **PR-feedback adapter**: it detects
-which feedback sources are present on the PR's head, loads
-`references/<source>.md` for each one present, triages every finding, settles
-every thread, and — when no caller owns the loop — converges. `fx-review` owns
-the procedure; each reference holds only its source's mechanics (`fx-review`
-§ What a platform skill adds). Where they disagree, `fx-review` wins.
+canonical review procedure. This skill is the **PR-feedback adapter, for one
+round**: it detects which feedback sources are on the PR, loads
+`references/<source>.md` for each one requested or present, triages every
+finding, fixes once or returns the blocking set, settles every thread, reports
+each source's state on the head, and returns. `fx-review` owns the procedure;
+each reference holds only its source's mechanics (`fx-review` § What a platform
+skill adds). Where they disagree, `fx-review` wins.
 
 **"Every" is a claim the queries below have to earn, and one page does not earn
 it.** `reviewThreads(first: 100)` returns *at most* the first 100 threads, not the
@@ -33,6 +34,19 @@ automated reviewer with no row in it is never categorised, never settled, and
 never counted in any verdict below. Its threads still gate the merge, and the
 caller settles them by hand (`[SKILLS_DIR]/dev/references/scope-contract.md`
 § Injecting the brief into reviews).
+
+## One round
+
+**Detect, triage, fix once, settle, report — then return. Never a wait, a nudge
+or a re-request.** This skill runs no waiter (Copilot's, CodeRabbit's or CI's),
+never nudges Copilot, never re-requests a review, and never loops back to detect
+again. Every wait,
+re-request and convergence loop is the caller's — `dev` Steps 6.3 and 7,
+`copilot-review` Steps 1–2 and 5, `coderabbit-review` Steps 1 and 3 — which
+already runs them under its own head discipline. A loop in here duplicated the
+caller's: it re-requested reviews the caller was about to request and re-invoked
+the adapter that had called it. The report (§ Step 5) is the hand-off — per
+source, its state on the head and the next wait or re-request the caller owns.
 
 ## Invocation Boundary
 
@@ -53,12 +67,9 @@ Skill tool: skill="resolve-pr-feedback",
 - **The Scope Brief is mandatory.** Run standalone without one, reconstruct it
   from the conversation and the PR description, and say that you did
   (`fx-review` Step 1).
-- **`sources:` given → settle those sources on the current head and return; the
-  convergence loop is the caller's** (`copilot-review` Steps 4–5,
-  `coderabbit-review` Step 3, `dev` Steps 6.3 and 7). A scoped call from
-  `copilot-review` used to fall into this skill's own loop, which nudged Copilot
-  and re-invoked the adapter that had called it. **Omitted** → Steps 1–5,
-  convergence included.
+- **`sources:` given → those sources; omitted → every source is detected.** Either
+  way the skill runs Steps 1–5 once and returns. `copilot-review` and
+  `coderabbit-review` name their own source; `dev` Step 7.2 names `ci,codecov`.
 - **Dispositions are authoritative** (`[SKILLS_DIR]/dev/references/scope-contract.md`
   § Resolver dispositions). The caller set them with the Scope Brief and the
   ledger in hand; a classification from comment text alone does not override
@@ -185,8 +196,8 @@ A source is present on exactly two kinds of signal:
   thread is settled whatever head it was raised on, so it makes the source
   present for Steps 2–4 regardless of `HEAD_SHA`.
 - **Head evidence — head-scoped.** A signal *about `HEAD_SHA`*, per the table
-  below. It makes the source present for Step 5's convergence test, which is a
-  claim about this head and nothing else.
+  below. It decides the source's **state on head** in the report (each reference's
+  § State on head), which is a claim about this head and nothing else.
 
 | Source | Head evidence — on `HEAD_SHA` only |
 |---|---|
@@ -200,9 +211,9 @@ only signals are head evidence for another commit — a review with another
 `commit_id`, a comment naming another SHA — and which has no unresolved thread is
 **stale**: report it as `stale: last seen on <sha>`, load nothing for it, and do
 not read it as absent (it reported on this PR) or as settled (it has not reported
-on this head). Counting historical evidence as presence loads a reference whose
-`## Converged` condition needs evidence on this head that may never come, and an
-unscoped run then loops on it.
+on this head). Counting historical evidence as presence reports a source as having
+spoken about this head when it has not, and the caller then skips the wait or
+re-request that head still needs.
 
 **Every review, comment and thread signal counts only under its source's own
 login** — § Supported Reviewers for a REST `user.login`, (a)'s categorisation for a
@@ -212,8 +223,8 @@ reported.
 
 **Head evidence counts without threads.** A pending or failed `CodeRabbit` check on
 `HEAD_SHA` with no thread is CodeRabbit present and unsettled; detecting by
-threads alone reports it absent, skips its `## Converged` condition, and lets the
-run report settled over a review that never finished.
+threads alone reports it absent, and the caller reads a review that never
+finished as settled.
 
 **A failing check excluded from `ci` is its owner's, and is reported against that
 owner even when the owner is not in `sources:`** — a failing `CodeRabbit` check
@@ -227,16 +238,12 @@ the caller then reads as flaky or infrastructure.
    detection found. Detection alone never reports a requested source absent: with
    no head evidence, the reference's own **§ Configured** check decides between
    `not configured` — report it; the source is absent and gates nothing — and
-   `configured, no report on head <sha>`, which is never clean. On a scoped call
-   that state goes back to the caller, whose loop owns the wait; on an unscoped
-   run Step 5 waits per the reference's § Converged and then hands back. A
-   requested source dropped on detection is a configured gate skipped in silence —
-   a Codecov that has not reported yet the moment `dev` Step 7.2 looks.
+   `configured, no report on head <sha>`, which is never clean: the report hands
+   it back as a wait the caller owns (§ Step 5). A requested source dropped on
+   detection is a configured gate skipped in silence — a Codecov that has not
+   reported yet the moment `dev` Step 7.2 looks.
 2. **A source the caller did not name** — every source, on an unscoped run —
-   loads its reference only when present; a stale one loads nothing. Copilot is
-   the exception: an unscoped run always loads `references/copilot.md`, because
-   Copilot review is mandatory (`copilot-review`) and a head it has not reviewed
-   is unreviewed, not settled.
+   loads its reference only when present; a stale one loads nothing.
 
 Report every source as one of: `present` (naming which kind — `threads`, `head`,
 or both); `clean on head <sha>` (requested, configured, reported, nothing to do);
@@ -293,6 +300,8 @@ whole blocking set across every source, review-rule entries included, and the
 spawned agent cannot follow by link). It pushes
 once, at the end (`[SKILLS_DIR]/dev/references/head-discipline.md` § Batch
 findings). Then run Step 4 with those threads annotated `already fixed in <sha>`.
+That push leaves a head no reviewer has seen, and this skill does not wait for
+one: § Step 5 names each re-request it needs.
 
 **When unsure which applies, coordinator-owned wins.** Returning costs a round
 trip; a second fix path races the coordinator's on the same branch and buys a
@@ -319,79 +328,9 @@ thread left open is unfinished work.
 — has nothing to reply to or resolve: record its disposition, and for a fixed one
 the commit, under "Findings with no thread" in the report.
 
-## Step 5: Converge (unscoped invocation only)
-
-With `sources:` given, return after Step 4; the caller loops.
-
-Unscoped, loop:
-
-1. **Fix the head this cycle is about.** If a fix was pushed, it is the post-push
-   head: the push created unreviewed commits, every reference's evidence is keyed
-   to the old SHA, and Copilot does not re-review on its own
-   (`references/copilot.md` § Converged). If the cycle only replied and resolved,
-   the head did not move.
-2. **Wait on that head for every loaded source that has no terminal head evidence
-   for it yet** — after a push that is every one; without a push it is whichever
-   never reported on this head. A source whose head evidence is already terminal
-   is not waited on again.
-   - **Copilot:** no Copilot review with `commit_id` equal to the head → nudge and
-     wait through `copilot-review` (`references/copilot.md` § Converged). Waiting
-     only after a push leaves a head Copilot never reviewed unreviewed forever.
-   - **CodeRabbit:** no terminal `CodeRabbit` check on the head →
-     `coderabbit-review`'s waiter (`references/coderabbit.md` § Waiting,
-     re-review and convergence).
-   - **CI and Codecov — every cycle, pushed or not:** `dev`'s CI waiter, for the
-     current head:
-
-     ```bash
-     bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> > <log> 2>&1
-     ```
-
-     Run it even when neither `ci` nor `codecov` is loaded yet. A head whose
-     checks are still running reads both absent — a check that has not failed yet
-     is not a failure, and Codecov comments only once CI has uploaded coverage —
-     so a detection taken before CI's terminal verdict misses both, and a run
-     with no push would then converge without ever seeing them.
-
-   Run each as a long wait (`[SKILLS_DIR]/dev/references/background-waits.md`;
-   `[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits for the shape).
-   Read the CI waiter the way `dev` Step 7.1 does: act only where `PR_HEAD_SHA=`
-   equals the current head, and branch on its `STATUS=` per that step's table —
-   `PENDING` is waited on once more and then handed back, never read as a pass,
-   and `NOT_CONFIGURED` goes to `references/ci.md` § Conflict check. **Never
-   hand-roll a polling loop in their place:** it only observes, never requests,
-   and accepts a result for a superseded commit.
-3. Re-run Step 1 in full on the current head, **after** step 2's waits are
-   terminal — threads, reviews, checks, statuses and comments — and re-triage
-   every unresolved thread, including the ones the last push created. The
-   breakdown query below counts threads by reviewer; it cannot feed Step 2, which
-   needs a disposition per thread.
-4. **A reference loaded on an earlier cycle stays loaded until its `## Converged`
-   condition holds or it hands back** — even where this head now reads it stale.
-   Detection reads a moment: a CI fix's new head has no failed check until CI
-   finishes, and a source that has not reported yet reads absent.
-   Dropping the reference there drops the only condition that would have caught
-   the fix not working.
-5. Stop when `fx-review` Step 7's ledger test holds **and** every loaded
-   reference's `## Converged` condition holds on a head that was actually
-   reviewed — each on the evidence step 2's waiters produced for that head.
-   **Also stop when a loaded reference's `## Converged` section hands back** —
-   its waiter ran out, its source did not report on this head, or its own
-   iteration limit is reached: report that source's reason under "Handed back"
-   and return. A hand-back is not convergence and the report never calls it
-   settled. Otherwise go back through § Step 2 to § Step 4.
-6. **A cycle that changed nothing ends the loop.** If a cycle pushed nothing and
-   its waits produced no new terminal evidence for the head, every condition is
-   where it was and the next cycle cannot differ: stop and hand back each unmet
-   condition with its reason. With `fx-review` Step 7's iteration bound, this is
-   what makes every state terminate — no condition is ever re-tested on unchanged
-   evidence.
-
-**⛔ Zero new threads is not convergence unless a Copilot review has been RECEIVED
-for the current head SHA** (`references/copilot.md` § Converged).
-
-**Say what this verdict covers when you report it.** The roster is whatever the
-query below selects by author login — the § Supported Reviewers table's three —
+**Re-count after settling, and say what the count covers.** The roster is
+whatever the query below selects by author login — the § Supported Reviewers
+table's three —
 so a clean result means *those* reviewers are settled. It is not evidence about a
 further automated reviewer a repo has configured, whose threads this skill never
 categorised. Those still gate the merge, and the caller settles them by hand
@@ -451,13 +390,36 @@ permanently unsatisfiable. An empty array over the **fully paginated** set means
 the reviewers this skill categorised have no open feedback — not that the PR has
 none. If threads remain, report which reviewers still have open feedback.
 
+## Step 5: Report and return
+
+Classify each source by its reference's **§ State on head** and report it — its
+dispositions, what this round pushed, and the **next action the caller owns** —
+then return. Do not wait, nudge or re-request anything to improve a state: the
+state as it stands is the answer, and the caller's loop acts on it.
+
+| Condition on the head | Next action in the report | The caller step that acts |
+|---|---|---|
+| This round pushed `<sha>` | "re-request / re-wait on `<sha>`" for every source with head evidence: Copilot nudge and wait, CodeRabbit wait, CI wait | `dev` 6.3 per-reviewer step 4 and Step 7; `copilot-review` Step 5; `coderabbit-review` Step 3 |
+| Copilot absent, stale or `configured, no report on head` | "request and wait for Copilot on `<sha>`" — Copilot review is mandatory | `copilot-review` Steps 1–2; `dev` 6.3 |
+| CodeRabbit check pending, or `configured, no report on head` | "wait on CodeRabbit for `<sha>`" | `coderabbit-review` Step 1; `dev` 6.3 |
+| CI `configured, no report on head` (checks pending) | "wait on CI for `<sha>`" | `dev` 7.1 |
+| Codecov `configured, no report on head` | "re-run the CI wait once for `<sha>`, then re-invoke with `codecov`" | `dev` 7.2 |
+| A reference's hand-back | "hand-back: `<reason>`" — the user's decision | the caller, then the user |
+
+**Standalone** — the user invoked this skill — end with that list addressed to
+the user: what to re-request or re-wait, and on which SHA. No loop follows.
+
+**Zero open threads is not a clean Copilot state unless a Copilot review covers
+the head** (`references/copilot.md` § State on head) — report it as not reviewed
+on this head, with its next action.
+
 ## Output Format
 
 ```
 ## PR #123 Feedback Summary — head <sha>
 
 ### Detection
-- copilot: present (head review; 2 unresolved threads) | configured, no report on head <sha> | stale: last seen on <sha> | not requested
+- copilot: present (head review; 2 unresolved threads) | clean on head <sha> | configured, no report on head <sha> | stale: last seen on <sha> | absent | not requested
 - coderabbit: present (head check <state>; 3 unresolved threads) | clean on head <sha> | configured, no report on head <sha> | not configured | stale | absent | not requested
 - codecov: present (head: patch 65%, threshold 80% from codecov.yml) | configured, no report on head <sha> (last seen on <sha>) | not configured | stale | absent | not requested
 - ci: present (2 failed checks) | clean on head <sha> | configured, no report on head <sha> (checks pending) | not configured | absent | not requested
@@ -472,8 +434,12 @@ none. If threads remain, report which reviewers still have open feedback.
 - Findings with no thread: <source>: <item> — <disposition> | none
 - Returned to the caller for its batched fix: <blocking set | none>
 - Reported, not fixed: <flaky / infrastructure / untestable | none>
+- Pushed: <sha> | nothing pushed (coordinator-owned, or no blocking finding)
 - Handed back: <source>: <the reference's hand-back reason> | none
 - Proposed review rules: <rule text | none>
+
+### Next — owned by the caller (§ Step 5); this skill did none of it
+- <source>: re-request / re-wait on <sha> — <caller step> | none
 
 ### Final Status
 - Settled sources: <list> (no other reviewer categorised)
@@ -498,8 +464,9 @@ would read as full coverage.
    (`copilot-review` **D4**).
 3. Coordinator-owned: nothing edited, committed or pushed here; the blocking set
    returned. Standalone: one implementer, one push.
-4. Unscoped: converged per Step 5 on a head that was actually reviewed, or
-   handed back with each source's reported reason — never a loop.
+4. One round: no waiter run, no nudge, no re-request, no second detection pass;
+   the report names every next action with its SHA and the caller step that owns
+   it.
 5. The report names which reviewers the verdict covers.
 
 ## Error Handling

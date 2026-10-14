@@ -30,7 +30,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `codex-review` | Runs a scoped one-shot Codex CLI branch review as an external review adapter. |
 | `copilot-review` | Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review. |
 | `coderabbit-review` | Handles CodeRabbit's PR-level review as an optional review adapter with Scope Brief triage and rate-limit degradation. |
-| `resolve-pr-feedback` | Settles automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions only for the sources present on the PR; any other configured reviewer is settled by hand by the caller. |
+| `resolve-pr-feedback` | Settles one round of automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions for the sources requested or present, then reports and returns; it never waits or re-requests a review, and any other configured reviewer is settled by hand by the caller. |
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
 | `project-management` | Manages project tracking through `docs/tasks.md` and `docs/changes/` where the fx docs layout is adopted, the repo's own tracker where it is not, or an explicitly selected external tracker. |
 | `spec-writer` | Writes and maintains living specs and proposed change documents within an explicitly requested documentation lifecycle. |

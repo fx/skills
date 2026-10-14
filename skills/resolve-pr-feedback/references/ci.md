@@ -3,8 +3,9 @@
 `resolve-pr-feedback` loads this file whenever `ci` is in its `sources:`, and on
 an unscoped run when its Step 1 detection finds failing CI on the PR's head
 (`resolve-pr-feedback` Step 1, which references load). It holds CI's mechanics
-only. The procedure — Scope Brief, triage, dispositions, convergence —
-is `fx-review` Steps 1–8, and none of it is restated here.
+only. The procedure — Scope Brief, triage, dispositions — is
+`fx-review` Steps 1–8, and none of it is restated here; Step 7's convergence
+loop is the caller's, never `resolve-pr-feedback`'s (its § One round).
 
 CI is not a reviewer: it posts no threads, so nothing here settles one.
 
@@ -14,17 +15,17 @@ Loaded on request with no failing check on the head, read the head's checks
 (§ Select the failing checks, without the failure filter) and report exactly one:
 
 - **Every check completed, none failed** → `clean on head <sha>`. Nothing to
-  diagnose; § Converged holds for this head.
+  diagnose.
 - **Checks still running** → `configured, no report on head <sha> (checks
-  pending)`. Scoped, that goes back to the caller, whose CI wait (`dev` Step 7.1)
-  owns it; unscoped, Step 5's CI wait decides.
+  pending)`. The CI wait is the caller's (`dev` Step 7.1); this skill runs none.
 - **No check at all** → § Conflict check first; with no conflict, `not
-  configured` — and, per § Converged, "no CI ran on head `<sha>`" is never a pass.
+  configured` — and "no CI ran on head `<sha>`" is never a pass (§ State on head).
 
 ## Input
 
-`dev` Step 7.1's waiter log under a coordinator; standalone, the CI wait
-`resolve-pr-feedback` Step 5 runs on every cycle. Act only on `STATUS=TERMINAL_FAIL` whose
+The caller's CI waiter log (`dev` Step 7.1) where it has one; otherwise the
+head's checks read directly (§ Select the failing checks) — this skill runs no
+wait of its own. Act only on `STATUS=TERMINAL_FAIL` whose
 `PR_HEAD_SHA=` equals the caller's candidate head (`dev`'s
 `references/head-discipline.md` § Evidence is SHA-scoped) — a verdict for an
 older head is superseded, not this head's failure. A `NOT_CONFIGURED` verdict
@@ -120,22 +121,20 @@ Owned by another source: <check> → coderabbit | codecov | none
 Base-branch conflict: yes | no
 ```
 
-## Converged
+## State on head
 
-CI's condition: a CI wait on the current head — the post-push head where a fix
-was pushed — reports `TERMINAL_PASS` for the SHA it names. Under a coordinator
-that wait is the caller's (`dev` Step 7.1) and `resolve-pr-feedback` never runs
-one; on a standalone unscoped run, `resolve-pr-feedback` Step 5 runs `dev`'s CI
-waiter itself on every cycle, pushed or not, because no one else will and the
-condition otherwise has no action that can satisfy it.
+Report CI as exactly one, for `resolve-pr-feedback` Step 5:
 
-It hands back, never loops, when the wait for the current head reports:
-
-- **`TERMINAL_FAIL` with nothing fixable** — every failure is flaky or
-  infrastructure (§ Categorise), or owned by another source (§ Select the
-  failing checks): report them with the evidence.
-- **`NOT_CONFIGURED`** — after § Conflict check: a conflict goes back as the
-  blocking finding it is; otherwise report "no CI ran on head `<sha>`", which is
-  not a pass.
-- **`PENDING` again on its re-run, or `ERROR`** — report the wait as unfinished
-  or failed; never read either as a verdict.
+- **`clean on head <sha>`** — every check completed, none failed.
+- **Failures returned** — the § Hand-off set went to the caller's batched fix, or
+  the standalone implementer pushed `<sha>`. Either way the next CI verdict is a
+  wait on the new head: next action "wait on CI for `<sha>`" (`dev` 7.1).
+- **`configured, no report on head <sha> (checks pending)`** — next action "wait
+  on CI for `<sha>`" (`dev` 7.1).
+- **Hand-back** — report the reason; nothing here or in a further wait changes it:
+  - every failure flaky or infrastructure (§ Categorise), or owned by another
+    source (§ Select the failing checks), with the evidence;
+  - after § Conflict check, a base-branch conflict (returned as the blocking
+    finding it is), or "no CI ran on head `<sha>`", which is not a pass;
+  - the caller's wait ended `PENDING` again or `ERROR` — unfinished or failed,
+    never a verdict.

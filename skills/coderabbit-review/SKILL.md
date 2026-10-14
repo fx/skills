@@ -210,8 +210,9 @@ Skill tool: skill="resolve-pr-feedback",
             args="<PR_NUMBER> — <Scope Brief verbatim> — sources: coderabbit — dispositions: <thread id> blocking (already fixed in <sha>), <thread id> immaterial, <thread id> deferred (<exclusion>) — false premise: <thread id> (<what does not hold>)"
 ```
 
-**`sources: coderabbit` keeps it to CodeRabbit's threads, and it returns without
-looping** — Step 3 below is the loop.
+**`sources: coderabbit` keeps it to CodeRabbit's threads, and it runs one round
+and returns — no wait, no re-request** (its § One round). Step 3 below is the
+loop, and the wait its report names after a push is this skill's Step 1.
 
 **Both suffixes are mandatory.** Invoked with only a PR number it re-derives
 triage it cannot see and treats threads you classified immaterial or deferred as

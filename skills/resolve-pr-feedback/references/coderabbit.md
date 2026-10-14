@@ -2,9 +2,9 @@
 
 `resolve-pr-feedback` loads this file whenever `coderabbit` is in its `sources:`,
 and on an unscoped run when its Step 1 detection finds CodeRabbit present. It
-holds CodeRabbit's mechanics only. The procedure — Scope Brief, triage, dispositions,
-review-rule entries, convergence — is `fx-review` Steps 1–8, and none of it is
-restated here.
+holds CodeRabbit's mechanics only. The procedure — Scope Brief, triage, dispositions, review-rule entries — is
+`fx-review` Steps 1–8, and none of it is restated here; Step 7's convergence
+loop is the caller's, never `resolve-pr-feedback`'s (its § One round).
 
 ## Identify
 
@@ -22,9 +22,9 @@ review or comment by a CodeRabbit login.
 
 - **None** → `not configured`, the same verdict `coderabbit-review`'s waiter
   reports as `NOT_CONFIGURED`. Absent; gates nothing.
-- **Any** → `configured, no report on head <sha>`. Scoped, that goes back to
-  `coderabbit-review`, whose waiter owns the wait; unscoped, Step 5 runs that
-  waiter and § Waiting, re-review and convergence decides.
+- **Any** → `configured, no report on head <sha>`: next action "wait on
+  CodeRabbit for `<sha>`" — `coderabbit-review`'s waiter, which this skill never
+  runs.
 
 ## Comment anatomy
 
@@ -120,33 +120,31 @@ fi
 configuration is `fx-setup` → `references/instruction-files.md` § CodeRabbit
 needs explicit configuration — do not copy it here.
 
-## Waiting, re-review and convergence
+## State on head
 
-The waiter, rate-limit degradation and `NOT_CONFIGURED` handling are
-`coderabbit-review`'s. CodeRabbit re-reviews every push by itself; there is no
-nudge.
+The waiter, rate-limit detection and `NOT_CONFIGURED` are `coderabbit-review`'s,
+and so is every wait: CodeRabbit re-reviews every push by itself, so there is
+nothing to request — only a wait, which is the caller's. Report CodeRabbit as
+exactly one, for `resolve-pr-feedback` Step 5:
 
-CodeRabbit's condition for `resolve-pr-feedback` Step 5: the most recent
-`CodeRabbit` check **on the current head** is terminal with `success` (or
-`skipped` / `neutral` where the repo configures that), and zero unresolved
-CodeRabbit threads — `coderabbit-review` Step 3, conditions 1–2. The ledger
-condition is `fx-review` Step 7. **The action that satisfies it** is
-`coderabbit-review`'s waiter on that head.
-
-It ends one of three other ways, each per `coderabbit-review`, and none of them
-loops:
-
-- **`NOT_CONFIGURED`** — no `CodeRabbit` check appears on the head. Settle every
-  CodeRabbit thread already open, then the check half no longer applies: report
-  "CodeRabbit did not review this head" and treat the condition as threads-only.
-- **Rate-limited** — settle every thread it already posted, fix its blocking
-  findings, record `skipped (rate-limited)`; the condition is met as degraded
+- **`clean on head <sha>`** — the most recent `CodeRabbit` check on the head is
+  terminal with `success` (or `skipped` / `neutral` where the repo configures
+  that), and zero unresolved CodeRabbit threads remain (`coderabbit-review`
+  Step 3, conditions 1–2; the ledger condition is `fx-review` Step 7).
+- **Threads settled, re-review due** — this round pushed `<sha>`: next action
+  "wait on CodeRabbit for `<sha>`" (`coderabbit-review` Step 3; `dev` 6.3).
+- **Check pending on the head** — next action "wait on CodeRabbit for `<sha>`".
+- **`configured, no report on head <sha>`** (§ Configured) — the same next action.
+- **`not configured`** — open CodeRabbit threads are still settled this round;
+  the check half no longer applies.
+- **Rate-limited** — every thread it already posted is settled and its blocking
+  findings are in the fix; record `skipped (rate-limited)`, met as degraded
   (`coderabbit-review` § CodeRabbit is optional when rate-limited).
-- **`PENDING` again on a re-run, or an `ERROR` that is not a rate limit** — hand
-  back: "CodeRabbit check still pending on head `<sha>`", or the error.
-- **`TERMINAL_FAIL` with zero unresolved CodeRabbit threads** — `coderabbit-review`
-  Step 1c: a rate limit is the degradation above; actionable review-body items are
-  findings, triaged in `resolve-pr-feedback` Step 2 and fixed through its Step 3,
-  with dispositions recorded in the report because no thread exists to settle;
-  nothing actionable, or nothing blocking, is a hand-back with Step 1c's wording.
-- **Threads unreadable** after one retry — hand back; never read it as zero.
+- **Check failed with zero unresolved CodeRabbit threads** — `coderabbit-review`
+  Step 1c's reads, done here once: a rate limit is the degraded state above;
+  actionable review-body items are findings, triaged in `resolve-pr-feedback`
+  Step 2 and fixed through its Step 3, dispositions recorded in the report since
+  no thread exists to settle; nothing actionable, or nothing blocking, is a
+  hand-back with Step 1c's wording.
+- **Hand-back** — also when threads stay unreadable after one retry; never read
+  that as zero.
