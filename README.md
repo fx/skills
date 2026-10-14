@@ -38,7 +38,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
 | `project-management` | Manages project tracking through `docs/tasks.md`, `docs/changes/`, or an explicitly selected external tracker. |
 | `spec-writer` | Writes and maintains living specs and proposed change documents within an explicitly requested documentation lifecycle. |
-| `fx-setup` | Creates the default docs and instruction-file layout as a prerequisite of an explicitly invoked documentation workflow. |
+| `fx-setup` | Creates the fx docs and instruction-file layout when you invoke it explicitly; any other load only reports whether the repository has adopted it. |
 | `fx-upgrade` | Migrates repository instruction files to the current conventions after explicit request and confirmation. |
 | `verify-web-change` | Verifies specified web changes using the real application and Playwright. |
 | `upstream-contrib` | Contributes a local change in a consumer repository upstream to the dependency it belongs in, then rewires the consumer onto it. |

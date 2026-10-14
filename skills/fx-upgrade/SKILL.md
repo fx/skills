@@ -5,6 +5,10 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 
 # Upgrade Instruction Files
 
+> **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
+> the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
+> every skill referenced below is installed as a sibling there.
+
 Migrates a repository to the **current** these conventions. Unlike `fx-setup`,
 this skill is **intentionally intrusive**: it moves content between files,
 rewrites files in place, resolves symlinks, and deletes obsolete paths.
@@ -15,15 +19,15 @@ The two skills split along one line: **who is allowed to destroy something.**
 
 | | `fx-setup` | `fx-upgrade` |
 |---|---|---|
-| Invocation | **Automatic**, on every `/spec-writer` and `/project-management` call | **Explicit only** — a human or a skill asks for it by name |
+| Invocation | **Explicit only** for writes — the user asks for it by name; any other load is a read-only check | **Explicit only** — the user asks for it by name |
 | May create missing files | yes | yes (via fx-setup) |
 | May append a missing marker block | yes | yes |
 | May move, merge, overwrite, or delete | **never** | yes, that is the point |
 | On finding a legacy layout | reports it and stops | migrates it |
 
-`fx-setup` runs unattended dozens of times a day, so it must never make a change a
-user would want to review. `fx-upgrade` runs when asked, once, and every change it
-makes is reviewable in `git diff`.
+`fx-setup` writes only when a user explicitly asks for the layout, and even then
+never makes a change a user would want to review. `fx-upgrade` runs when asked,
+once, and every change it makes is reviewable in `git diff`.
 
 **Never invoke `fx-upgrade` automatically from another skill.** If a skill detects
 a legacy layout, it reports and recommends — it does not migrate.
@@ -202,8 +206,10 @@ Rust toolchain dependency — and that is allowed precisely because it goes thro
 an explicit prompt the user can decline. Nothing here may add anything the user
 did not ask for and was not asked about.
 
-If the repo has no `docs/` structure and looks like it wants one, say so in the
-Step 7 report and let the user run `/fx-setup` themselves.
+Run `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh`; if it reports
+`FX_DOCS=not-adopted`, end the Step 7 report with the docs-layer block from
+`fx-setup` → `references/adoption.md` § Report (Skipped: docs scaffolding —
+fx-upgrade migrates instruction files only; Used instead: none).
 
 ### Step 6: Offer duvet adoption (only if not already adopted)
 

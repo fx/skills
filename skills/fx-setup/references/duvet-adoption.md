@@ -1,9 +1,9 @@
 # Duvet Adoption
 
 **This file is the single owner of the duvet adoption procedure.** `fx-setup`
-and `fx-upgrade` each offer adoption and defer here for every detail. Neither
-skill restates the steps, and nothing else in this catalog may describe how to adopt
-duvet — a second copy is a second thing to drift.
+and `fx-upgrade` each offer adoption when the user runs them, and defer here for
+every detail. Neither skill restates the steps, and nothing else in this catalog
+may describe how to adopt duvet — a second copy is a second thing to drift.
 
 ## What adoption buys, and what it costs
 
@@ -61,26 +61,23 @@ If the user declines, **proceed with the rest of the calling skill normally and
 do not raise duvet again during that run.** Nothing is written on a decline —
 not a marker file, not a TODO, not a note in `AGENTS.md`.
 
-A caller that runs many times in one session — `fx-setup`, invoked by every
-`/spec-writer` and `/project-management` call — must widen "that run" to the
-whole session: once declined, skip the offer silently for the rest of it. An
-optional tool asked about repeatedly within one session is nagging, and nagging
-is how a prompt stops being read.
+The offer happens at most once per explicit `/fx-setup` or `/fx-upgrade` run —
+never in `fx-setup`'s check mode, and never when another skill loaded it. An
+optional tool asked about repeatedly is nagging, and nagging is how a prompt
+stops being read.
 
 **Be honest about where that skip ends.** Because a decline writes nothing, it
-cannot outlive the session that heard it: the first `/spec-writer` or
-`/project-management` call of the *next* session offers adoption again. Do not
-tell the user, or imply anywhere, that the question is asked "once, ever" — it is
-asked at most once **per session**, indefinitely.
+cannot outlive the run that heard it: the next explicit run offers adoption
+again. Do not tell the user, or imply anywhere, that the question is asked
+"once, ever" — it is asked at most once **per explicit run**, indefinitely.
 
 That is a deliberate trade, not an oversight. A decline costs one keystroke and
 leaves the repo byte-identical; the alternative — a persisted `.duvet-declined`
 marker or an opt-out key in some config — is a new file or a new schema invented
-here, in a procedure `fx-setup` runs unattended, and inventing config the
-user never asked for is exactly the change its create-only contract exists to
-prevent. If per-session recurrence turns out to be too much, the fix is a durable
-opt-out designed on purpose. See **Open questions** at the end of this file; do
-not improvise one mid-adoption.
+here, and inventing config the user never asked for is exactly the change
+`fx-setup`'s create-only contract exists to prevent. If per-run recurrence turns
+out to be too much, the fix is a durable opt-out designed on purpose. See **Open
+questions** at the end of this file; do not improvise one mid-adoption.
 
 Every write below happens only after this approval. That is what keeps adoption
 inside `fx-setup`'s create-only contract: the user reviewed the change at the
@@ -683,9 +680,9 @@ On decline: say nothing beyond continuing the calling skill's normal work.
 Tracked here deliberately rather than improvised mid-adoption:
 
 - **A durable opt-out for the offer.** A decline currently persists only for the
-  session (see "The offer"), so the question recurs once per session forever. A
+  run (see "The offer"), so the question recurs on every explicit run. A
   fix needs a persisted signal, and every candidate — a `.duvet-declined` marker,
   a key in `.coderabbit.yaml`, a new config file for this catalog — is either a file
-  `fx-setup` may not invent unattended or a schema shared with other skills.
+  `fx-setup` may not invent or a schema shared with other skills.
   It needs designing across `fx-setup`, `fx-upgrade`, and
   `spec-writer` at once. Until then the honest description above stands.

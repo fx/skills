@@ -72,6 +72,8 @@ A workflow's instructions apply only to the request that invoked it and end at i
 
 Internal delegation stays valid — `dev` may name `requirements-analyzer`, the reviewer skills, and itself in its Implementer role as part of its active lifecycle. That does not authorize those skills to load themselves for unrelated requests.
 
+**No skill adopts the fx layout as a side effect.** Gate every write to an fx docs-layer or instruction-layer file on `fx-setup` → `references/adoption.md`, follow the target repo's own convention when it has not adopted the layout, and never load `fx-setup` as a prerequisite — only an explicit `/fx-setup` or `/fx-upgrade` adopts. A prerequisite load once dropped `AGENTS.md`, `REVIEW.md`, `.coderabbit.yaml` and duvet wiring into unrelated spec and implementation PRs.
+
 ## Host portability
 
 The orchestration skills are written against **seven operations** — delegate, load a skill, wait, message, ask the user, run long concurrently, scratch space — mapped per host in `skills/dev/references/host-adapters.md`. Adding a host means adding a column there, not editing the skills.
