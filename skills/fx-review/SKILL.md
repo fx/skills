@@ -432,6 +432,10 @@ Only what is true of that tool and nothing else:
 **A platform skill MUST NOT restate Steps 1–8.** If it needs one, it names the
 step. If it genuinely needs different behaviour, change it here, for everyone.
 
+`resolve-pr-feedback`'s per-source `references/<source>.md` files are platform
+adapters in exactly this sense: each holds one source's mechanics, and none
+restates Steps 1–8.
+
 ## Shared rules that bite in every platform
 
 - **Never leave new PR-level comments.** `gh pr review --comment` and
