@@ -26,19 +26,27 @@ A review thread whose author is exactly `codecov`, `codecov[bot]` or
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+set -o pipefail   # a failed gh read must fail the pipeline, never print an empty "none found"
 
 # 1. Codecov statuses on the head
 gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/statuses" \
-  | jq '[.[][] | select(.context | startswith("codecov/")) | {context, state, description, target_url}]'
+  | jq '[.[][] | select(.context | startswith("codecov/")) | {context, state, description, target_url}]' \
+  || echo "READ FAILED: statuses — not evidence"
 
 # 2. The latest Codecov PR comment
 gh api --paginate --slurp "/repos/${REPO_NWO}/issues/${PR_NUMBER}/comments" \
-  | jq -r '[.[][] | select(.user.login == "codecov[bot]" or .user.login == "codecov-commenter")] | last | .body // empty'
+  | jq -r '[.[][] | select(.user.login == "codecov[bot]" or .user.login == "codecov-commenter")] | last | .body // empty' \
+  || echo "READ FAILED: comments — not evidence"
 
 # 3. Line annotations
 gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/comments" \
-  | jq '[.[][] | select(.user.login == "codecov[bot]" or .user.login == "codecov-commenter") | {path, line: (.line // .original_line), body}]'
+  | jq '[.[][] | select(.user.login == "codecov[bot]" or .user.login == "codecov-commenter") | {path, line: (.line // .original_line), body}]' \
+  || echo "READ FAILED: annotations — not evidence"
 ```
+
+Empty output from a read that succeeded is "nothing from Codecov there"; a
+`READ FAILED` line is not — retry once, then hand it back. Treating it as empty
+sends a configured Codecov to § Configured, or a covered head to a gap.
 
 Codecov edits one comment in place. Confirm it names the head commit before using
 it — a report on an older commit is not evidence about this head (`dev`'s
@@ -105,20 +113,47 @@ no Codecov comment naming it. Codecov is **configured** when any one holds:
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
-# 1. A Codecov config file
-ls "$ROOT"/codecov.yml "$ROOT"/.codecov.yml "$ROOT"/.github/codecov.yml 2>/dev/null
+evidence=()
+read_failed=0
+# 1. A Codecov config file — any one of the three, each tested on its own
+for f in codecov.yml .codecov.yml .github/codecov.yml; do
+  [ -f "$ROOT/$f" ] && evidence+=("config:$f")
+done
 # 2. An uploader in a workflow: the action, or the CLI/uploader script
-grep -rlE 'codecov/codecov-action|codecov(cli)?[[:space:]]+(upload|do-upload)|codecov\.io/(bash|uploader)' "$ROOT"/.github/workflows/ 2>/dev/null
-# 3. A codecov/* status on any earlier commit of this PR
-for sha in $(gh pr view "$PR_NUMBER" --json commits --jq '.commits[].oid'); do
-  gh api "/repos/${REPO_NWO}/commits/${sha}/status" \
-    --jq '[.statuses[] | select(.context | startswith("codecov/"))] | length'
-done | grep -qv '^0$' && echo "codecov/* status on an earlier commit"
+if [ -d "$ROOT/.github/workflows" ]; then
+  while IFS= read -r wf; do evidence+=("uploader:${wf#"$ROOT"/}"); done < <(
+    grep -rlE 'codecov/codecov-action|codecov(cli)?[[:space:]]+(upload|do-upload)|codecov\.io/(bash|uploader)' \
+      "$ROOT/.github/workflows/" 2>/dev/null)
+fi
+# 3. A codecov/* status on any earlier commit of this PR — a failed read is not a zero
+if shas=$(gh pr view "$PR_NUMBER" --json commits --jq '.commits[].oid'); then
+  for sha in $shas; do
+    if n=$(gh api "/repos/${REPO_NWO}/commits/${sha}/status" \
+             --jq '[.statuses[] | select(.context | startswith("codecov/"))] | length'); then
+      [ "$n" -gt 0 ] && { evidence+=("status:${sha:0:7}"); break; }
+    else
+      read_failed=1
+    fi
+  done
+else
+  read_failed=1
+fi
+# One verdict line — read this, never an exit status
+if [ ${#evidence[@]} -gt 0 ]; then echo "CODECOV_CONFIGURED=yes ${evidence[*]}"
+elif [ "$read_failed" = 1 ]; then echo "CODECOV_CONFIGURED=unknown (a GitHub read failed)"
+else echo "CODECOV_CONFIGURED=no"; fi
 ```
 
-- **None holds** → `not configured`: report "Codecov does not appear to be
-  configured for this repository". Absent, and not a failure.
-- **Any holds** → `configured, no report on head <sha>`. Codecov reports only
+Branch on the `CODECOV_CONFIGURED=` line, never on an exit status: the probes
+are several independent tests, and one missing file or one failed read says
+nothing about the others.
+
+- **`no`** → `not configured`: report "Codecov does not appear to be configured
+  for this repository". Absent, and not a failure.
+- **`unknown`** → a read failed and nothing else proved configuration: report the
+  failed read as a hand-back (§ State on head). Never classify it as `not
+  configured` — that would turn a failed read into a gate that is not there.
+- **`yes`** → `configured, no report on head <sha>`, with the evidence. Codecov reports only
   after CI uploads coverage, so this is never a pass and never absent. The one
   re-wait that gives a late `codecov/*` status its chance is the caller's
   (`dev` Step 7.2): it re-runs the CI wait once and invokes this skill again.
@@ -142,6 +177,7 @@ uploads coverage; every open Codecov thread is settled either way.
   `NOT_CONFIGURED` there is no CI to re-wait, so it is the hand-back below at once.
 - **`not configured`** — absent; gates nothing.
 - **Hand-back**, the user's decision:
+  - **§ Configured read `unknown`** — a GitHub read failed; name it.
   - **Codecov did not report on this head** — `configured, no report` reported a
     second time, after the caller's one re-wait, or once on a head with no CI at
     all, with no failed `codecov/*`

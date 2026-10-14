@@ -391,11 +391,14 @@ that Copilot had already declined to raise as threads.
 ```bash
 # The gate is only passed when the newest Copilot review covers the current head.
 HEAD_SHA=$(gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid')
-REVIEWED=$(gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
-  --jq '[.[] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | .commit_id] | last // empty')
-[[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
-  && echo "covered: $HEAD_SHA" \
-  || echo "NOT covered — head=$HEAD_SHA reviewed=${REVIEWED:-none}"
+if REVIEWED=$(gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
+    --jq '[.[] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | .commit_id] | last // empty'); then
+  [[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
+    && echo "covered: $HEAD_SHA" \
+    || echo "NOT covered — head=$HEAD_SHA reviewed=${REVIEWED:-none}"
+else
+  echo "UNKNOWN — the reviews read failed; not evidence either way"   # never read as NOT covered
+fi
 ```
 
 ## Success Criteria

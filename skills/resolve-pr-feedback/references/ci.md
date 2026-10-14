@@ -54,15 +54,21 @@ here.
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+set -o pipefail   # a failed gh read must fail the pipeline, never print an empty "none found"
 
 # Check runs on the head commit
 gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/check-runs" \
-  | jq '[.[].check_runs[] | select(.conclusion as $c | ["failure","cancelled","timed_out","action_required"] | index($c)) | {name, id, conclusion, html_url}]'
+  | jq '[.[].check_runs[] | select(.conclusion as $c | ["failure","cancelled","timed_out","action_required"] | index($c)) | {name, id, conclusion, html_url}]' \
+  || echo "READ FAILED: check runs — not evidence"
 
 # Legacy commit statuses on the head (combined status, not a list endpoint)
 gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status" \
-  --jq '[.statuses[] | select(.state == "failure" or .state == "error") | {context, description, target_url}]'
+  --jq '[.statuses[] | select(.state == "failure" or .state == "error") | {context, description, target_url}]' \
+  || echo "READ FAILED: commit status — not evidence"
 ```
+
+`[]` is "no failing check"; a `READ FAILED` line is not — retry once, then hand
+back the failed read (§ State on head).
 
 Exclude `codecov/*` contexts and the `CodeRabbit` check — their references own
 them. **Excluded is not dropped, and never flaky or infrastructure:** list each

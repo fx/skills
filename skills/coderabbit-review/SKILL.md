@@ -174,17 +174,24 @@ both, for the current head only:
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+set -o pipefail   # a failed gh read must fail the pipeline, never print an empty "none found"
 
 # The check's own explanation — a check run's output, or a commit status's description
 gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/check-runs" \
-  | jq '[.[].check_runs[] | select(.name == "CodeRabbit") | {conclusion, title: .output.title, summary: .output.summary}]'
+  | jq '[.[].check_runs[] | select(.name == "CodeRabbit") | {conclusion, title: .output.title, summary: .output.summary}]' \
+  || echo "READ FAILED: check runs — not evidence"
 gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status" \
-  --jq '[.statuses[] | select(.context == "CodeRabbit") | {state, description}]'
+  --jq '[.statuses[] | select(.context == "CodeRabbit") | {state, description}]' \
+  || echo "READ FAILED: commit status — not evidence"
 
 # CodeRabbit's review bodies for this head
 gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("coderabbitai", "coderabbitai[bot]")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")'
+  | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("coderabbitai", "coderabbitai[bot]")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")' \
+  || echo "READ FAILED: reviews — not evidence"
 ```
+
+A `READ FAILED` line is not "nothing actionable": retry once, then hand back the
+failed read — never the no-actionable-feedback hand-back.
 
 Then exactly one of:
 

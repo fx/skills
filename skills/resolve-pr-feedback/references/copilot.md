@@ -40,8 +40,10 @@ PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explic
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
+set -o pipefail   # a failed gh read must fail the pipeline, never print an empty "none found"
 gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")'
+  | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")' \
+  || echo "READ FAILED: reviews — not evidence"
 ```
 
 Empty output means **no Copilot review covers the head** — unreviewed, not
@@ -89,11 +91,15 @@ PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explic
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
-REVIEWED=$(gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  | jq -r '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | .commit_id] | last // empty')
-[[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
-  && echo "covered: $HEAD_SHA" \
-  || echo "NOT covered — head=$HEAD_SHA reviewed=${REVIEWED:-none}"
+set -o pipefail   # a failed read must not look like "no review"
+if REVIEWED=$(gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+    | jq -r '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | .commit_id] | last // empty'); then
+  [[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
+    && echo "COPILOT_COVERAGE=covered head=$HEAD_SHA" \
+    || echo "COPILOT_COVERAGE=not-covered head=$HEAD_SHA reviewed=${REVIEWED:-none}"
+else
+  echo "COPILOT_COVERAGE=unknown (the reviews read failed)"
+fi
 ```
 
 The `// empty` is load-bearing: without it a PR with no Copilot review prints the
@@ -102,7 +108,8 @@ presented as a concrete-looking value instead of an obvious absence.
 
 "Received" is the only test — never "was requested": the request API is inert, so
 whether a request happened is not a determinable fact (`copilot-review` **D1**).
-Report Copilot as exactly one:
+Branch on the `COPILOT_COVERAGE=` line: `unknown` is a failed read — retry once,
+then hand it back — never `not-covered`. Report Copilot as exactly one:
 
 - **`clean on head <sha>`** — covered, and zero unresolved Copilot threads. A
   *Needs a closer look* verdict with zero open threads is clean, and a suppressed
