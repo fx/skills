@@ -33,19 +33,16 @@ Codex is a **local, one-shot** reviewer against the current branch, and it is th
 Codex reads `AGENTS.md`. It does **not** read `REVIEW.md` or `CLAUDE.md`. Every
 other reviewer reaches `REVIEW.md` on its own; Codex is the exception. The bridge
 is a `## Code Review Rules` section in `AGENTS.md` pointing at `REVIEW.md`, which
-`fx-setup` creates.
+`fx-setup` and `fx-upgrade` create when the user runs them.
 
-Before the first run in a repo:
-
-```bash
-grep -q "## Code Review Rules" AGENTS.md 2>/dev/null \
-  && echo "Codex pointer present" \
-  || echo "MISSING - run fx-setup (new repo) or fx-upgrade (legacy layout)"
-```
-
-If it is missing, **report it and continue reviewing on defaults** — do NOT run
-`fx-setup` or `fx-upgrade` from here (`fx-review` Step 6 explains
-why). Tell the user to run it separately.
+**The bundled script checks the bridge on every run, from the repository root**
+(§ Running it) — do not re-check it by hand. It reports one of three states: no
+`REVIEW.md` → there is nothing to bridge, and it prints one informational line
+with no remediation; `REVIEW.md` without the pointer → a warning naming
+`fx-upgrade`'s M1.4 — report it with the instruction-layer block from `fx-setup` →
+`references/adoption.md` § Report and keep reviewing on defaults (never run
+`fx-setup` or `fx-upgrade` from here; `fx-review` Step 6 explains why); pointer
+present → its `present` line and nothing more.
 
 If Codex flags something `REVIEW.md` explicitly permits, the pointer is not
 landing — say so rather than silently applying the finding.

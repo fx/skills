@@ -368,15 +368,20 @@ fi
 
 # ── Project-conventions bridge ───────────────────────────────────────────────
 # Codex reads AGENTS.md. It does NOT read REVIEW.md or CLAUDE.md — it is the one
-# reviewer that needs a pointer. Report a missing bridge and continue on defaults;
-# do NOT run fx-setup or fx-upgrade from here.
-if grep -q "## Code Review Rules" AGENTS.md 2>/dev/null; then
+# reviewer that needs a pointer, and only where a REVIEW.md exists to point at.
+# Checked from the repository root, so a run from a subdirectory does not report
+# a bridge that is actually present. Report and continue on defaults; never
+# invoke fx-setup or fx-upgrade from here (fx-review Step 6).
+BRIDGE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+if [[ ! -e "$BRIDGE_ROOT/REVIEW.md" && ! -L "$BRIDGE_ROOT/REVIEW.md" ]]; then
+    echo "REVIEW.md: absent — nothing to bridge; Codex reviews on AGENTS.md and the scope prompt."
+elif grep -q "## Code Review Rules" "$BRIDGE_ROOT/AGENTS.md" 2>/dev/null; then
     echo "AGENTS.md -> REVIEW.md pointer: present"
 else
-    echo "WARNING: no '## Code Review Rules' section in AGENTS.md."
+    echo "WARNING: REVIEW.md exists but AGENTS.md has no '## Code Review Rules' section."
     echo "         Codex cannot see REVIEW.md, so it will review on defaults."
-    echo "         Fix separately with fx-setup (new repo) or fx-upgrade"
-    echo "         (legacy layout) — not from this review."
+    echo "         The pointer is fx-upgrade's M1.4, applied when the user asks for it —"
+    echo "         not from this review."
     echo "         If Codex flags something REVIEW.md explicitly permits, this is why:"
     echo "         say so rather than silently applying the finding."
 fi

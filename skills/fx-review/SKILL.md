@@ -184,28 +184,46 @@ input — it is the churn the materiality bar exists to stop. The gate is zero
 resolver's own categorisation (§ Resolver dispositions): the coordinator holds the
 brief and the ledger, and a resolver classifying from comment text alone does not.
 
-## Step 6: Record incorrect findings in `REVIEW.md`
+## Step 6: Record incorrect findings in the review-rules file
 
 When a reviewer flags a pattern that is a deliberate project convention, write the
-rule into **`REVIEW.md` at the repo root**. One entry stops Codex, Copilot and
-CodeRabbit — the whole roster — from raising it again; they all resolve to that
-file.
+rule where every reviewer reads it. That entry is **required work, not an edit made
+for an immaterial finding**: it is the only thing that stops the false positive
+recurring, and its commit is expected.
 
-That entry is **required work, not an edit made for an immaterial finding**: it is
-the only thing that stops the false positive recurring, and its commit is expected.
+**Where it goes — first match wins. Never create a review-rules file from a
+review.**
 
-- **Never** create or edit `.github/copilot-instructions.md`. It is obsolete.
-- If `REVIEW.md` does not exist, create just that file, with a `# PR Review`
-  heading and the rule under it. **Do not run `fx-setup` or `fx-upgrade`
-  from a review** — they scaffold `docs/`, `AGENTS.md` and `.coderabbit.yaml`, and
-  burying one review rule in a large unrelated diff is not an acceptable change.
-  Mention that `/fx-setup` completes the layout later.
-- **Keep the top section under 4000 characters.** Copilot reads roughly the first
-  4000 when reviewing, and every reviewer takes the file verbatim, where length
-  dilutes the rules that matter. Put the most important rules in a
+1. **`REVIEW.md` at the repo root, when it is a regular file.** One entry stops
+   Codex, Copilot and CodeRabbit — the whole roster — from raising it again; they
+   all resolve to that file.
+2. **Otherwise, the first `NATIVE_REVIEW_RULES` entry** from `fx-setup`'s check
+   (`bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh`, or the output the
+   coordinator already recorded): a review section in `AGENTS.md` — Codex, Copilot
+   and CodeRabbit all read `AGENTS.md` (`fx-setup` →
+   `references/instruction-files.md` § Who reads what) — then
+   `.github/copilot-instructions.md`, which only Copilot reads. **Append only:** add
+   the rule, written in full, at the end of that section, and change nothing else.
+3. **Otherwise, write nothing.** Reply on the thread with the evidence as usual, and
+   put a `Proposed review rule (not written — no review-rules file in this repo)`
+   block with the exact rule text in the report, followed by the instruction-layer
+   block from `fx-setup` → `references/adoption.md` § Report.
+
+- **A symlinked `REVIEW.md` is never written through** — writing follows the link to
+  its target, possibly outside the repository. Treat it as case 3 and name the
+  symlink in the report.
+- **Never create `REVIEW.md` or `.github/copilot-instructions.md`, and never run
+  `fx-setup` or `fx-upgrade` from a review** — they scaffold `docs/`, `AGENTS.md`
+  and `.coderabbit.yaml`, and burying one review rule in a large unrelated diff is
+  not an acceptable change. Where `REVIEW.md` exists,
+  `.github/copilot-instructions.md` is obsolete: never edit it there either.
+- **Keep `REVIEW.md`'s top section under 4000 characters.** Copilot reads roughly
+  the first 4000 when reviewing, and every reviewer takes the file verbatim, where
+  length dilutes the rules that matter. Put the most important rules in a
   `## PR Review Checklist (CRITICAL)` section at the top.
-- `REVIEW.md` is pasted verbatim: `@` imports are not expanded and referenced
-  files are not read. Write the rule out in full; never write `See docs/…`.
+- **`REVIEW.md` is pasted verbatim**, and so is every review-rules file: `@` imports
+  are not expanded and referenced files are not read. Write the rule out in full;
+  never write `See docs/…`.
 
 ### Parallel resolvers must not write it concurrently
 
@@ -214,7 +232,7 @@ revision and the second write silently discards the first's rule. When resolvers
 run in parallel, have each **return** its proposed rules instead of editing, then
 apply them all in one serialized edit and verify with `git diff -- REVIEW.md` that
 every proposed rule appears as an added line. Counting the whole file always fails
-— an established `REVIEW.md` already holds unrelated rules.
+— an established review-rules file already holds unrelated rules.
 
 ## Step 7: Re-run until it converges
 
