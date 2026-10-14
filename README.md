@@ -36,7 +36,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `resolve-codecov-feedback` | Processes Codecov feedback and adds coverage required by an active workflow. |
 | `resolve-ci-failures` | Analyzes and fixes CI failures within an active explicitly requested PR workflow. |
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
-| `project-management` | Manages project tracking through `docs/tasks.md`, `docs/changes/`, or an explicitly selected external tracker. |
+| `project-management` | Manages project tracking through `docs/tasks.md` and `docs/changes/` where the fx docs layout is adopted, the repo's own tracker where it is not, or an explicitly selected external tracker. |
 | `spec-writer` | Writes and maintains living specs and proposed change documents within an explicitly requested documentation lifecycle. |
 | `fx-setup` | Creates the fx docs and instruction-file layout when you invoke it explicitly; any other load only reports whether the repository has adopted it. |
 | `fx-upgrade` | Migrates repository instruction files to the current conventions after explicit request and confirmation. |
