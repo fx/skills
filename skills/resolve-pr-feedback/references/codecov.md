@@ -106,4 +106,7 @@ source as absent — not as a failure.
 
 Codecov's condition for `resolve-pr-feedback` Step 5: the Codecov comment for the
 current head shows zero missing lines (or every remaining gap is user-accepted as
-untestable), and the head's `codecov/*` statuses pass.
+untestable), and the head's `codecov/*` statuses pass — read after the CI wait
+for that head reached a terminal verdict, since Codecov reports only once CI
+uploads coverage. That wait is `dev` Step 7.1's under a coordinator and
+`resolve-pr-feedback` Step 5's on a standalone run.

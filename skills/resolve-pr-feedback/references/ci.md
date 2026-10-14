@@ -9,7 +9,8 @@ CI is not a reviewer: it posts no threads, so nothing here settles one.
 
 ## Input
 
-Usually `dev` Step 7.1's waiter log. Act only on `STATUS=TERMINAL_FAIL` whose
+`dev` Step 7.1's waiter log under a coordinator; standalone, the CI wait
+`resolve-pr-feedback` Step 5 runs. Act only on `STATUS=TERMINAL_FAIL` whose
 `PR_HEAD_SHA=` equals the caller's candidate head (`dev`'s
 `references/head-discipline.md` § Evidence is SHA-scoped) — a verdict for an
 older head is superseded, not this head's failure. A `NOT_CONFIGURED` verdict
@@ -103,6 +104,8 @@ Base-branch conflict: yes | no
 
 ## Converged
 
-CI's condition: the caller's next CI wait on the new head reports `TERMINAL_PASS`
-for the SHA it names (`dev` Step 7.1). The CI wait is the caller's, never this
-skill's.
+CI's condition: the next CI wait on the new head reports `TERMINAL_PASS` for the
+SHA it names. Under a coordinator that wait is the caller's (`dev` Step 7.1) and
+`resolve-pr-feedback` never runs one; on a standalone unscoped run,
+`resolve-pr-feedback` Step 5 runs `dev`'s CI waiter itself, because no one else
+will and the condition otherwise has no action that can satisfy it.

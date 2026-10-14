@@ -262,22 +262,39 @@ With `sources:` given, return after Step 4; the caller loops.
 
 Unscoped, loop:
 
-1. **If a fix was pushed, re-run Step 1 on the new head** — the push created
+1. **If a fix was pushed, the new head has to be re-covered** — the push created
    unreviewed commits, and every reference's evidence is keyed to the old SHA.
    Copilot does not re-review on its own (`references/copilot.md` § Converged).
    A cycle that only replied and resolved did not move the head, and a review of
    it already exists: skip the wait and go to step 3.
-2. Wait with the dedicated waiters — `copilot-review` for Copilot,
-   `coderabbit-review` for CodeRabbit. **Never hand-roll a polling loop in their
-   place:** it only observes, never requests, and accepts a review of a
-   superseded commit.
-3. Re-run the full Step 1 thread query and re-triage every unresolved thread,
-   including the ones the last push created. The breakdown query below counts
-   threads by reviewer; it cannot feed Step 2, which needs a disposition per
-   thread.
-4. Stop when `fx-review` Step 7's ledger test holds **and** every loaded
+2. Wait on the new head with the dedicated waiters — `copilot-review` for
+   Copilot, `coderabbit-review` for CodeRabbit, and, **when `ci` or `codecov` is
+   loaded**, `dev`'s CI waiter:
+
+   ```bash
+   bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> > <log> 2>&1
+   ```
+
+   Run it as a long wait (`[SKILLS_DIR]/dev/references/background-waits.md`;
+   `[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits for the shape) and
+   read it the way `dev` Step 7.1 does: act only where `PR_HEAD_SHA=` equals the
+   new head, and only on `TERMINAL_PASS` / `TERMINAL_FAIL`. Codecov reports after
+   the CI run that uploads coverage, so its evidence is read after that terminal
+   verdict, never before. **Never hand-roll a polling loop in their place:** it
+   only observes, never requests, and accepts a result for a superseded commit.
+3. Re-run Step 1 in full on the new head — threads, reviews, checks, statuses and
+   comments — and re-triage every unresolved thread, including the ones the last
+   push created. The breakdown query below counts threads by reviewer; it cannot
+   feed Step 2, which needs a disposition per thread.
+4. **A reference loaded on an earlier cycle stays loaded until its `## Converged`
+   condition holds.** Detection reads a moment: a CI fix's new head has no failed
+   check until CI finishes, and a source that has not reported yet reads absent.
+   Dropping the reference there drops the only condition that would have caught
+   the fix not working.
+5. Stop when `fx-review` Step 7's ledger test holds **and** every loaded
    reference's `## Converged` condition holds on a head that was actually
-   reviewed. Otherwise go back through Steps 2–4.
+   reviewed — each on the evidence step 2's waiter produced for that head.
+   Otherwise go back through § Step 2 to § Step 4.
 
 **⛔ Zero new threads is not convergence unless a Copilot review has been RECEIVED
 for the current head SHA** (`references/copilot.md` § Converged).
