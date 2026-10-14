@@ -831,7 +831,7 @@ Skill tool: skill="resolve-pr-feedback", args="[PR_NUMBER] — [STEP 2.5 SCOPE B
 
 **A passing run comes here too, because this is the lifecycle's only Codecov pass.** Step 6.3's calls are scoped to `copilot` and `coderabbit`, and a passing `codecov/patch` can sit beside missing lines in the Codecov comment, which is what decides (`resolve-pr-feedback`'s `references/codecov.md` § Assess). It runs on CI's terminal verdict, never earlier, because Codecov reports only once CI has uploaded coverage.
 
-It detects both sources on this head and loads the reference of each one present — reporting Codecov `absent` where the repo does not use it, which is not a failure, and `stale` where it reported on an earlier head but not this one, which is not a pass: Step 8.1's Codecov gate stays unmet and goes to the user — then reads the failing checks' logs, assesses coverage, and **returns the diagnosed blocking set**: CI failures by category, coverage gaps as uncovered lines. It fixes and pushes nothing (its Step 3). Flaky and infrastructure failures come back reported, not fixed — they are the user's call, never a blind re-run. If the set is empty, there is nothing to fix: on `TERMINAL_PASS` proceed to Step 8. **On `TERMINAL_FAIL`, route every failing check by its owner before concluding anything** — the CI reference excludes the checks other sources own, so an empty set does not mean every failure was transient:
+Both sources are requested, so both references load whatever detection finds (`resolve-pr-feedback` Step 1, which references load), and each reference's § Configured check settles a source with no report on this head: Codecov `not configured` is not a failure and gates nothing; Codecov `configured, no report on head <sha>` — after that reference's one re-wait — is not a pass: Step 8.1's Codecov gate stays unmet and goes to the user. It then reads the failing checks' logs, assesses coverage, and **returns the diagnosed blocking set**: CI failures by category, coverage gaps as uncovered lines. It fixes and pushes nothing (its Step 3). Flaky and infrastructure failures come back reported, not fixed — they are the user's call, never a blind re-run. If the set is empty, there is nothing to fix: on `TERMINAL_PASS` proceed to Step 8. **On `TERMINAL_FAIL`, route every failing check by its owner before concluding anything** — the CI reference excludes the checks other sources own, so an empty set does not mean every failure was transient:
 
 - a failing **`CodeRabbit` check** is CodeRabbit's: return to Step 6.3's CodeRabbit path (`coderabbit-review`, its rate-limit degradation included), never a CI fix and never flaky;
 - a failing **`codecov/*` status** is Codecov's: act on the `codecov` result this call returned — a coverage gap is in the blocking set; a status failing with no patch gap is reported as Codecov's for the user's decision (`resolve-pr-feedback`'s `references/codecov.md` § Assess);
@@ -891,9 +891,10 @@ Skill tool: skill="coderabbit-review",  args="[NUMBER] — [STEP 2.5 SCOPE BRIEF
 gh pr view [NUMBER] --json reviewThreads \
   --jq '[.reviewThreads[] | select(.isResolved == false)] | length'
 
-# 4. Codecov — Step 7.2's codecov result for MERGE_HEAD: absent, or clean per
-#    resolve-pr-feedback's references/codecov.md — 0 missing lines in the comment
-#    AND codecov/* statuses passing. A green codecov/patch alone is not the gate.
+# 4. Codecov — Step 7.2's codecov result for MERGE_HEAD: `not configured`, or clean
+#    per resolve-pr-feedback's references/codecov.md — 0 missing lines in the comment
+#    AND codecov/* statuses passing. A green codecov/patch alone is not the gate, and
+#    `configured, no report on head` is UNMET: report it to the user, never merge.
 #    Reuse that result when it names MERGE_HEAD; it is evidence about one SHA.
 ```
 
@@ -918,7 +919,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 - [ ] CodeRabbit is passing with all received threads resolved, not configured, or explicitly recorded as `skipped (rate-limited)`. CodeRabbit throttling is optional and never blocks merge.
 - [ ] Zero unresolved **blocking** ledger entries (`references/scope-contract.md` § Blocking) — `required-by-contract`, `regression-caused-by-change`, and any entry blocking by tier; the latest affected delta is verified within the stopping bounds
 - [ ] Every test plan item **settled** (Step 5.5): verified, user-confirmed as a manual pass, or explicitly accepted by the user — as a known failure, or as knowingly unverified. An unanswered `— requires manual testing` is pending, not settled, and blocks
-- [ ] Codecov absent, or Step 7.2 assessed it clean on `MERGE_HEAD` — 0 missing lines in the Codecov comment, not only passing `codecov/*` statuses
+- [ ] Codecov `not configured` (its § Configured check), or Step 7.2 assessed it clean on `MERGE_HEAD` — 0 missing lines in the Codecov comment, not only passing `codecov/*` statuses. `configured, no report on head` is unmet and goes to the user
 - [ ] No unresolved review threads from any reviewer (Copilot, CodeRabbit, human, or any other configured automated reviewer); follow-up/out-of-scope threads are settled without expanding implementation
 
 <!--

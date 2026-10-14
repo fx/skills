@@ -221,17 +221,30 @@ under `sources: ci,codecov` is reported as CodeRabbit's, not dropped. Excluding 
 from CI without naming it leaves a failed run with no failure anyone owns, which
 the caller then reads as flaky or infrastructure.
 
-**Load `references/<source>.md` for each source that is present and in `sources:`
-scope — and only those; a stale source loads nothing.** An unscoped run also
-loads `references/copilot.md` when Copilot is absent or stale, for its
-convergence condition: Copilot review is mandatory
-(`copilot-review`), and a head it has not reviewed is unreviewed, not settled.
+**Which references load — the one rule:**
 
-Report every source as `present` (naming which kind — `threads`, `head`, or
-both), `stale: last seen on <sha>`, `absent` or `not requested`. **Neither absent
-nor stale is a clean result**: absent means nothing from that source on this PR's
-head or threads, stale means it has not reported on this head — never that it is
-settled.
+1. **A source the caller named in `sources:` always loads its reference**, whatever
+   detection found. Detection alone never reports a requested source absent: with
+   no head evidence, the reference's own **§ Configured** check decides between
+   `not configured` — report it; the source is absent and gates nothing — and
+   `configured, no report on head <sha>`, which is never clean. On a scoped call
+   that state goes back to the caller, whose loop owns the wait; on an unscoped
+   run Step 5 waits per the reference's § Converged and then hands back. A
+   requested source dropped on detection is a configured gate skipped in silence —
+   a Codecov that has not reported yet the moment `dev` Step 7.2 looks.
+2. **A source the caller did not name** — every source, on an unscoped run —
+   loads its reference only when present; a stale one loads nothing. Copilot is
+   the exception: an unscoped run always loads `references/copilot.md`, because
+   Copilot review is mandatory (`copilot-review`) and a head it has not reviewed
+   is unreviewed, not settled.
+
+Report every source as one of: `present` (naming which kind — `threads`, `head`,
+or both); `clean on head <sha>` (requested, configured, reported, nothing to do);
+`configured, no report on head <sha>` (with `last seen on <sha>` where it reported
+earlier); `not configured`; `stale: last seen on <sha>` (unrequested only);
+`absent` (unrequested only); or `not requested`. **Only `present` with nothing
+left, `clean`, and `not configured` are settled states**: absent, stale and
+"no report on head" each mean the source has not spoken about this head.
 
 ## Step 2: Triage
 
@@ -441,10 +454,10 @@ none. If threads remain, report which reviewers still have open feedback.
 ## PR #123 Feedback Summary — head <sha>
 
 ### Detection
-- copilot: present (head review; 2 unresolved threads) | stale: last seen on <sha> | absent | not requested
-- coderabbit: present (head check <state>; 3 unresolved threads) | stale: last seen on <sha> | absent | not requested
-- codecov: present (head: patch 65%, threshold 80% from codecov.yml) | stale: last seen on <sha> | absent | not requested
-- ci: present (2 failed checks) | absent | not requested
+- copilot: present (head review; 2 unresolved threads) | configured, no report on head <sha> | stale: last seen on <sha> | not requested
+- coderabbit: present (head check <state>; 3 unresolved threads) | clean on head <sha> | configured, no report on head <sha> | not configured | stale | absent | not requested
+- codecov: present (head: patch 65%, threshold 80% from codecov.yml) | configured, no report on head <sha> (last seen on <sha>) | not configured | stale | absent | not requested
+- ci: present (2 failed checks) | clean on head <sha> | configured, no report on head <sha> (checks pending) | not configured | absent | not requested
 - Failing checks owned by another source: <check> → <source> (<present | not requested>) | none
 - Uncategorised automated reviewers: <name>: <n> unresolved — no reference here (or "none seen")
 
@@ -472,9 +485,10 @@ would read as full coverage.
 
 ## Success Criteria
 
-1. Every in-scope source detected under Step 1's two-kind presence definition and
-   reported `present`, `stale`, `absent` or `not requested`; only present
-   sources' references loaded (plus Copilot's for an unscoped run's convergence).
+1. Every source detected under Step 1's two-kind presence definition and reported
+   in one of its states; every requested source's reference loaded and its
+   § Configured check run, and an unrequested source's only when present (plus
+   Copilot's on an unscoped run). No requested source reported absent.
 2. Every in-scope thread from a categorised reviewer triaged, replied to and
    resolved — every author matched exactly against § Supported Reviewers' logins,
    Copilot never on the bare `Copilot`. Suppressed comments open no thread and are not part of this

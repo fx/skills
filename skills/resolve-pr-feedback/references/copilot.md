@@ -1,8 +1,8 @@
 # Copilot
 
-`resolve-pr-feedback` loads this file only when its Step 1 detection finds
-Copilot on the PR and Copilot is in its `sources:` scope — and, on an unscoped
-run, for the convergence condition below even when Copilot has posted nothing.
+`resolve-pr-feedback` loads this file whenever `copilot` is in its `sources:`, and
+on every unscoped run — for the convergence condition below even when Copilot has
+posted nothing.
 It holds Copilot's mechanics only. The procedure — Scope Brief, triage,
 dispositions, review-rule entries, convergence — is `fx-review` Steps 1–8, and
 none of it is restated here.
@@ -19,6 +19,13 @@ or substring test, which also claims any login that merely begins with it
 `requested_reviewers`, which is always empty, so matching on it categorises
 **zero** Copilot threads on every PR — real threads stay open while the run
 reports nothing to do and the merge gate stays unsatisfiable.
+
+## Configured
+
+Copilot review is mandatory (`copilot-review`), so it is always configured and is
+never reported `not configured`. With no Copilot review of the head, report
+`configured, no report on head <sha>`: scoped, `copilot-review`'s loop nudges and
+waits; unscoped, § Converged's action does.
 
 ## Read the verdict of the current head's reviews
 

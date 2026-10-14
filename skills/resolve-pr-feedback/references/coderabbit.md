@@ -1,8 +1,8 @@
 # CodeRabbit
 
-`resolve-pr-feedback` loads this file only when its Step 1 detection finds
-CodeRabbit on the PR's head and CodeRabbit is in its `sources:` scope. It holds
-CodeRabbit's mechanics only. The procedure — Scope Brief, triage, dispositions,
+`resolve-pr-feedback` loads this file whenever `coderabbit` is in its `sources:`,
+and on an unscoped run when its Step 1 detection finds CodeRabbit present. It
+holds CodeRabbit's mechanics only. The procedure — Scope Brief, triage, dispositions,
 review-rule entries, convergence — is `fx-review` Steps 1–8, and none of it is
 restated here.
 
@@ -12,6 +12,19 @@ A CodeRabbit author's login is exactly `coderabbitai` in GraphQL or
 `coderabbitai[bot]` in REST — match it with `IN("coderabbitai", "coderabbitai[bot]")`,
 never a substring test (`resolve-pr-feedback` § Supported Reviewers).
 Its PR check is named `CodeRabbit`.
+
+## Configured
+
+Run this when CodeRabbit has no head evidence and no open thread. CodeRabbit is
+**configured** when `.coderabbit.yaml` exists at the root, or CodeRabbit left any
+signal on this PR — a `CodeRabbit` check or status on any of its commits, or a
+review or comment by a CodeRabbit login.
+
+- **None** → `not configured`, the same verdict `coderabbit-review`'s waiter
+  reports as `NOT_CONFIGURED`. Absent; gates nothing.
+- **Any** → `configured, no report on head <sha>`. Scoped, that goes back to
+  `coderabbit-review`, whose waiter owns the wait; unscoped, Step 5 runs that
+  waiter and § Waiting, re-review and convergence decides.
 
 ## Comment anatomy
 

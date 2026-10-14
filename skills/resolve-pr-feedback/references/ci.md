@@ -1,11 +1,25 @@
 # CI
 
-`resolve-pr-feedback` loads this file only when its Step 1 detection finds
-failing CI on the PR's head and `ci` is in its `sources:` scope. It holds CI's
-mechanics only. The procedure — Scope Brief, triage, dispositions, convergence —
+`resolve-pr-feedback` loads this file whenever `ci` is in its `sources:`, and on
+an unscoped run when its Step 1 detection finds failing CI on the PR's head
+(`resolve-pr-feedback` Step 1, which references load). It holds CI's mechanics
+only. The procedure — Scope Brief, triage, dispositions, convergence —
 is `fx-review` Steps 1–8, and none of it is restated here.
 
 CI is not a reviewer: it posts no threads, so nothing here settles one.
+
+## Configured
+
+Loaded on request with no failing check on the head, read the head's checks
+(§ Select the failing checks, without the failure filter) and report exactly one:
+
+- **Every check completed, none failed** → `clean on head <sha>`. Nothing to
+  diagnose; § Converged holds for this head.
+- **Checks still running** → `configured, no report on head <sha> (checks
+  pending)`. Scoped, that goes back to the caller, whose CI wait (`dev` Step 7.1)
+  owns it; unscoped, Step 5's CI wait decides.
+- **No check at all** → § Conflict check first; with no conflict, `not
+  configured` — and, per § Converged, "no CI ran on head `<sha>`" is never a pass.
 
 ## Input
 

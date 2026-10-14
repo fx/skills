@@ -396,7 +396,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 | # | Gate | How to verify | Blocking? |
 |---|------|--------------|-----------|
 | 1 | **Required CI checks green** | `gh pr checks <NUMBER>` — every required non-CodeRabbit check must pass | YES |
-| 1b | **Codecov clean (if configured)** | `dev` Step 7.2's `codecov` result for the head: absent, or 0 missing lines in the Codecov comment with `codecov/*` statuses passing — a green `codecov/patch` alone does not pass | YES |
+| 1b | **Codecov clean (if configured)** | `dev` Step 7.2's `codecov` result for the head: `not configured`, or 0 missing lines in the Codecov comment with `codecov/*` statuses passing — a green `codecov/patch` alone does not pass, and `configured, no report on head` is unmet and goes to the user | YES |
 | 2 | **Copilot review RECEIVED and feedback RESOLVED** | Invoke `copilot-review` skill — confirm 0 unresolved Copilot threads | YES |
 | 2b | **CodeRabbit reviewed or correctly degraded** | Invoke `coderabbit-review`: prefer a passing check with received feedback resolved; if CodeRabbit rate-limits, report once, resolve what it already delivered (blocking findings fixed, every posted thread settled), and record `skipped (rate-limited)` without blocking | NO when rate-limited |
 | 3 | **Implementation matches spec/task** | Read the diff and verify against requirements | YES |

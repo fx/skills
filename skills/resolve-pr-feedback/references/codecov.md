@@ -1,8 +1,8 @@
 # Codecov
 
-`resolve-pr-feedback` loads this file only when its Step 1 detection finds
-Codecov on the PR's head and Codecov is in its `sources:` scope. It holds
-Codecov's mechanics only. The procedure — Scope Brief, triage, dispositions,
+`resolve-pr-feedback` loads this file whenever `codecov` is in its `sources:` —
+`dev` Step 7.2 always names it — and on an unscoped run when its Step 1 detection
+finds Codecov present. It holds Codecov's mechanics only. The procedure — Scope Brief, triage, dispositions,
 review-rule entries, convergence — is `fx-review` Steps 1–8, and none of it is
 restated here.
 
@@ -68,7 +68,7 @@ produces tests nobody asked for.
 | Comment shows any missing lines, even with a passing status | Coverage gap |
 | No comment, but a `codecov/*` status is `failure` or `error` | Coverage gap |
 | Comment clean, but a `codecov/*` status is `failure` or `error` — usually `codecov/project` | Not a patch gap and not flaky: report it as Codecov's, with the status description, for the user's decision. The failing check still gates the merge |
-| No Codecov data at all | § Not configured |
+| No Codecov data on the head | § Configured |
 
 ## Locate the uncovered lines
 
@@ -97,12 +97,31 @@ Deliberately uncovered: <path:lines> — <why>
 - **One fix iteration.** If coverage still fails after one push, report the
   remaining gaps instead of looping.
 
-## Not configured
+## Configured
 
-No status, comment or annotation on the PR at all: check for `codecov.yml` /
-`.codecov.yml` and for `codecov/codecov-action` in `.github/workflows/`, report
-"Codecov does not appear to be configured for this repository", and treat the
-source as absent — not as a failure.
+Run this whenever the head has no Codecov evidence — no `codecov/*` status on it,
+no Codecov comment naming it. Codecov is **configured** when any one holds:
+
+```bash
+ROOT=$(git rev-parse --show-toplevel)
+# 1. A Codecov config file
+ls "$ROOT"/codecov.yml "$ROOT"/.codecov.yml "$ROOT"/.github/codecov.yml 2>/dev/null
+# 2. An uploader in a workflow: the action, or the CLI/uploader script
+grep -rlE 'codecov/codecov-action|codecov(cli)?[[:space:]]+(upload|do-upload)|codecov\.io/(bash|uploader)' "$ROOT"/.github/workflows/ 2>/dev/null
+# 3. A codecov/* status on any earlier commit of this PR
+for sha in $(gh pr view "$PR_NUMBER" --json commits --jq '.commits[].oid'); do
+  gh api "/repos/${REPO_NWO}/commits/${sha}/status" \
+    --jq '[.statuses[] | select(.context | startswith("codecov/"))] | length'
+done | grep -qv '^0$' && echo "codecov/* status on an earlier commit"
+```
+
+- **None holds** → `not configured`: report "Codecov does not appear to be
+  configured for this repository". Absent, and not a failure.
+- **Any holds** → `configured, no report on head <sha>`. Codecov reports only
+  after CI uploads coverage, so the head's CI wait must be terminal first;
+  where it already is, re-run that wait once — it also waits on `codecov/*`
+  statuses that appeared since — and re-read. Still nothing is § Converged's
+  "did not report on this head" hand-back, never a pass and never absent.
 
 ## Converged
 
@@ -120,8 +139,9 @@ It hands back, never loops, when:
   verdict for the head and no Codecov comment names it (§ Collect's stale-comment
   rule), and no `codecov/*` status on it has failed (a failed one is a coverage
   gap, § Assess). Report "Codecov did not report on head `<sha>`" with any status
-  states; it is not a pass and not a coverage gap. Waiting again cannot change
-  it: Codecov's input was CI, and CI is done.
+  states; it is not a pass and not a coverage gap. § Configured's one re-wait has
+  already given a late status its chance; waiting further cannot change it:
+  Codecov's input was CI, and CI is done.
 - **A `codecov/*` status fails with no patch gap** (§ Assess) — report it as
   Codecov's for the user's decision.
 - **Gaps remain after the one fix iteration** (§ Hand-off to Step 3) — report
