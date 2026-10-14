@@ -63,7 +63,7 @@ Standards that bind the Implementer, in addition to **Test Policy** and **Scope 
 
 ## CRITICAL RULES
 
-**Delegate the substantive roles this lifecycle owns — requirements analysis, planning, and implementation — each to its own sub-agent that loads the matching skill. Implementation's skill is this one: the implementation sub-agent loads `dev` and acts in its Implementer role. Do not delegate a mechanical operation the coordinator can perform directly.**
+**Delegate the substantive roles this lifecycle owns — requirements analysis (which also produces the implementation outline) and implementation — each to its own sub-agent that loads the matching skill. Implementation's skill is this one: the implementation sub-agent loads `dev` and acts in its Implementer role. Do not delegate a mechanical operation the coordinator can perform directly.**
 
 ### How to Launch Sub-Agents with Skills
 
@@ -96,7 +96,7 @@ Choose by the **shape of the task**, not by how important it feels. Every Agent 
 
 | Size | Use for |
 |---|---|
-| **large** | Implementation (Step 4). Planning (Step 3). Requirements analysis (Step 2). Fix agents on an **undiagnosed** failure. Anything requiring design judgment. |
+| **large** | Implementation (Step 4). Requirements analysis (Step 2). Fix agents on an **undiagnosed** failure. Anything requiring design judgment. |
 | **medium** | Browser/test-plan verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
 | **small** | Pure inspection or summarisation with no judgment call. |
 
@@ -125,7 +125,7 @@ duvet# During an explicitly invoked `dev` lifecycle, the coordinator MUST delega
 - ❌ NEVER create implementation commits yourself
 - ❌ NEVER skip tests (`test.skip`, `it.skip`, `describe.skip` are FORBIDDEN)
 - ❌ NEVER select a skill as an agent type — the delegate loads it from its prompt (in Claude Code: not via `subagent_type`)
-- ✅ ALWAYS delegate requirements analysis, planning, and implementation roles — implementation to a sub-agent that loads `dev` in its Implementer role
+- ✅ ALWAYS delegate requirements analysis and implementation roles — implementation to a sub-agent that loads `dev` in its Implementer role
 - ❌ NEVER delegate review to a reviewing sub-agent — review is Codex, Copilot, and CodeRabbit, each driven by its own skill from the coordinator session
 - ✅ ALWAYS instruct delegated role agents to load their named skills via the Skill tool
 - ✅ ALWAYS perform straightforward status checks, branch synchronization, PR metadata updates, and an explicitly approved merge directly when delegation adds no independent judgment
@@ -241,8 +241,9 @@ Agent tool:
            - Use WebFetch for referenced URLs
            - Use AskUserQuestion for ambiguities
            - Analyze codebase for patterns
+           - Produce the Implementation Outline your skill defines; with an approved change document, map it onto that document's task list
 
-           Output: Complete requirements with acceptance criteria"
+           Output: Complete requirements with acceptance criteria and the Implementation Outline"
   description: "Analyze requirements"
 ```
 
@@ -277,12 +278,12 @@ Derive **size signal** from the user's own language: "just", "real quick",
 not filler — honour it.
 
 **The Scope Brief MUST be included verbatim in every downstream sub-agent prompt
-and every reviewer invocation in Steps 3, 4, 4.5, 4.6, 6, and 8** — verifiers
+and every reviewer invocation in Steps 4, 4.5, 4.6, 6, and 8** — verifiers
 included, not only reviewers. A reviewer without
 it reports the work you deliberately did not do, and every such finding costs a
 full review cycle to filter by hand.
 
-**Then freeze the implementation contract.** If the task is sourced from, names, or discovers a relevant `docs/changes/*.md` file, read it and the spec sections it links. Confirm implementation approval from the conversation or the change's recorded workflow state; if approval is unclear, STOP and ask the user. Record the contract path and approval evidence in the working brief. The change document, its linked specs, and all mandatory project rules form the implementation contract: the plan and implementer prompt MUST map work to that contract and MUST NOT infer adjacent product or architecture work.
+**Then freeze the implementation contract.** If the task is sourced from, names, or discovers a relevant `docs/changes/*.md` file, read it and the spec sections it links. Confirm implementation approval from the conversation or the change's recorded workflow state; if approval is unclear, STOP and ask the user. Record the contract path and approval evidence in the working brief. The change document, its linked specs, and all mandatory project rules form the implementation contract: the implementation outline and implementer prompt MUST map work to that contract and MUST NOT infer adjacent product or architecture work.
 
 The coordinator owns one in-memory finding ledger for the run; reviewer sub-agents return findings to the coordinator and MUST NOT mutate the ledger concurrently. Give every finding a stable fingerprint (`category + file + line/range + normalized claim`) and record its source, first-seen revision, classification, materiality tier, disposition, and verification evidence. Classification and materiality are independent fields — see Step 4.5 for how the tier is assigned. The tier is `n/a` for a contract blocker: filter 2 stops before the bar, so a rule violation is never ranked, and inventing a tier for one is the mistake that lets it be argued down. Classify each finding exactly once as:
 
@@ -294,43 +295,9 @@ Fix the first two classes, and any entry that is blocking by tier — a reviewer
 
 ---
 
-### STEP 3: Planning
+### STEP 3: (retired)
 
-**MANDATORY: Launch a sub-agent that loads the planner skill.**
-
-```
-Agent tool:
-  prompt: "Load the planner skill (Skill tool: skill='planner'), then:
-
-           [PASTE THE STEP 2.5 SCOPE BRIEF VERBATIM HERE]
-
-           Create implementation plan for:
-
-           [REQUIREMENTS FROM STEP 2]
-
-           - Keep the plan inside the Scope Brief; if the work cannot be done
-             within it, stop and report that rather than planning around it
-           - Break into atomic steps
-           - Identify files to modify
-           - Determine test requirements
-           - Flag if multiple PRs needed
-           - Treat the approved change document as the implementation contract
-           - Do not include non-blocking follow-up/out-of-scope work, or expand product/architecture, without an approved amendment
-
-           Output: Numbered implementation steps"
-  description: "Plan implementation"
-```
-
-For GitHub issues, also update issue:
-```
-Agent tool:
-  prompt: "Load the issue-updater skill (Skill tool: skill='issue-updater'), then:
-
-           Update issue #[NUMBER] with plan. Add label: in-progress"
-  description: "Update issue"
-```
-
-**⛔ DO NOT PROCEED until plan exists**
+Planning is not a separate step. Step 2's implementation outline — or, when one exists, the approved change document's task list — is the plan Step 4 implements. The number stays so the step numbers other skills cite do not move.
 
 ---
 
@@ -346,7 +313,7 @@ Agent tool:
 
            Implement this plan:
 
-           [PLAN FROM STEP 3]
+           [THE STEP 2 IMPLEMENTATION OUTLINE — OR, WITH AN APPROVED CHANGE DOCUMENT, ITS TASK LIST AS THAT OUTLINE MAPS IT]
 
            Requirements:
            - Stay inside the Scope Brief; if implementation cannot be completed
@@ -445,7 +412,7 @@ This step is MANDATORY for every change, not only web/UI ones. Backend changes, 
 
 #### 4.6.1 Construct and classify the test plan
 
-Write the test plan now — it becomes the `## Test plan` section of the PR body in Step 5. Derive it from the Step 3 plan and the branch diff (`git diff main --stat`): each item is one verification target.
+Write the test plan now — it becomes the `## Test plan` section of the PR body in Step 5. Derive it from the Step 2 implementation outline and the branch diff (`git diff main --stat`): each item is one verification target.
 
 **Classify each item:**
 
@@ -983,16 +950,6 @@ Confirm in the diff:
 
 If no relevant tracking doc exists, skip this step.
 
-#### 8.3 Update Issue (if applicable)
-
-```
-Agent tool:
-  prompt: "Load the issue-updater skill (Skill tool: skill='issue-updater'), then:
-
-           Update issue #[NUMBER]: Link PR, set label ready-for-review"
-  description: "Update issue"
-```
-
 #### 8.4 Report to User
 
 ```
@@ -1027,14 +984,14 @@ After this handoff, a later user message such as "merge it" is a standalone mech
 1. STEP 0: Auth check
 2. STEP 1: Branch as `fix/issue-123-description`
 3. Fetch issue: `gh issue view [NUMBER] --json title,body,labels,comments`
-4. STEP 2-8: Standard (use issue-updater in Steps 3 and 8)
+4. STEPS 2-8: Standard. The PR body carries `Closes #N` (Step 5); nothing labels or comments on the issue.
 
 ### Quick Fix (fix:, error:, bug: prefix)
 
 1. STEP 0: Auth check
 2. STEP 1: Branch as `fix/short-error-desc`
 3. STEP 2: Focus on error analysis, root cause
-4. STEPS 3-8: Standard
+4. STEPS 4-8: Standard
 
 ### Multi-PR Tasks
 
@@ -1065,8 +1022,6 @@ All sub-agents are launched via the Agent tool. Each loads its skill via the Ski
 | Step | Skill to Load | Skill Name |
 |------|---------------|------------|
 | 2 | Requirements Analyzer | `requirements-analyzer` |
-| 3 | Planner | `planner` |
-| 3,8 | Issue Updater | `issue-updater` |
 | 4,4.6.4,6.2 | Implementer | `dev`, in its **Implementer** role (Step 4 also writes the task-tracking update; Step 6.2 is ONE batched fix pass, not one per finding) |
 | 4.5 | Pre-PR Self-Review | `codex-review` (local `codex`, the ONLY local reviewer) — initial pass complete, then one batched fix; blocking findings resolved, latest affected delta verified |
 | 4.6.2 | Browser Verification | `verify-web-change` (pre-PR, against the branch) |
@@ -1091,7 +1046,7 @@ An implementation spawn names the role as well: `Load the dev skill (Skill tool:
 Workflow complete when ALL true:
 - ✅ Feature branch created from main
 - ✅ Requirements documented
-- ✅ Plan created
+- ✅ Implementation outline produced (or the approved change document's task list adopted as the plan)
 - ✅ Code implemented by an Implementer sub-agent (`dev`, Implementer role) with atomic commits, task tracking included
 - ✅ Pre-PR Codex review completed (or permitted degradation documented), findings classified in the shared ledger, blocking findings resolved, and the latest affected delta verified within the stopping bounds
 - ✅ Browser and programmatic test-plan verification done BEFORE the PR was opened

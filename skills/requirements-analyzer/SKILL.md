@@ -1,6 +1,6 @@
 ---
 name: requirements-analyzer
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Analyzes supplied implementation requirements, repository context, and acceptance criteria."
+description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Analyzes supplied implementation requirements, repository context, and acceptance criteria, and produces the implementation outline the lifecycle implements from."
 ---
 
 # Requirements Analyzer
@@ -13,7 +13,7 @@ You are an expert requirements analyst and technical documentation specialist. Y
 
 ## Ultimate Goal
 
-**Your output is consumed by the planner skill.** Your job is to deliver complete, unambiguous requirements documentation that enables the planner to create a detailed implementation plan without needing to gather additional context.
+**Your output is the plan.** `dev` has no separate planning step: the coordinator hands your requirements and their **Implementation Outline** (§ 6) straight to the implementer. Deliver both complete and unambiguous, so implementation can start without gathering more context.
 
 ## MANDATORY: Preserve the user's own words
 Your output is the first place the user's framing can be lost — and once lost, no downstream skill or reviewer can recover it. Open your requirements document with the **Scope Brief** (definition: `[SKILLS_DIR]/dev/references/scope-contract.md`):
@@ -136,7 +136,7 @@ When given a GitHub issue (either by URL or by finding the next logical issue):
 3. **Priority Conflicts**: When requirements may conflict
 4. **Missing Criteria**: When acceptance criteria are incomplete
 
-**Ask focused, multiple-choice questions that help the planner proceed without ambiguity.**
+**Ask focused, multiple-choice questions that help implementation proceed without ambiguity.**
 
 ### 4. Codebase Analysis
 
@@ -165,11 +165,11 @@ Understand the project's structure and conventions:
    - Document database schema patterns
    - Find component structure examples
 
-### 5. Requirements Compilation for Planner
+### 5. Requirements Compilation
 
-Create a comprehensive requirements document optimized for the planner skill:
+Create a comprehensive requirements document:
 
-1. **Summary**: High-level overview that tells the planner exactly what to build
+1. **Summary**: High-level overview that tells the implementer exactly what to build
 
 2. **Detailed Requirements**:
    - Functional requirements with clear, testable specifications
@@ -202,7 +202,18 @@ Create a comprehensive requirements document optimized for the planner skill:
    - Documentation needs
    - Performance benchmarks if applicable
 
-### 6. Issue Selection (When No URL Provided)
+### 6. Implementation Outline (MANDATORY)
+
+Your requirements end with an outline the implementer can work from step by step.
+
+- **Contract first.** With an approved change document, its task list is the plan: map every outline step onto a task in it, and add no step no task covers — new work needs an approved amendment first (`dev` Step 2.5 freezes that contract). Without one, the Scope Brief is the contract.
+- **Every step traces to the request, an approved change document, or a spec it links** — and names which. A step you cannot trace does not go in.
+- **Atomic and ordered.** Each step is one commit-sized change: the files it touches, what changes, and the tests that prove it.
+- **Flag several PRs** when the work needs them, with the reason. Several PRs where one was implied is a stop-and-report (`[SKILLS_DIR]/dev/references/scope-contract.md` § The sprawl stop rule), not a plan to carry on with.
+- **Adjacent improvements go in a separate `Out of scope / follow-up` list, never in the steps.** An outline is the easiest place for scope to grow: every adjacent fix looks reasonable in a numbered list, and nobody notices the request doubled until implementation.
+- **If outlining shows the work needs materially more than the request implies,** deliver the outline for what is in scope, then state the boundary and the cheapest path forward. Never quietly outline the larger version, and never stop with no outline.
+
+### 7. Issue Selection (When No URL Provided)
 When asked to find the next logical issue:
 
 1. **Check Project Boards First**:
@@ -225,15 +236,15 @@ When asked to find the next logical issue:
    - Priority labels
    - Absence of blockers
 
-### 7. Output Format
+### 8. Output Format
 
-Provide a structured output that the planner skill can consume directly:
+Provide a structured output that the coordinator can hand to the implementer directly:
 
 ```markdown
 # Requirements Analysis: [Issue Title]
 
 ## Summary
-[Brief overview that tells the planner exactly what to build]
+[Brief overview of exactly what to build]
 
 ## Issue Details
 - Issue: #[number]
@@ -282,6 +293,16 @@ Provide a structured output that the planner skill can consume directly:
 - [Specific guidance point 2]
 ...
 
+## Implementation Outline
+Contract: [approved change document path — its task list is the plan | none — the Scope Brief]
+1. [Step] — files: [paths] — traces to: [request | change-doc task | spec section]
+   - Tests: [what proves it]
+2. ...
+PRs: [one | several — reason]
+
+## Out of scope / follow-up
+- [adjacent improvement noticed — not in the steps]
+
 ## Success Criteria
 - [ ] [Criterion 1 - measurable]
 - [ ] [Criterion 2 - measurable]
@@ -298,7 +319,7 @@ Provide a structured output that the planner skill can consume directly:
 1. **No Ambiguity**: Use AskUserQuestion to resolve ALL unclear requirements before finalizing
 2. **Complete Research**: Use WebSearch and WebFetch to gather ALL external context
 3. **Codebase-Aware**: Always analyze existing patterns and provide specific file references
-4. **Planner-Optimized**: Structure output so the planner skill can immediately create implementation steps
+4. **Implementation-ready**: The outline is the plan — the implementer works from it directly
 5. **Comprehensive**: Missing requirements cause implementation delays - be thorough
 
-Remember: Your output directly enables the planner skill to create an accurate, actionable implementation plan. The quality of planning depends entirely on the completeness of your requirements analysis.
+Remember: your output is the plan the implementer works from. The quality of the implementation depends on the completeness of your requirements and the precision of your outline.

@@ -11,7 +11,7 @@ Installable into Claude Code, Codex, Cursor, OpenCode, and 70+ other agents via 
 npx skills add fx/skills --skill '*' -g
 
 # Just the lifecycle
-npx skills add fx/skills --skill dev --skill planner --skill fx-review
+npx skills add fx/skills --skill dev --skill requirements-analyzer --skill fx-review
 
 # List first
 npx skills add fx/skills --list
@@ -27,8 +27,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `team` | Wraps `dev`: runs its lifecycle for every change in the approved scope, unattended, and merges each PR itself once the merge gates pass. |
 | `fix` | Runs a test-first bug-fix lifecycle and then enters the explicitly requested SDLC workflow. |
 | `workflow-runner` | Runs an explicitly selected workflow through its own completion criteria without stopping between phases. |
-| `requirements-analyzer` | Analyzes supplied implementation requirements, repository context, and acceptance criteria. |
-| `planner` | Creates a detailed implementation plan from supplied requirements and scope. |
+| `requirements-analyzer` | Analyzes supplied implementation requirements, repository context, and acceptance criteria, and produces the implementation outline the lifecycle implements from. |
 | `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows. |
 | `codex-review` | Runs a scoped one-shot Codex CLI branch review as an external review adapter. |
 | `copilot-review` | Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review. |
@@ -39,7 +38,6 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `resolve-codecov-feedback` | Processes Codecov feedback and adds coverage required by an active workflow. |
 | `resolve-ci-failures` | Analyzes and fixes CI failures within an active explicitly requested PR workflow. |
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
-| `issue-updater` | Updates GitHub issues with planning, status, and implementation progress within an active workflow. |
 | `project-management` | Manages project tracking through `docs/tasks.md`, `docs/changes/`, or an explicitly selected external tracker. |
 | `spec-writer` | Writes and maintains living specs and proposed change documents within an explicitly requested documentation lifecycle. |
 | `fx-setup` | Creates the default docs and instruction-file layout as a prerequisite of an explicitly invoked documentation workflow. |
@@ -51,7 +49,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 
 ## Explicit invocation
 
-**Every skill here is explicit-use only.** None auto-triggers on generic task semantics — "write some code", "review this", "fix the bug", "make a PR" do not load anything. A skill runs when you name it (`/dev`, "use the planner skill") or when a workflow you already invoked calls it by name.
+**Every skill here is explicit-use only.** None auto-triggers on generic task semantics — "write some code", "review this", "fix the bug", "make a PR" do not load anything. A skill runs when you name it (`/dev`, "use the spec-writer skill") or when a workflow you already invoked calls it by name.
 
 That is deliberate. These are opinionated multi-step lifecycles that create branches, open pull requests, and drive external reviewers. Loading one because a request merely resembled a stage of it is a worse failure than not loading it at all.
 

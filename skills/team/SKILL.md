@@ -224,7 +224,7 @@ Remember each `(worktree path, branch, node_modules symlink)` triple you created
 
 **You loaded `dev` before doing anything else** (First action, above). It is the single source of truth for the development workflow — do not duplicate its instructions here. If you have not loaded it, stop and load it now; nothing below works without it.
 
-For each task (or group of parallel tasks), walk through `dev`'s SDLC steps yourself, Steps 0–8.3, then merge in place of Step 8.4. For each step, decide:
+For each task (or group of parallel tasks), walk through `dev`'s SDLC steps yourself, Steps 0–8.2, then merge in place of Step 8.4. For each step, decide:
 
 1. **Can I handle this step directly?** (e.g., invoking a skill, running a `gh` command, pushing the candidate head from a worktree) → Do it yourself.
 2. **Does this step require writing/modifying code?** → Spawn a focused agent with a single-purpose prompt for just that step. Implementation and fixes go to an implementer, spawned with the template in **Restated here because they did not survive by reference**.

@@ -27,7 +27,7 @@ Flat only. The [`skills`](https://github.com/vercel-labs/skills) CLI supports ca
 
 Format: `[a-z0-9-]+`, 1–64 chars, no leading/trailing hyphen, no `--`. That satisfies the spec, Codex (≤64 chars), and Pi (which warns but still loads on violation).
 
-**Names are bare by default.** `dev`, `team`, `planner`, `github` — no vanity prefix, because it costs a keystroke on every invocation and buys nothing when the name is already distinctive.
+**Names are bare by default.** `dev`, `team`, `learn`, `github` — no vanity prefix, because it costs a keystroke on every invocation and buys nothing when the name is already distinctive.
 
 **Prefix `fx-` when a collision is real or likely.** Two triggers, in order:
 
@@ -63,14 +63,14 @@ Both fields required — the `skills` CLI will not discover a skill missing eith
 
 **Every skill here is explicit-use only.** A skill may run when:
 
-1. the user explicitly names or invokes it (`/dev`, "use the planner skill"), or
+1. the user explicitly names or invokes it (`/dev`, "use the spec-writer skill"), or
 2. an already-active, explicitly invoked workflow calls it by name.
 
 Do not write descriptions that auto-trigger on generic task semantics — "coding", "GitHub", "planning", "review", "fix", "create". Do not use `MUST BE USED`, `MUST BE LOADED`, "automatically invoked", or trigger-phrase lists to turn an ordinary request into a lifecycle invocation.
 
 A workflow's instructions apply only to the request that invoked it and end at its documented handoff. Later standalone requests do not inherit the old workflow's orchestration rules: a status query, branch sync, PR metadata change, or explicitly approved merge is handled directly unless the user starts another workflow.
 
-Internal delegation stays valid — `dev` may name `planner`, the reviewer skills, and itself in its Implementer role as part of its active lifecycle. That does not authorize those skills to load themselves for unrelated requests.
+Internal delegation stays valid — `dev` may name `requirements-analyzer`, the reviewer skills, and itself in its Implementer role as part of its active lifecycle. That does not authorize those skills to load themselves for unrelated requests.
 
 ## Host portability
 

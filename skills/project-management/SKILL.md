@@ -74,7 +74,6 @@ Default to `docs/tasks.md` and `docs/changes/` task lists.
 - **`Plan`** — Design implementation plans (built-in subagent type)
 
 ### Development Skills
-- **`planner`** — Create detailed implementation plans
 - **`dev`** — Orchestrate complete SDLC workflow; in its Implementer role, implement features and fix bugs
 
 ## Workflows
