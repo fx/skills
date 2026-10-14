@@ -38,7 +38,7 @@ Use this skill only when the user explicitly names it, or an active explicitly i
 bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh
 ```
 
-- **`FX_DOCS=adopted`** → the workflows below apply as written. A missing `docs/tasks.md` is created from `references/tasks-md-template.md` when the first orphan task needs it (`fx-setup` → `references/adoption.md` § Partial adoption).
+- **`FX_DOCS=adopted`** → the workflows below apply as written. A missing `docs/tasks.md` is created from `references/tasks-md-template.md` when the first orphan task needs it (`fx-setup` → `references/adoption.md` § Partial adoption). Every file the workflows below write or create — `docs/tasks.md`, a change document's task list, `docs/index.yml`, `docs/index.md` — passes `fx-setup` → `references/adoption.md` § Who gates on what's write rule first.
 - **`FX_DOCS=not-adopted`** → use the repo's own tracker, in this order: the `AGENTS.md` `task-tracking:` value (§ External Task Tracking), a `NATIVE_TRACKING` file, then open GitHub issues (`gh repo view --json hasIssuesEnabled`). Edit a tracker file only in its own format — checkbox, heading or table, whatever it already uses. Any tracker path you write or create passes adoption.md § Who gates on what's inside-the-repository rule first. Never create `docs/`, `docs/tasks.md` or `docs/changes/`. Report once per run with the docs-layer block from adoption.md § Report.
 
 ## Task Source Priority
@@ -63,7 +63,7 @@ Projects MAY define a preference for external task tracking in their AGENTS.md. 
 1. Load the GitHub skill (`Skill tool: skill="github"`) if using GitHub
 2. Create issues/tickets in the external tool
 3. In an adopted repo, keep `docs/tasks.md` as a lightweight reference linking to external items
-4. Mark completion in BOTH the external tool and, in an adopted repo, `docs/tasks.md` or change documents
+4. Mark completion in BOTH the external tool and, in an adopted repo, `docs/tasks.md` or change documents — each file a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule
 
 **When no external tracking is configured:** default to `docs/tasks.md` and `docs/changes/` task lists in an adopted repo, and to § Pre-Flight's native tracker otherwise.
 
@@ -87,7 +87,7 @@ When user says "add a feature that does X" or "improve X to allow Y":
 2. **Check if a relevant spec exists** in `docs/specs/` or the native spec directory
 3. **Determine scope** — Single PR? Multiple PRs? Needs a change document?
 4. **If multi-PR**: Invoke `/spec-writer` (which applies its own adoption gating) to create or update the spec and propose change documents
-5. **If single PR**: Add to `docs/tasks.md` (adopted) or the native tracker and proceed to implementation
+5. **If single PR**: Add to `docs/tasks.md` (adopted) or the native tracker — the target passing `fx-setup` → `references/adoption.md` § Who gates on what's write rule — and proceed to implementation
 6. **Get approval** then begin work
 
 ### Workflow 2: "Work on Next"
@@ -138,7 +138,7 @@ Never create `docs/` or a tracker file yourself. Migrating an existing `PROJECT.
 
 **Not adopted:** skip — there is no fx index to sync, and no report beyond § Pre-Flight's.
 
-**After ANY change document status change (draft → in-progress → complete), update ALL THREE locations in the SAME PR:**
+**After ANY change document status change (draft → in-progress → complete), update ALL THREE locations in the SAME PR** — each a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule:
 
 1. **Update the change document itself** — Set `**Status:** complete` (or `in-progress`) in the frontmatter
 2. **Update `docs/index.yml`** — Update the `status:` field for the affected change entry
@@ -151,6 +151,8 @@ Never create `docs/` or a tracker file yourself. Migrating an existing `PROJECT.
 ## Critical Requirements
 
 ### Every Task Completion MUST:
+
+Each file below is written only after it passes `fx-setup` → `references/adoption.md` § Who gates on what's write rule.
 
 1. Mark task complete in the file where the task lives: `- [x] Task`, plus `(PR #N)` where the PR number is already known. The annotation is **optional** — see item 6: tracking is written with the implementation, before the PR exists, and a completed task is never held back or re-committed for the sake of adding a number the merge commit already records.
 2. In an adopted repo, task lists may be in `docs/tasks.md` OR in `docs/changes/*.md` files
@@ -165,7 +167,7 @@ Never create `docs/` or a tracker file yourself. Migrating an existing `PROJECT.
 1. Verify task is atomic (single PR scope)
 2. Ensure description is clear and actionable
 3. Prefer placing tasks in change documents over `docs/tasks.md` (adopted repos)
-4. **Check if a change document already tracks this work** — if so, add the task there, NEVER in `docs/tasks.md`
+4. **Check if a change document already tracks this work** — if so, add the task there (a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule), NEVER in `docs/tasks.md`
 
 ### When Ambiguity Exists:
 

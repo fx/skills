@@ -332,9 +332,16 @@ Agent tool:
              document, mark completion only in a field it already has, in its own
              vocabulary. Same commit series as the code — never a separate later
              commit.
+           - WRITE TARGETS: before writing or creating any tracking, docs or
+             review-rules file, check its path from the repository root down —
+             relative, no `..` component, no component a symlink (ancestors
+             included) — and if any check fails, write nothing to it and report
+             the path.
            - Do NOT create PR"
   description: "Implement changes"
 ```
+
+> **The `WRITE TARGETS` line is a MIRROR** of `fx-setup` → `references/adoption.md` § Who gates on what's write rule — it crosses into a spawned agent, which cannot follow the link. Keep it a faithful restatement, and update it here, in Step 6.2's prompt and in `team`'s copy in the same commit that changes the canonical rule.
 
 Identify `[DOC_PATH]` before spawning: the change document or task list the request names, or — **only when Step 2.5 recorded `FX_DOCS=adopted`** — the result of:
 
@@ -696,11 +703,16 @@ Agent tool:
            Do not implement ledger entries that are not blocking. Judge that by
            the blocking flag, not the tier: a required-by-contract entry also
            carries tier n/a, and it MUST be fixed.
+           WRITE TARGETS: before writing or creating any tracking, docs or
+           review-rules file, check its path from the repository root down —
+           relative, no `..` component, no component a symlink (ancestors
+           included) — and if any check fails, write nothing to it and report
+           the path.
            Push once, at the end."
   description: "Fix review issues"
 ```
 
-**Do not hold the batch open for a channel that has not reported** (`references/head-discipline.md` § Batch findings) — late findings are the next batch, against the new head. After the push, record the new SHA as the candidate head and apply § Evidence is SHA-scoped to every wait still bound to the previous one.
+The `WRITE TARGETS` line is Step 4's MIRROR — a review-rule entry or a tracking fix in the batch writes through it. **Do not hold the batch open for a channel that has not reported** (`references/head-discipline.md` § Batch findings) — late findings are the next batch, against the new head. After the push, record the new SHA as the candidate head and apply § Evidence is SHA-scoped to every wait still bound to the previous one.
 
 Then invoke `resolve-pr-feedback` scoped to each reviewer's source to settle its threads, passing its blocking entries annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions). Under a coordinator it never fixes or pushes itself (its Step 3); a second fix path would race this one on the same branch and buy two CI cycles for one round of feedback.
 

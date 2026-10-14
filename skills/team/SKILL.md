@@ -290,7 +290,7 @@ Two constraints worth knowing rather than rediscovering:
 
 **Implementation steps** (planning, coding, testing) → Spawn focused agents. For any implementer that will run **concurrently** with another, give it an isolated worktree via STEP 2.5 and start its prompt with the worktree preamble — do NOT rely on `isolation: "worktree"` (it's a no-op for teammates; see the prohibition above). Give each agent ONLY its specific job — the change doc path, spec path, plan, and acceptance criteria. Do NOT tell it to follow the full SDLC. Always pass the handle (see above).
 
-**Tracking updates ride in the implementation commit** (`[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head). Every implementer prompt MUST tell it to check off, in the same commit series as the code, the tracking items its own PR completes (the tracking doc the approved scope names — in an fx-adopted repo, `docs/tasks.md` or the change doc's task list). The Status-flip split below is the same rule applied to the one field that must not flip early.
+**Tracking updates ride in the implementation commit** (`[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head). Every implementer prompt MUST tell it to check off, in the same commit series as the code, the tracking items its own PR completes (the tracking doc the approved scope names — in an fx-adopted repo, `docs/tasks.md` or the change doc's task list). The Status-flip split below is the same rule applied to the one field that must not flip early. **Every implementer and fix prompt — the Status-flip ones below included — also carries this line verbatim**, a MIRROR of `fx-setup` → `references/adoption.md` § Who gates on what's write rule kept in step with `dev` Step 4's copy, because the delegate cannot follow a link: "WRITE TARGETS: before writing or creating any tracking, docs or review-rules file, check its path from the repository root down — relative, no `..` component, no component a symlink (ancestors included) — and if any check fails, write nothing to it and report the path."
 
 **A tracking-only commit later in the lifecycle is a defect, not an alternative.** It is not impossible — the recovery path below exists for exactly that — but it costs what this ordering was written to avoid: the push moves the head, so it re-enters at step 7 of § The candidate head and re-spends the hosted-review and CI cycles it invalidated. Treat one as an implementer prompt that was missing this instruction, and fix the prompt for the next PR.
 
@@ -499,7 +499,7 @@ duvet# The size, triviality, or follow-up status of a pull request MUST NOT be t
 
 **The FINAL PR for a change document MUST mark the change `complete` IN that PR — NOT in a follow-up.** A change doc still showing `**Status:** draft` after its last implementing PR merges is a bug; the docs lie about state and the index is out of sync with reality on `main`.
 
-There are two places to flip:
+There are two places to flip, each a write target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule (the implementer's `WRITE TARGETS` line):
 
 1. **Change doc body** — `docs/changes/<NNNN>-<slug>.md` — flip the front-matter line `**Status:** draft` → `**Status:** complete`.
 2. **Index** — `docs/index.yml` — flip `status: draft` → `status: complete` on that change's entry. Sync `docs/index.md` if the project keeps both.
@@ -513,7 +513,7 @@ There are two places to flip:
 If the flip is missing when you reach the gates anyway:
 
 1. **Do NOT merge.**
-2. **Spawn a focused fix agent** to flip both files. Never commit it yourself — Coordinator Rules below: the coordinator writes no code and creates no commits. Commit message: `docs(changes): mark <NNNN> complete`.
+2. **Spawn a focused fix agent** to flip both files, its prompt carrying the `WRITE TARGETS` line verbatim. Never commit it yourself — Coordinator Rules below: the coordinator writes no code and creates no commits. Commit message: `docs(changes): mark <NNNN> complete`.
 3. Record the resulting SHA as the new candidate head and **re-enter at step 7 of `[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head**, exactly as any other post-candidate push does: re-cover the delta with the hosted reviewers first — Copilot does not re-review a push on its own — then the CI wait, then the gates. Going straight to CI merges a commit no required reviewer has read.
 4. Then merge.
 

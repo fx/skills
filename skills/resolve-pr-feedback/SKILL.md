@@ -286,8 +286,11 @@ and no push.**
 
 **Standalone** — no lifecycle coordinator: the user invoked this skill, or
 `copilot-review` / `coderabbit-review`, directly. Spawn **one** implementer — a
-sub-agent that loads `dev` in its Implementer role — with the Scope Brief and the
-whole blocking set across every source, review-rule entries included. It pushes
+sub-agent that loads `dev` in its Implementer role — with the Scope Brief, the
+whole blocking set across every source, review-rule entries included, and the
+`WRITE TARGETS` line of `dev` Step 4's implementer prompt verbatim (a MIRROR of
+`fx-setup` → `references/adoption.md` § Who gates on what's write rule, which a
+spawned agent cannot follow by link). It pushes
 once, at the end (`[SKILLS_DIR]/dev/references/head-discipline.md` § Batch
 findings). Then run Step 4 with those threads annotated `already fixed in <sha>`.
 

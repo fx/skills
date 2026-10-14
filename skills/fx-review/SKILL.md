@@ -233,7 +233,8 @@ review.**
 Re-reading before writing is not locking: two sub-agents can read the same
 revision and the second write silently discards the first's rule. When resolvers
 run in parallel, have each **return** its proposed rules instead of editing, then
-apply them all in one serialized edit to the target the list above resolved, and
+apply them all in one serialized edit to the target the list above resolved —
+which has already passed the symlink rule above — and
 verify with `git diff -- <that path>` — `REVIEW.md`, `AGENTS.md` or
 `.github/copilot-instructions.md` — that every proposed rule appears as an added
 line. Diffing `REVIEW.md` after a fallback write shows nothing and reads as every

@@ -39,7 +39,7 @@ duvet# The `spec-writer` skill MUST NOT create or modify any file outside the `d
 - Do NOT create or run database migrations
 - Do NOT modify tests, configs, or any non-documentation file
 - Do NOT install packages or run build commands
-- The ONLY files this skill creates or modifies are in `docs/` (specs, changes, indexes)
+- The ONLY files this skill creates or modifies are in `docs/` (specs, changes, indexes), and each passes `fx-setup` → `references/adoption.md` § Who gates on what's write rule before it is written
 
 If the user asks to "write a spec AND implement it", write the spec/changes first, then stop and tell the user to use `/dev` for implementation.
 
@@ -250,7 +250,7 @@ bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh
 
 Record the output in your working notes for Phases 1–6 and branch per `fx-setup` → `references/adoption.md`:
 
-- **`FX_DOCS=adopted`** → proceed exactly as below. A docs-layer path `FX_DOCS_MISSING` names is created, inside `docs/`, by the phase that first needs it (adoption.md § Partial adoption).
+- **`FX_DOCS=adopted`** → proceed exactly as below. A docs-layer path `FX_DOCS_MISSING` names is created, inside `docs/`, by the phase that first needs it (adoption.md § Partial adoption). Every path Phases 3–6 write or create passes adoption.md § Who gates on what's write rule first.
 - **`FX_DOCS=not-adopted`** → choose the native target for Phases 3–6 now (adoption.md § Following the repo's convention): one `NATIVE_SPECS` directory, picked by document type — a decision goes to an ADR directory, a feature or behaviour to a specs, RFC or design directory — asking with AskUserQuestion when several fit.
   - **The target must be under `docs/`.** For a native directory outside it (`doc/adr/`, `adr/`, `rfcs/`, `design/`), produce the document in the Output report with its intended path and write nothing: § Scope — Documentation Only does not move with the repo's convention.
   - **Every target — adopted or native, chosen or confirmed by the user — must pass adoption.md § Who gates on what's inside-the-repository rule** before Phases 3–6 write it; one that fails is reported, not written.
@@ -363,7 +363,9 @@ AskUserQuestion:
 
 #### 3.1 Create Spec Directory
 
-**Not adopted:** skip 3.1 and write the new document in the native directory Phase 0.0 selected, mirroring its newest document — naming and numbering, front-matter, headings, status vocabulary (`fx-setup` → `references/adoption.md` § Following the repo's convention). 3.2's content rules still apply (verified claims, altitude, single owner, scope discipline); the template sections, the Changelog table and RFC 2119 keywords apply only where the existing documents already use them. Example: `docs/adr/0007-<title>.md` copying 0006's headings and starting at `Proposed`; in a repo with only `docs/specs/` (this catalog's shape), `docs/specs/<name>/index.md` in the existing specs' shape, with no index file created.
+**Not adopted:** skip 3.1 and write the new document — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule — in the native directory Phase 0.0 selected, mirroring its newest document — naming and numbering, front-matter, headings, status vocabulary (`fx-setup` → `references/adoption.md` § Following the repo's convention). 3.2's content rules still apply (verified claims, altitude, single owner, scope discipline); the template sections, the Changelog table and RFC 2119 keywords apply only where the existing documents already use them. Example: `docs/adr/0007-<title>.md` copying 0006's headings and starting at `Proposed`; in a repo with only `docs/specs/` (this catalog's shape), `docs/specs/<name>/index.md` in the existing specs' shape, with no index file created.
+
+Check `docs/specs/<spec-name>` against `fx-setup` → `references/adoption.md` § Who gates on what's write rule before creating it.
 
 ```bash
 mkdir -p docs/specs/<spec-name>
@@ -373,7 +375,7 @@ Where `<spec-name>` is a brief, descriptive kebab-case name (e.g., `user-authent
 
 #### 3.2 Write the Spec
 
-Read the template at `references/spec-index-template.md` and write `docs/specs/<spec-name>/index.md`.
+Read the template at `references/spec-index-template.md` and write `docs/specs/<spec-name>/index.md` — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule.
 
 **Critical rules:**
 - Describe the system **as it currently exists in the codebase**. If the feature doesn't exist yet, describe the desired behavior and note it as unimplemented.
@@ -453,7 +455,7 @@ Categorize findings:
 
 #### 4.3 Update the Spec
 
-Edit `docs/specs/<spec-name>/index.md` to reflect the current truth:
+Edit `docs/specs/<spec-name>/index.md` — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule — to reflect the current truth:
 - Add missing requirements discovered during audit
 - Update requirements that have changed
 - Remove requirements for deprecated behavior
@@ -463,7 +465,7 @@ Edit `docs/specs/<spec-name>/index.md` to reflect the current truth:
 
 #### 4.4 Update Changelog
 
-Add an entry to the spec's Changelog for every update:
+Add an entry to the spec's Changelog for every update (same file, same write rule as 4.3):
 
 ```markdown
 | YYYY-MM-DD | <Description of what changed> | [NNNN-change-name](../../changes/NNNN-change-name.md) |
@@ -475,7 +477,7 @@ If updating to match existing implementation (no change document), use `—` for
 
 ### Phase 5: Propose Change Documents
 
-**Not adopted: skip `docs/changes/` entirely.** Put the plan where the native convention holds plans if it has such a section (an RFC's implementation plan, an ADR's consequences); otherwise put the task breakdown in the Output report. Offer to file issues only with the user's confirmation — creating one is a shared-system write. 5.3.1 Testing Requirements still applies wherever the plan lands.
+**Not adopted: skip `docs/changes/` entirely.** Put the plan where the native convention holds plans if it has such a section (an RFC's implementation plan, an ADR's consequences — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule); otherwise put the task breakdown in the Output report. Offer to file issues only with the user's confirmation — creating one is a shared-system write. 5.3.1 Testing Requirements still applies wherever the plan lands.
 
 For every gap between the spec (desired state) and the implementation (current state), create change documents in `docs/changes/`.
 
@@ -498,7 +500,7 @@ Split large efforts into multiple change documents. It is BETTER to have many sm
 
 #### 5.3 Write Change Documents
 
-Read the template at `references/change-template.md` and write each change to `docs/changes/NNNN-<name>.md`.
+Read the template at `references/change-template.md` and write each change to `docs/changes/NNNN-<name>.md` — each a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule, `docs/changes/` included when this creates it.
 
 **Critical rules:**
 - Every change MUST reference the spec it relates to
@@ -576,9 +578,9 @@ The rules you write MUST come from the project you're operating in, discovered v
 
 ### Phase 6: Update Indexes
 
-**Not adopted: skip 6.1 and 6.2.** Update the native convention's own index if it keeps one (a `docs/adr/README.md`, say) the way its existing entries are written, and report — do not apply — any registration outside `docs/`, such as a `mkdocs.yml` nav entry, as 6.3 already does for duvet. **Adopted with `FX_DOCS_MISSING` naming an index file:** recreate it from the templates below (adoption.md § Partial adoption).
+**Not adopted: skip 6.1 and 6.2.** Update the native convention's own index if it keeps one (a `docs/adr/README.md`, say) the way its existing entries are written — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule like any other — and report — do not apply — any registration outside `docs/`, such as a `mkdocs.yml` nav entry, as 6.3 already does for duvet. **Adopted with `FX_DOCS_MISSING` naming an index file:** recreate it from the templates below (adoption.md § Partial adoption).
 
-After creating or modifying specs and changes, update both index files. **Index files MUST strictly follow their templates — no ad-hoc columns, renamed fields, or alternative status values.**
+After creating or modifying specs and changes, update both index files — `docs/index.yml` and `docs/index.md`, each a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule. **Index files MUST strictly follow their templates — no ad-hoc columns, renamed fields, or alternative status values.**
 
 #### 6.1 Update `docs/index.yml`
 
