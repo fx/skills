@@ -141,7 +141,7 @@ it. Copilot's `[nitpick]` prefix is an input to that judgment, never a verdict.
 **Every push re-opens the gate.** Copilot must then re-review the new head
 (Step 5), so editing for an immaterial finding costs a full wait cycle *and*
 produces a fresh commit for it to comment on. Push fixes for blocking findings;
-reply-and-resolve the rest without a commit. The one exception is the `REVIEW.md`
+reply-and-resolve the rest without a commit. The one exception is the review-rules
 entry for a misread convention (`fx-review` Step 6) — required work, and its
 commit is expected.
 

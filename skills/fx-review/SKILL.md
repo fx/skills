@@ -172,8 +172,8 @@ as ONE finding naming the class and list every other site — § Reporting a cla
 outdated/incorrect handler: reply with the evidence, resolve, and where a
 deliberate convention was misread, record it (Step 6). A coordinator hands it over
 as an explicitly undisposed item *with the reason*, never as a disposition value,
-because an authoritative one would close that route off and lose the `REVIEW.md`
-entry with it.
+because an authoritative one would close that route off and lose the Step 6
+review-rules entry with it.
 
 **Never edit for an immaterial finding.** Every push requires another reviewer
 pass before the loop can converge, so actioning one manufactures the next round's
@@ -230,9 +230,13 @@ review.**
 Re-reading before writing is not locking: two sub-agents can read the same
 revision and the second write silently discards the first's rule. When resolvers
 run in parallel, have each **return** its proposed rules instead of editing, then
-apply them all in one serialized edit and verify with `git diff -- REVIEW.md` that
-every proposed rule appears as an added line. Counting the whole file always fails
-— an established review-rules file already holds unrelated rules.
+apply them all in one serialized edit to the target the list above resolved, and
+verify with `git diff -- <that path>` — `REVIEW.md`, `AGENTS.md` or
+`.github/copilot-instructions.md` — that every proposed rule appears as an added
+line. Diffing `REVIEW.md` after a fallback write shows nothing and reads as every
+rule missing, or, where an unrelated `REVIEW.md` edit is staged, as the wrong rules
+present. Counting the whole file always fails — an established review-rules file
+already holds unrelated rules.
 
 ## Step 7: Re-run until it converges
 

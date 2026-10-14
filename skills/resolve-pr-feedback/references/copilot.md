@@ -64,8 +64,9 @@ never settle a thread on the prefix alone.
 A coordinator's disposition wins over this table (`fx-review` Step 5); use it
 only for threads the caller did not dispose of.
 
-**Copilot reads `REVIEW.md` from the head branch**, so a Step 6 rule added on
-this PR takes effect on this same PR's next review.
+**Copilot reads `REVIEW.md` from the head branch**, so where `fx-review` Step 6
+wrote its rule to `REVIEW.md`, the rule takes effect on this same PR's next
+review.
 
 Every push costs a full Copilot wait cycle: sweep the class before any push
 (`fx-review` Step 4), and let only blocking findings produce one.
