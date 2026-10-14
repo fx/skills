@@ -39,7 +39,8 @@ caller settles them by hand (`[SKILLS_DIR]/dev/references/scope-contract.md`
 Use this skill only when the user names it, or an active explicitly invoked
 workflow calls it by name: `copilot-review` Step 3 (`sources: copilot`),
 `coderabbit-review` Step 2 (`sources: coderabbit`), `dev` Step 6.3 (each
-reviewer's own source) and Step 7.2 (`sources: ci`). A mention of PR comments,
+reviewer's own source) and Step 7.2 (`sources: ci,codecov`, the lifecycle's only
+Codecov pass). A mention of PR comments,
 review threads, coverage or failing checks does not load it.
 
 ## Arguments

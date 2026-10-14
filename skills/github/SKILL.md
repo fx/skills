@@ -91,7 +91,7 @@ Use this skill only when the user explicitly invokes or names it, or when an act
 | Copilot comments RESOLVED | All **Copilot-authored** review threads resolved (0 unresolved). Filter on the Copilot login — human threads are out of scope and must never be touched | ⛔ YES |
 | CodeRabbit review attempted (if GitHub App configured) | Prefer a received review; explicit `skipped (rate-limited)` is acceptable | Optional when rate-limited |
 | CodeRabbit comments resolved (if received) | Resolve **every** thread CodeRabbit already posted, rate limit or not. Throttling waives the review passes that never ran, never a thread already on the PR | ⛔ YES for delivered threads |
-| Codecov passing | `codecov/patch` and `codecov/project` checks pass | ⛔ YES |
+| Codecov clean (if configured) | 0 missing lines in the Codecov comment for the head **and** `codecov/*` statuses pass — a passing `codecov/patch` alone is not enough (`resolve-pr-feedback`'s `references/codecov.md` § Assess; `dev` Step 7.2 assesses it) | ⛔ YES |
 
 > **CodeRabbit is PR-level only** — see `coderabbit-review`. There is no local CodeRabbit pass; the `cr` CLI is not used, and Codex is the only local pre-PR reviewer (`dev` Step 4.5). The PR-level review applies only when the GitHub App auto-reviews PRs; its waiter reports `STATUS=NOT_CONFIGURED` otherwise, which is terminal and expected for most repos. **CodeRabbit is optional when it reports a rate/quota limit or cooldown:** report once, resolve findings already received **and settle every thread it already posted**, record `skipped (rate-limited)`, and continue without waiting or retrying. The degradation waives the passes that never ran, never work already on the PR. Other merge gates remain mandatory.
 

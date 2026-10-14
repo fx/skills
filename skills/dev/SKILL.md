@@ -815,28 +815,30 @@ Then branch on the trailing `STATUS=` line:
 
 | STATUS | Exit | What to do |
 |---|---|---|
-| `TERMINAL_PASS` | 0 | Every check completed, none failed → **proceed to Step 8** |
+| `TERMINAL_PASS` | 0 | Every check completed, none failed → **proceed to Step 7.2** for the Codecov assessment; Step 8 once it returns nothing to fix |
 | `TERMINAL_FAIL` | 1 | Every check completed, at least one failed → **proceed to Step 7.2** |
 | `PENDING` | 2 | Still running at budget expiry. Not a verdict. Re-run to keep waiting, or report the wait as unfinished. **Never** record it as "CI passed". |
 | `NOT_CONFIGURED` | 3 | No checks appeared within the discovery grace — this PR has no CI configured. **This is NOT a pass**: a merge gate requiring green CI is not satisfied by the absence of CI. Report it and confirm against branch protection. Rule out a base-branch conflict first: `resolve-pr-feedback`'s `references/ci.md` § Conflict check — a conflicting PR shows exactly this status. |
 | `ERROR` | 4 | Bad arguments, `gh` unauthenticated, or the checks API could not be read → report. A failed read is not "no checks". |
 
-#### 7.2 Handle CI Failures (LOOP — max 3 iterations)
+#### 7.2 Handle CI Failures and Coverage (LOOP — max 3 iterations)
 
-**If Step 7.1 reports `STATUS=TERMINAL_FAIL` on `CANDIDATE_HEAD`:**
+**On every terminal verdict Step 7.1 reports for `CANDIDATE_HEAD` — `TERMINAL_PASS` and `TERMINAL_FAIL` alike:**
 
 ```
-Skill tool: skill="resolve-pr-feedback", args="[PR_NUMBER] — [STEP 2.5 SCOPE BRIEF VERBATIM] — sources: ci"
+Skill tool: skill="resolve-pr-feedback", args="[PR_NUMBER] — [STEP 2.5 SCOPE BRIEF VERBATIM] — sources: ci,codecov"
 ```
 
-It loads its CI reference, reads the failing checks' logs for this head, categorises each failure and **returns the diagnosed blocking set**; it fixes and pushes nothing (its Step 3). Flaky and infrastructure failures come back reported, not fixed — they are the user's call, never a blind re-run. If every failure is one of those, there is nothing to fix: STOP and report them with the evidence.
+**A passing run comes here too, because this is the lifecycle's only Codecov pass.** Step 6.3's calls are scoped to `copilot` and `coderabbit`, and a passing `codecov/patch` can sit beside missing lines in the Codecov comment, which is what decides (`resolve-pr-feedback`'s `references/codecov.md` § Assess). It runs on CI's terminal verdict, never earlier, because Codecov reports only once CI has uploaded coverage.
+
+It detects both sources on this head and loads the reference of each one present — reporting Codecov `absent` where the repo does not use it, which is not a failure — then reads the failing checks' logs, assesses coverage, and **returns the diagnosed blocking set**: CI failures by category, coverage gaps as uncovered lines. It fixes and pushes nothing (its Step 3). Flaky and infrastructure failures come back reported, not fixed — they are the user's call, never a blind re-run. If the set is empty, there is nothing to fix: on `TERMINAL_PASS` proceed to Step 8; on `TERMINAL_FAIL`, every failure was flaky or infrastructure — STOP and report them with the evidence. Coverage gets one fix iteration of the three below (`references/codecov.md` § Hand-off); gaps still open after it are reported to the user, not looped on.
 
 **Fix the returned set through Step 6.2** — one fix agent, one commit series, one push — **batched with anything else outstanding for this head** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
 
 **After that push, record the new SHA as `CANDIDATE_HEAD`, apply 6.1's material-change test to the delta, and re-enter Step 6.3 before Step 7.0.** Where that test fires, its delta-scoped Codex re-entry runs first, and 6.1's blocking-finding consequence governs whatever that re-entry reports; a CI fix that only corrected a line falls straight through it. A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first. Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
 
 ```
-Step 7.1 (wait) → fail → Step 7.2 (diagnose: resolve-pr-feedback, sources: ci)
+Step 7.1 (wait) → terminal → Step 7.2 (diagnose: resolve-pr-feedback, sources: ci,codecov) → blocking set
                        → Step 6.2 (batched fix, one push)
                        → 6.1 material-change test → Step 6.3 (re-cover the new head)
                        → Step 7.0 → Step 7.1 (wait) → ...
@@ -844,7 +846,7 @@ Step 7.1 (wait) → fail → Step 7.2 (diagnose: resolve-pr-feedback, sources: c
 
 **⚠️ Maximum 3 iterations.** Track the current iteration count. If checks still fail after 3 fix attempts, STOP and report the persistent failures to the user with full details.
 
-**⛔ DO NOT PROCEED until all checks pass or max iterations reached**
+**⛔ DO NOT PROCEED until all checks pass and Step 7.2 returns nothing to fix, or max iterations reached**
 
 ---
 
@@ -885,8 +887,10 @@ Skill tool: skill="coderabbit-review",  args="[NUMBER] — [STEP 2.5 SCOPE BRIEF
 gh pr view [NUMBER] --json reviewThreads \
   --jq '[.reviewThreads[] | select(.isResolved == false)] | length'
 
-# 4. Codecov — patch and project checks must pass
-gh pr checks [NUMBER]  # verify codecov/patch and codecov/project
+# 4. Codecov — Step 7.2's codecov result for MERGE_HEAD: absent, or clean per
+#    resolve-pr-feedback's references/codecov.md — 0 missing lines in the comment
+#    AND codecov/* statuses passing. A green codecov/patch alone is not the gate.
+#    Reuse that result when it names MERGE_HEAD; it is evidence about one SHA.
 ```
 
 <!--
@@ -910,7 +914,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 - [ ] CodeRabbit is passing with all received threads resolved, not configured, or explicitly recorded as `skipped (rate-limited)`. CodeRabbit throttling is optional and never blocks merge.
 - [ ] Zero unresolved **blocking** ledger entries (`references/scope-contract.md` § Blocking) — `required-by-contract`, `regression-caused-by-change`, and any entry blocking by tier; the latest affected delta is verified within the stopping bounds
 - [ ] Every test plan item **settled** (Step 5.5): verified, user-confirmed as a manual pass, or explicitly accepted by the user — as a known failure, or as knowingly unverified. An unanswered `— requires manual testing` is pending, not settled, and blocks
-- [ ] Codecov coverage passing with 0 missing lines
+- [ ] Codecov absent, or Step 7.2 assessed it clean on `MERGE_HEAD` — 0 missing lines in the Codecov comment, not only passing `codecov/*` statuses
 - [ ] No unresolved review threads from any reviewer (Copilot, CodeRabbit, human, or any other configured automated reviewer); follow-up/out-of-scope threads are settled without expanding implementation
 
 <!--
@@ -1025,7 +1029,7 @@ All sub-agents are launched via the Agent tool. Each loads its skill via the Ski
 | 4.6.2 | Browser Verification | `verify-web-change` (pre-PR, against the branch) |
 | 6.3 | Copilot Review | `copilot-review` (waiter backgrounded, concurrent with coderabbit-review) |
 | 6.3 | CodeRabbit Review | `coderabbit-review` (PR-level only, waiter backgrounded, concurrent with copilot-review; classify/deduplicate feedback and verify only affected deltas within bounds) |
-| 6.3, 7.2 | PR Feedback Resolver | `resolve-pr-feedback` (coordinator session; scoped by `sources:` — the reviewer skills call it for their own source, Step 7.2 for `ci`) |
+| 6.3, 7.2 | PR Feedback Resolver | `resolve-pr-feedback` (coordinator session; scoped by `sources:` — the reviewer skills call it for their own source, Step 7.2 for `ci,codecov`) |
 
 **Pattern for every sub-agent call:**
 ```

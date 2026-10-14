@@ -396,6 +396,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 | # | Gate | How to verify | Blocking? |
 |---|------|--------------|-----------|
 | 1 | **Required CI checks green** | `gh pr checks <NUMBER>` — every required non-CodeRabbit check must pass | YES |
+| 1b | **Codecov clean (if configured)** | `dev` Step 7.2's `codecov` result for the head: absent, or 0 missing lines in the Codecov comment with `codecov/*` statuses passing — a green `codecov/patch` alone does not pass | YES |
 | 2 | **Copilot review RECEIVED and feedback RESOLVED** | Invoke `copilot-review` skill — confirm 0 unresolved Copilot threads | YES |
 | 2b | **CodeRabbit reviewed or correctly degraded** | Invoke `coderabbit-review`: prefer a passing check with received feedback resolved; if CodeRabbit rate-limits, report once, resolve what it already delivered (blocking findings fixed, every posted thread settled), and record `skipped (rate-limited)` without blocking | NO when rate-limited |
 | 3 | **Implementation matches spec/task** | Read the diff and verify against requirements | YES |
@@ -431,6 +432,8 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/coderabbit-review/scr
 # LATER — once the reviewers above have converged on this head:
 Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> \
         > [AGENT_DIR]/team/waits/ci-<PR_NUMBER>.log 2>&1
+# On its terminal verdict — TERMINAL_PASS too — `dev` Step 7.2: `resolve-pr-feedback`
+# with `sources: ci,codecov`. It is the only Codecov pass in the lifecycle.
 
 # On each wake — a notification, or the wait_agent that returns: read the log,
 # branch on its STATUS= line, classify its findings in the ledger, then combine
