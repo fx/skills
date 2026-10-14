@@ -171,7 +171,7 @@ Do not budget for Copilot being quick. Observed delivery ranges from **85 s to
 
 ## Arguments
 
-This skill expects a PR number **and the Scope Brief**: `skill='copilot-review', args='<PR_NUMBER> — <Scope Brief verbatim>'`. Copilot cannot be handed the brief itself, but this skill triages its output and dispatches a resolver, and both need it (`fx-review` Step 1). A bare PR number makes the whole chain re-derive the exclusions from the PR description.
+This skill expects a PR number **and the Scope Brief**: `skill='copilot-review', args='<PR_NUMBER> — <Scope Brief verbatim>'`. Copilot cannot be handed the brief itself, but this skill triages its output and settles it through `resolve-pr-feedback`, and both need it (`fx-review` Step 1). A bare PR number makes the whole chain re-derive the exclusions from the PR description.
 
 ## Workflow
 
@@ -272,34 +272,36 @@ reading. Take all bodies for the commit.
 
 ### Step 3: Resolve Feedback
 
-After the review is received, invoke the resolve-pr-feedback skill to process the automated review threads it categorises (Copilot, CodeRabbit, Codecov):
+After the review is received, invoke `resolve-pr-feedback` scoped to Copilot:
 
 ```
 Skill tool: skill="resolve-pr-feedback",
-            args="<PR_NUMBER> — <Scope Brief verbatim> — dispositions already assigned: <suppressed item or thread id> blocking | immaterial | deferred (<exclusion>) — false premise (resolver's own handler): <item or thread id> (<what does not hold>)"
+            args="<PR_NUMBER> — <Scope Brief verbatim> — sources: copilot — dispositions: <suppressed item or thread id> blocking (already fixed in <sha>) | immaterial | deferred (<exclusion>) — false premise: <item or thread id> (<what does not hold>)"
 ```
 
 **Never invoke it with only the PR number.** The Scope Brief must travel into
 every downstream review call (`[SKILLS_DIR]/dev/references/scope-contract.md`
-§ Injecting the brief into reviews), and a resolver handed a bare number
-re-derives triage from the PR description — losing the exact exclusions and
+§ Injecting the brief into reviews), and `resolve-pr-feedback` handed a bare
+number re-derives triage from the PR description — losing the exact exclusions and
 known-and-accepted decisions, and editing for threads you classified immaterial
 or deferred.
 
 Pass dispositions only for what you have actually triaged — usually nothing at
 this point, since this skill never fetches the thread list, and suppressed items
-are ignored by default (**D4**). The `dispositions already assigned:` clause is
+are ignored by default (**D4**). The `dispositions:` clause is
 there for the rare case where an absolutely-dire suppressed item was acted on.
 `resolve-pr-feedback` fetches the threads and triages the rest (its
-Steps 2 → 4). **Do not invent a disposition for a thread you have not read**; an
+Steps 1–2). **Do not invent a disposition for a thread you have not read**; an
 absent one is filled in downstream, a wrong one is authoritative and overrides
-the resolver's own reading.
+its own reading.
 
-This skill will:
-1. Find all unresolved Copilot threads
-2. Categorize each (nitpick, valid, incorrect, outdated, deferred)
-3. Fix **blocking** findings; reply-and-resolve every other thread without editing
-4. Report a summary table of actions taken
+Scoped to `sources: copilot`, it loads its Copilot reference, fetches every
+unresolved Copilot thread on the head, triages each one you did not dispose of,
+and replies to and resolves every Copilot thread. Under a coordinator it returns
+the blocking set unfixed for the coordinator's one batched fix; run standalone,
+it fixes the blocking set once and pushes once. **It settles only Copilot's
+threads, and it does not loop** — Steps 4–5 below are the loop. CodeRabbit's
+threads are `coderabbit-review`'s.
 
 ### Step 4: Confirm Resolution
 
@@ -359,7 +361,7 @@ The gate is passed when **both** hold:
 
 A zero thread count on its own is not enough — condition (1) is what makes it mean
 anything, because zero threads on a superseded commit says nothing about the code
-being merged. If the count is > 0, re-invoke resolve-pr-feedback. The verdict
+being merged. If the count is > 0, re-invoke `resolve-pr-feedback` with `sources: copilot`. The verdict
 headline does not add a third condition: **Needs a closer look** with zero threads
 passes exactly as **Approval recommended** with zero threads does.
 

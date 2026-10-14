@@ -107,8 +107,8 @@ the script fails closed on it. Verify the threads yourself before any merge gate
 
 ## Step 1b: Fetch the threads and triage them
 
-**The waiter emits a count, not the threads**, and Step 2 hands the resolver a
-disposition per thread — a count cannot be triaged. Fetch the bodies, then run
+**The waiter emits a count, not the threads**, and Step 2 hands `resolve-pr-feedback`
+a disposition per thread — a count cannot be triaged. Fetch the bodies, then run
 `fx-review` Steps 2–3 over them.
 
 ```bash
@@ -150,38 +150,42 @@ jq '[.[] | select(.isResolved == false
 ```
 
 A thread stranded past the first page is never triaged and never given a
-disposition, so it neither reaches the resolver nor shows up in Step 3's count —
+disposition, so it neither reaches `resolve-pr-feedback` nor shows up in Step 3's count —
 the gate reads as met while the finding sits unread.
 
 Assign one of `blocking`, `immaterial`, or `deferred` to each thread **that
-carries a finding**. Yours is authoritative — you hold the Scope Brief; the
-resolver does not. A thread whose premise fails gets **no** disposition; list it
-with the reason so the resolver's outdated/incorrect handler takes it
+carries a finding**. Yours is authoritative — you hold the Scope Brief;
+`resolve-pr-feedback` does not. A thread whose premise fails gets **no**
+disposition; list it with the reason so its outdated/incorrect handling takes it
 (`fx-review` Step 3).
 
-## Step 2: Hand it to the resolver
+## Step 2: Settle the threads through `resolve-pr-feedback`
 
 ```
-Skill tool: skill="rabbit-feedback-resolver",
-            args="<PR_NUMBER> — <Scope Brief verbatim> — dispositions: <thread id> blocking, <thread id> immaterial, <thread id> deferred (<exclusion>) — false premise (resolver's own handler): <thread id> (<what does not hold>)"
+Skill tool: skill="resolve-pr-feedback",
+            args="<PR_NUMBER> — <Scope Brief verbatim> — sources: coderabbit — dispositions: <thread id> blocking (already fixed in <sha>), <thread id> immaterial, <thread id> deferred (<exclusion>) — false premise: <thread id> (<what does not hold>)"
 ```
 
-**Both suffixes are mandatory.** Invoking the resolver with only a PR number makes
-it re-derive triage it cannot see, and it will edit for threads you classified
-immaterial or deferred. The false-premise suffix is what routes a thread Step 1b
-rejected to the outdated/incorrect path instead of a re-triage that loses the
-`REVIEW.md` entry.
+**`sources: coderabbit` keeps it to CodeRabbit's threads, and it returns without
+looping** — Step 3 below is the loop.
+
+**Both suffixes are mandatory.** Invoked with only a PR number it re-derives
+triage it cannot see and treats threads you classified immaterial or deferred as
+work. The false-premise suffix routes a thread Step 1b rejected to its
+outdated/incorrect handling instead of a re-triage that loses the `fx-review`
+Step 6 entry.
 
 **Where a coordinator is running several channels, the blocking fixes are batched
-and pushed before this dispatch** (`[SKILLS_DIR]/dev/references/head-discipline.md`
-§ Batch findings), so the `blocking` dispositions arrive annotated
+and pushed before this call** (`[SKILLS_DIR]/dev/references/head-discipline.md`
+§ Batch findings), so `blocking` dispositions arrive annotated
 `already fixed in <sha>` (`[SKILLS_DIR]/dev/references/scope-contract.md`
-§ Resolver dispositions). Dispatching with an un-fixed one instead sends the
-resolver down its own edit-and-push path, once per reviewer.
+§ Resolver dispositions). Under a coordinator `resolve-pr-feedback` edits nothing
+(its Step 3): an un-fixed `blocking` disposition comes back to you unfixed — one
+more round trip, not a fix.
 
 ## Step 3: Loop until settled
 
-CodeRabbit re-reviews after every push, so once Step 2 pushes fixes the check goes
+CodeRabbit re-reviews after every push, so once a fix is pushed the check goes
 pending again — go back to Step 1. Per `fx-review` Step 7, repeat Steps
 1 → 1b → 2 until **all three** hold:
 

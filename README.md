@@ -1,6 +1,6 @@
 # skills
 
-An agent-skill catalog for the software development lifecycle: requirements → plan → implement → review → CI → merge, plus the review adapters, feedback resolvers, and documentation skills that lifecycle depends on.
+An agent-skill catalog for the software development lifecycle: requirements → plan → implement → review → CI → merge, plus the review adapters, the PR-feedback resolver, and documentation skills that lifecycle depends on.
 
 Installable into Claude Code, Codex, Cursor, OpenCode, and 70+ other agents via the [`skills`](https://github.com/vercel-labs/skills) CLI.
 
@@ -31,10 +31,6 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `copilot-review` | Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review. |
 | `coderabbit-review` | Handles CodeRabbit's PR-level review as an optional review adapter with Scope Brief triage and rate-limit degradation. |
 | `resolve-pr-feedback` | Settles automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions only for the sources present on the PR; any other configured reviewer is settled by hand by the caller. |
-| `copilot-feedback-resolver` | Processes and resolves existing GitHub Copilot review threads without creating PR-level comments. |
-| `rabbit-feedback-resolver` | Processes and resolves existing CodeRabbit review threads. |
-| `resolve-codecov-feedback` | Processes Codecov feedback and adds coverage required by an active workflow. |
-| `resolve-ci-failures` | Analyzes and fixes CI failures within an active explicitly requested PR workflow. |
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
 | `project-management` | Manages project tracking through `docs/tasks.md` and `docs/changes/` where the fx docs layout is adopted, the repo's own tracker where it is not, or an explicitly selected external tracker. |
 | `spec-writer` | Writes and maintains living specs and proposed change documents within an explicitly requested documentation lifecycle. |

@@ -75,7 +75,7 @@ Use this skill only when the user explicitly invokes or names it, or when an act
 - ✅ Reply to an EXISTING thread created by an **automated reviewer** using `addPullRequestReviewThreadReply`
 - ✅ Resolve an automated reviewer's thread using `resolveReviewThread`
 
-**The line is automated versus human, not Copilot versus everything else.** Copilot and CodeRabbit are the two with their own resolver skills, and the merge gates below require CodeRabbit's delivered threads to be resolved — so a Copilot-only reading of this rule contradicts them. Any other bot a repo has configured is settled the same way, by hand, since no skill adapts it (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into reviews).
+**The line is automated versus human, not Copilot versus everything else.** Copilot and CodeRabbit are the two `resolve-pr-feedback` has thread references for, and the merge gates below require CodeRabbit's delivered threads to be resolved — so a Copilot-only reading of this rule contradicts them. Any other bot a repo has configured is settled the same way, by hand, since no skill adapts it (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into reviews).
 
 **Never respond to or interact with human reviewer comments.** Human threads are out of scope and must never be touched, replied to, or resolved — only automated feedback is addressed.
 
@@ -770,5 +770,5 @@ This ensures the same mistake is never repeated.
 
 ## Integration with Other Skills
 
-- **copilot-feedback-resolver**: For complete Copilot review thread workflows
+- **resolve-pr-feedback**: Settles automated review threads (Copilot, CodeRabbit, Codecov) and diagnoses failing CI
 - **dev** Step 5: PR creation, under the PR conventions block above

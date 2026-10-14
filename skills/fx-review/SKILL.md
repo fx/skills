@@ -10,8 +10,8 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > every skill referenced below is installed as a sibling there.
 
 **The one procedure every reviewer in this catalog follows.** The platform skills —
-`codex-review`, `coderabbit-review`, `copilot-review`, `resolve-pr-feedback`,
-`copilot-feedback-resolver`, `rabbit-feedback-resolver` — are adapters. They
+`codex-review`, `coderabbit-review`, `copilot-review`, and `resolve-pr-feedback`
+with its per-source references — are adapters. They
 describe how to drive one particular tool: its command, its
 flags and quirks, the shape of its output, the threads or checks it exposes.
 Everything else — what to review, what to report, what to fix, when to stop —

@@ -436,10 +436,10 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-
 # branch on its STATUS= line, classify its findings in the ledger, then combine
 # every channel's outstanding blocking findings into ONE set, hand that whole set
 # to a SINGLE fix teammate, and push once (§ Batch findings) — one teammate for
-# all channels, never one per channel. Only AFTER that push do you invoke the resolvers, with their
-# blocking threads annotated `already fixed in <sha>` (scope-contract.md
-# § Resolver dispositions) — a resolver handed an UN-fixed blocking disposition
-# takes its own edit-and-push path instead, once per reviewer.
+# all channels, never one per channel. Only AFTER that push do you invoke
+# `resolve-pr-feedback` for each reviewer's source, with its blocking threads
+# annotated `already fixed in <sha>` (scope-contract.md § Resolver dispositions)
+# — handed an UN-fixed blocking disposition, it returns it to you unfixed.
 ```
 
 **On every wake**, record the result against the SHA it observed and apply § Evidence is SHA-scoped — including stopping any CI waiter whose SHA the head has moved past, which also returns its slot to the wave.

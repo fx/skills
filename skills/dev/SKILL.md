@@ -642,7 +642,7 @@ Waiting on a manual answer never blocks **Steps 6 and 7** — post the request, 
 2. **If 6.1 produced a blocking finding, fix it now** — one **6.2** pass, one push, and that SHA becomes the candidate head. Do this **before** launching anything in 6.3: a hosted review started on a head you already know must change is a full reviewer cycle spent on a diff that will not survive. Nothing is waiting yet, so this fix costs nothing but the push it was always going to need.
 3. **6.3's waiter launch**, on a head with no known blocking finding — and where 2 pushed, **6.1's material-change test** applies to that push first, because the launch is a hosted waiter starting on a moved head like any other. The hosted reviewers are the long pole, so from here on nothing waits on them that could have gone first.
 4. **On each reviewer wake** — read that log and classify its threads (6.3, per-reviewer steps 1–2). **If the table now holds any blocking entry**, re-enter **6.2 once** for everything currently on it across every channel, and push once. If it holds none, there is nothing to fix and nothing to push — go straight to 5.
-5. **Dispatch the resolvers on every wake, push or no push.** A wake that produced only `immaterial` and `deferred` findings still has threads to settle, and leaving them for a later push that may never come is what stalls the 6.3 convergence gate. The only ordering constraint is that a `blocking` entry is fixed in 4 before its thread is dispatched, so it arrives annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions) rather than sending the resolver down its own pushing path.
+5. **Settle threads on every wake, push or no push** — invoke `resolve-pr-feedback` scoped to the woken reviewer's source (`sources: copilot` or `sources: coderabbit`). A wake that produced only `immaterial` and `deferred` findings still has threads to settle, and leaving them for a later push that may never come is what stalls the 6.3 convergence gate. The only ordering constraint is that a `blocking` entry is fixed in 4 before its thread is dispatched, so it arrives annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions) rather than coming back to you unfixed.
 6. **If 4 pushed, that created a new head, so re-cover it** — apply **6.1's material-change test** to that push, then 6.3, per-reviewer step 4, applying `references/head-discipline.md` § Evidence is SHA-scoped — before repeating from 4 on the next wake. A wake that pushed nothing invalidates no evidence and needs no relaunch.
 
 If a wake arrives while nothing else is outstanding and its channel is the only one with findings, 6.2 still runs once for that channel — a batch of one is not a violation. What is forbidden is fixing channel A, pushing, and then fixing channel B (`references/head-discipline.md` § Batch findings).
@@ -702,7 +702,7 @@ Agent tool:
 
 **Do not hold the batch open for a channel that has not reported** (`references/head-discipline.md` § Batch findings) — late findings are the next batch, against the new head. After the push, record the new SHA as the candidate head and apply § Evidence is SHA-scoped to every wait still bound to the previous one.
 
-Then invoke each reviewer's resolver to settle its threads, passing its blocking entries annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions). Letting two resolvers fix in parallel instead races them on the same branch and buys two CI cycles for one round of feedback.
+Then invoke `resolve-pr-feedback` scoped to each reviewer's source to settle its threads, passing its blocking entries annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions). Under a coordinator it never fixes or pushes itself (its Step 3); a second fix path would race this one on the same branch and buy two CI cycles for one round of feedback.
 
 #### 6.3 Automated Reviewer Wait (Copilot + CodeRabbit)
 
@@ -745,9 +745,9 @@ bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NU
    - `PENDING` — not a verdict and not a failure. Re-running is safe if you still need it. **Never** record it as "no findings" or "CI passed".
    - `NOT_CONFIGURED` — that reviewer does not apply to this repo. Terminal: report once, proceed without it, never retry.
    - `ERROR` — the wait never started. Report it.
-2. Read its unresolved threads and classify them in the shared ledger **before** invoking any resolver. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
-3. **Fix before you dispatch.** Take every blocking entry this wake produced, together with every other channel's outstanding blocking entries, through **one** Step 6.2 pass, and push once. Then invoke each reviewer's resolver, passing a disposition for every thread that carries a finding — `blocking` annotated `already fixed in <sha>`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions). A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. Handing a resolver an un-fixed `blocking` disposition puts it on its own fixing path, which pushes per reviewer — the churn this ordering exists to prevent.
-4. **After the Step 6.2 push** — that push, not a resolver's, is what moves the head under this ordering — record the new SHA as the candidate head and re-cover it:
+2. Read its unresolved threads and classify them in the shared ledger **before** invoking `resolve-pr-feedback`. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
+3. **Fix before you dispatch.** Take every blocking entry this wake produced, together with every other channel's outstanding blocking entries, through **one** Step 6.2 pass, and push once. Then invoke `resolve-pr-feedback` scoped to that reviewer's source (`sources: copilot` or `sources: coderabbit`), passing a disposition for every thread that carries a finding — `blocking` annotated `already fixed in <sha>`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions). A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. An un-fixed `blocking` disposition only comes back to you unfixed: fixing is always Step 6.2's one batched pass.
+4. **After the Step 6.2 push** — that push — `resolve-pr-feedback` never pushes under a coordinator — is what moves the head under this ordering — record the new SHA as the candidate head and re-cover it:
    - **Apply 6.1's material-change test to the delta first — including its blocking-finding consequence, which fixes and pushes before any relaunch below.** Where it fires, its delta-scoped Codex re-entry runs *before* the relaunches, so a materially changed diff never reaches Copilot or CodeRabbit with no local pass behind it. Most pushes fall straight through.
    - **Relaunch the waiter of every reviewer whose evidence the delta invalidated**, and only those. Do not restart a reviewer the delta did not touch merely because `HEAD` changed. **Copilot does not re-review a push on its own** — its waiter must be relaunched, or the fix you just pushed ships unreviewed by it; CodeRabbit re-reviews by itself and its waiter is relaunched only to observe that.
    - On the next wake, inspect only feedback added or changed since that reviewer's previously reviewed SHA, and classify and deduplicate it in the shared ledger.
@@ -818,28 +818,26 @@ Then branch on the trailing `STATUS=` line:
 | `TERMINAL_PASS` | 0 | Every check completed, none failed → **proceed to Step 8** |
 | `TERMINAL_FAIL` | 1 | Every check completed, at least one failed → **proceed to Step 7.2** |
 | `PENDING` | 2 | Still running at budget expiry. Not a verdict. Re-run to keep waiting, or report the wait as unfinished. **Never** record it as "CI passed". |
-| `NOT_CONFIGURED` | 3 | No checks appeared within the discovery grace — this PR has no CI configured. **This is NOT a pass**: a merge gate requiring green CI is not satisfied by the absence of CI. Report it and confirm against branch protection. |
+| `NOT_CONFIGURED` | 3 | No checks appeared within the discovery grace — this PR has no CI configured. **This is NOT a pass**: a merge gate requiring green CI is not satisfied by the absence of CI. Report it and confirm against branch protection. Rule out a base-branch conflict first: `resolve-pr-feedback`'s `references/ci.md` § Conflict check — a conflicting PR shows exactly this status. |
 | `ERROR` | 4 | Bad arguments, `gh` unauthenticated, or the checks API could not be read → report. A failed read is not "no checks". |
 
 #### 7.2 Handle CI Failures (LOOP — max 3 iterations)
 
-**If Step 7.1 reports `STATUS=TERMINAL_FAIL` (failures detected):**
+**If Step 7.1 reports `STATUS=TERMINAL_FAIL` on `CANDIDATE_HEAD`:**
 
 ```
-Skill tool: skill="resolve-ci-failures"
+Skill tool: skill="resolve-pr-feedback", args="[PR_NUMBER] — [STEP 2.5 SCOPE BRIEF VERBATIM] — sources: ci"
 ```
 
-Pass the failure details from the script output to the skill. The skill will:
-1. Analyze failure logs and identify root causes
-2. Delegate fixes to a sub-agent that loads `dev` in its Implementer role
-3. Push the fixes
+It loads its CI reference, reads the failing checks' logs for this head, categorises each failure and **returns the diagnosed blocking set**; it fixes and pushes nothing (its Step 3). Flaky and infrastructure failures come back reported, not fixed — they are the user's call, never a blind re-run. If every failure is one of those, there is nothing to fix: STOP and report them with the evidence.
 
-**Batch the CI failures with anything else outstanding before that push** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
+**Fix the returned set through Step 6.2** — one fix agent, one commit series, one push — **batched with anything else outstanding for this head** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
 
-**After the skill completes and fixes are pushed, record the new SHA as `CANDIDATE_HEAD`, apply 6.1's material-change test to the delta, and re-enter Step 6.3 before Step 7.0.** Where that test fires, its delta-scoped Codex re-entry runs first, and 6.1's blocking-finding consequence governs whatever that re-entry reports; a CI fix that only corrected a line falls straight through it. A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first. Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
+**After that push, record the new SHA as `CANDIDATE_HEAD`, apply 6.1's material-change test to the delta, and re-enter Step 6.3 before Step 7.0.** Where that test fires, its delta-scoped Codex re-entry runs first, and 6.1's blocking-finding consequence governs whatever that re-entry reports; a CI fix that only corrected a line falls straight through it. A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first. Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
 
 ```
-Step 7.1 (wait) → fail → Step 7.2 (batched fix, one push)
+Step 7.1 (wait) → fail → Step 7.2 (diagnose: resolve-pr-feedback, sources: ci)
+                       → Step 6.2 (batched fix, one push)
                        → 6.1 material-change test → Step 6.3 (re-cover the new head)
                        → Step 7.0 → Step 7.1 (wait) → ...
 ```
@@ -1027,8 +1025,7 @@ All sub-agents are launched via the Agent tool. Each loads its skill via the Ski
 | 4.6.2 | Browser Verification | `verify-web-change` (pre-PR, against the branch) |
 | 6.3 | Copilot Review | `copilot-review` (waiter backgrounded, concurrent with coderabbit-review) |
 | 6.3 | CodeRabbit Review | `coderabbit-review` (PR-level only, waiter backgrounded, concurrent with copilot-review; classify/deduplicate feedback and verify only affected deltas within bounds) |
-| 6.3 | PR Feedback Resolver | `resolve-pr-feedback` (meta — called by reviewer skills) |
-| 7.2 | CI Failure Resolver | `resolve-ci-failures` |
+| 6.3, 7.2 | PR Feedback Resolver | `resolve-pr-feedback` (coordinator session; scoped by `sources:` — the reviewer skills call it for their own source, Step 7.2 for `ci`) |
 
 **Pattern for every sub-agent call:**
 ```

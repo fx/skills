@@ -349,7 +349,7 @@ A prerelease pin is temporary. Note in the consumer PR that it should move to th
 | Upstream tests fail | Fix upstream before proceeding; never skip its CI |
 | Link step unsupported for the ecosystem | Ask the user how they normally test a local build; do not invent a mechanism |
 | Consumer fails against the linked build | Fix the API upstream, not around it in the consumer |
-| Upstream PR CI fails | `resolve-ci-failures` in the upstream working directory |
+| Upstream PR CI fails | `dev` Step 7.2 (`resolve-pr-feedback`, `ci` source) in the upstream working directory |
 | No release after merge | Report the strategy and what is blocking; never merge a release PR |
 
 ## Success Criteria
