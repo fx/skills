@@ -25,8 +25,6 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 |---|---|
 | `dev` | Runs the complete attended SDLC lifecycle through requirements, implementation, review, CI, and finalization, stopping at an unmerged PR; also defines the Implementer role its coordinators delegate implementation to. |
 | `team` | Wraps `dev`: runs its lifecycle for every change in the approved scope, unattended, and merges each PR itself once the merge gates pass. |
-| `fix` | Runs a test-first bug-fix lifecycle and then enters the explicitly requested SDLC workflow. |
-| `workflow-runner` | Runs an explicitly selected workflow through its own completion criteria without stopping between phases. |
 | `requirements-analyzer` | Analyzes supplied implementation requirements, repository context, and acceptance criteria, and produces the implementation outline the lifecycle implements from. |
 | `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows. |
 | `codex-review` | Runs a scoped one-shot Codex CLI branch review as an external review adapter. |

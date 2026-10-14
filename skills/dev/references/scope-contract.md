@@ -271,7 +271,7 @@ Over-triggering is its own failure. The rule covers work **outside** the request
 - Reviewer findings classified `required-by-contract` or `regression-caused-by-change` — in scope
 - Ordinary multi-step work that a `normal` request plainly implies
 
-**Autonomous long-running skills** (`team`, `workflow-runner`) exist to run unattended for extended periods. For them the trigger is **only** work outside the approved spec, change document, or task list — never mere duration, task count, or effort. A coordinator working through an approved backlog does not stop to ask permission for the next approved task; it stops when a task requires something the contract does not cover.
+**An autonomous long-running skill** (`team`) exists to run unattended for extended periods. For it the trigger is **only** work outside the approved spec, change document, or task list — never mere duration, task count, or effort. A coordinator working through an approved backlog does not stop to ask permission for the next approved task; it stops when a task requires something the contract does not cover.
 
 ### Size signal changes the threshold, not the rule
 

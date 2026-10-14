@@ -990,7 +990,7 @@ After this handoff, a later user message such as "merge it" is a standalone mech
 
 1. STEP 0: Auth check
 2. STEP 1: Branch as `fix/short-error-desc`
-3. STEP 2: Focus on error analysis, root cause
+3. STEP 2: Focus on error analysis and root cause. The Step 4 implementer reproduces the bug with a failing test first and confirms it fails **for the reported reason**; if the bug cannot be reproduced, STOP and report — never guess at a fix. The minimal fix is the scope: a bug report authorizes fixing that bug, not refactoring the code around it.
 4. STEPS 4-8: Standard
 
 ### Multi-PR Tasks
