@@ -159,19 +159,27 @@ PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explic
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
-gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews"           # copilot reviews
-gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/check-runs"       # ci
-gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status"                              # codecov/*, ci (combined status)
-gh api --paginate --slurp "/repos/${REPO_NWO}/issues/${PR_NUMBER}/comments"         # codecov comment
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews"           # copilot, coderabbit reviews
+gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/check-runs"       # CodeRabbit check, ci
+gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status"                              # codecov/*, CodeRabbit, ci (combined status)
+gh api --paginate --slurp "/repos/${REPO_NWO}/issues/${PR_NUMBER}/comments"         # codecov, coderabbit comments
 gh pr view "$PR_NUMBER" --json mergeable,mergeStateStatus                           # ci: base-branch conflict
 ```
 
 | Source | Present when |
 |---|---|
 | copilot | It has any review or any thread on the PR |
-| coderabbit | It has any thread on the PR |
+| coderabbit | A check run or status named `CodeRabbit` exists on `HEAD_SHA` in any state, `coderabbitai[bot]` posted a review or comment on the PR, or it has a thread |
 | codecov | A status context on `HEAD_SHA` starts `codecov/`, `codecov[bot]` or `codecov-commenter` commented, or it has a thread |
 | ci | A check run on `HEAD_SHA` concluded `failure`, `cancelled`, `timed_out` or `action_required`, or a status is `failure` / `error` — **excluding `codecov/*` and the `CodeRabbit` check**, which their own references own; or the head has no checks at all and `mergeable` is `CONFLICTING` |
+
+**Presence is any signal the source emits, never threads alone.** A source that
+reports through a check, a status or a comment is present before it posts a
+thread, and often without ever posting one: a pending or failed `CodeRabbit`
+check, or a rate-limit comment, with no threads is CodeRabbit present and
+unsettled. Detecting it by threads alone reports it absent, skips its reference
+and its `## Converged` condition, and lets the run report settled over a review
+that never finished.
 
 **Load `references/<source>.md` for each source that is present and in `sources:`
 scope — and only those.** An unscoped run also loads `references/copilot.md` when
@@ -342,7 +350,7 @@ none. If threads remain, report which reviewers still have open feedback.
 
 ### Detection
 - copilot: present (2 unresolved threads) | absent | not requested
-- coderabbit: present (3 unresolved threads) | absent | not requested
+- coderabbit: present (check <state>, 3 unresolved threads) | absent | not requested
 - codecov: present (patch 65%, threshold 80% from codecov.yml) | absent | not requested
 - ci: present (2 failed checks) | absent | not requested
 - Uncategorised automated reviewers: <name>: <n> unresolved — no reference here (or "none seen")
