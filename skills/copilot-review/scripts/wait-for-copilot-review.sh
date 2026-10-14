@@ -297,7 +297,9 @@ fi
 #   gh pr view --json:        author.login = "copilot-pull-request-reviewer"
 #   REST requested_reviewers: login = "Copilot" — but it is always empty (D1),
 #                             so this script never reads it.
-COPILOT_LOGIN_PREFIX="copilot-pull-request-reviewer"
+# Matched exactly, both forms — a prefix test also claims any login that merely
+# begins with it.
+COPILOT_LOGIN="copilot-pull-request-reviewer"
 
 
 # Get repo owner/name for REST API calls
@@ -358,7 +360,7 @@ check_review_submitted() {
     cap=$(wait_cap)
     if (( cap <= 0 )); then return 2; fi
     out=$(timeout "$cap" gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" --jq \
-        "[.[] | select(.user.login | startswith(\"${COPILOT_LOGIN_PREFIX}\")) | select(.commit_id == \"${sha}\") | (.state // \"UNKNOWN\")] | unique | join(\", \")" \
+        "[.[] | select(.user.login | IN(\"${COPILOT_LOGIN}\", \"${COPILOT_LOGIN}[bot]\")) | select(.commit_id == \"${sha}\") | (.state // \"UNKNOWN\")] | unique | join(\", \")" \
         2>/dev/null) || rc=$?
     if (( rc == 124 )); then return 2; fi
     if (( rc != 0 )); then return 1; fi
@@ -382,7 +384,7 @@ review_bodies() {
     cap=$(diag_cap)
     if (( cap <= 0 )); then return 1; fi   # tail spent; `timeout 0` would uncap
     timeout "$cap" gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" --jq \
-        "[.[] | select(.user.login | startswith(\"${COPILOT_LOGIN_PREFIX}\")) | select(.commit_id == \"${sha}\") | .body] | join(\"\n\n----- (next Copilot review of this same commit) -----\n\n\")"
+        "[.[] | select(.user.login | IN(\"${COPILOT_LOGIN}\", \"${COPILOT_LOGIN}[bot]\")) | select(.commit_id == \"${sha}\") | .body] | join(\"\n\n----- (next Copilot review of this same commit) -----\n\n\")"
 }
 
 # The commit of the newest Copilot review of ANY commit. Diagnostic only — used to
@@ -404,7 +406,7 @@ latest_review_commit() {
     local cap; cap=$(diag_cap)
     if (( cap <= 0 )); then return 1; fi
     timeout "$cap" gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" --jq \
-        "[.[] | select(.user.login | startswith(\"${COPILOT_LOGIN_PREFIX}\")) | .commit_id] | last // empty"
+        "[.[] | select(.user.login | IN(\"${COPILOT_LOGIN}\", \"${COPILOT_LOGIN}[bot]\")) | .commit_id] | last // empty"
 }
 
 # Best-effort nudge. See D1: the response is discarded on purpose. Issued because
@@ -446,7 +448,7 @@ count_copilot_threads() {
           }
         }
       }
-    }" --jq "[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == \"${COPILOT_LOGIN_PREFIX}\")] | length" 2>/dev/null); then
+    }" --jq "[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == \"${COPILOT_LOGIN}\")] | length" 2>/dev/null); then
         echo "unknown"
         return
     fi

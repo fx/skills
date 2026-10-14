@@ -262,7 +262,7 @@ REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid')
 
 gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
-  --jq "[.[] | select(.user.login | startswith(\"copilot-pull-request-reviewer\")) | select(.commit_id == \"${HEAD_SHA}\") | .body] | join(\"\n\n----- (next review of this commit) -----\n\n\")"
+  --jq "[.[] | select(.user.login | IN(\"copilot-pull-request-reviewer\", \"copilot-pull-request-reviewer[bot]\")) | select(.commit_id == \"${HEAD_SHA}\") | .body] | join(\"\n\n----- (next review of this commit) -----\n\n\")"
 ```
 
 **Do not narrow that to `| last`.** Two Copilot reviews of a single commit are
@@ -389,7 +389,7 @@ that Copilot had already declined to raise as threads.
 # The gate is only passed when the newest Copilot review covers the current head.
 HEAD_SHA=$(gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid')
 REVIEWED=$(gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
-  --jq '[.[] | select(.user.login | startswith("copilot-pull-request-reviewer")) | .commit_id] | last // empty')
+  --jq '[.[] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | .commit_id] | last // empty')
 [[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
   && echo "covered: $HEAD_SHA" \
   || echo "NOT covered — head=$HEAD_SHA reviewed=${REVIEWED:-none}"

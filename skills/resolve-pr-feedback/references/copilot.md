@@ -10,8 +10,10 @@ none of it is restated here.
 ## Identify
 
 A Copilot thread's author is `copilot-pull-request-reviewer` in GraphQL and
-`copilot-pull-request-reviewer[bot]` in REST. Match with
-`startswith("copilot-pull-request-reviewer")` so both forms match.
+`copilot-pull-request-reviewer[bot]` in REST. Match both exactly —
+`IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")` — never with a prefix
+or substring test, which also claims any login that merely begins with it
+(`resolve-pr-feedback` § Supported Reviewers).
 
 **⛔ Never match the bare string `Copilot`.** It appears only in
 `requested_reviewers`, which is always empty, so matching on it categorises
@@ -33,7 +35,7 @@ REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
 gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | startswith("copilot-pull-request-reviewer")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")'
+  | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")'
 ```
 
 Empty output means **no Copilot review covers the head** — unreviewed, not
@@ -82,7 +84,7 @@ REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
 REVIEWED=$(gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  | jq -r '[.[][] | select(.user.login | startswith("copilot-pull-request-reviewer")) | .commit_id] | last // empty')
+  | jq -r '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | .commit_id] | last // empty')
 [[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
   && echo "covered: $HEAD_SHA" \
   || echo "NOT covered — head=$HEAD_SHA reviewed=${REVIEWED:-none}"

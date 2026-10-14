@@ -103,7 +103,7 @@ PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explic
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq "[.[] | select(.user.login | startswith(\"copilot-pull-request-reviewer\")) | select(.commit_id == \"${HEAD_SHA}\")] | length"
+  --jq "[.[] | select(.user.login | IN(\"copilot-pull-request-reviewer\", \"copilot-pull-request-reviewer[bot]\")) | select(.commit_id == \"${HEAD_SHA}\")] | length"
 ```
 
 A result of `0` means **the commit you are about to merge is UNREVIEWED**, whatever
@@ -582,12 +582,12 @@ HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
 # Reviews of the CURRENT head — this is coverage.
 gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq "[.[] | select(.user.login | startswith(\"copilot-pull-request-reviewer\")) | select(.commit_id == \"${HEAD_SHA}\") | {state, submitted_at}]"
+  --jq "[.[] | select(.user.login | IN(\"copilot-pull-request-reviewer\", \"copilot-pull-request-reviewer[bot]\")) | select(.commit_id == \"${HEAD_SHA}\") | {state, submitted_at}]"
 
 # Every Copilot review with its commit — diagnostic, to see whether a review exists
 # but covers an older commit. NOT a pass signal.
 gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq '[.[] | select(.user.login | startswith("copilot-pull-request-reviewer")) | {commit_id, state, submitted_at}]'
+  --jq '[.[] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | {commit_id, state, submitted_at}]'
 ```
 
 Or via GraphQL — include `commit { oid }`, otherwise the result is unscoped and

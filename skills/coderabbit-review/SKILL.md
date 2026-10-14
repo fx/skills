@@ -145,7 +145,7 @@ array of matches would discard the `pageInfo` `--paginate` pages from.
 
 ```bash
 jq '[.[] | select(.isResolved == false
-       and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))]' \
+       and (.comments.nodes[0].author.login | IN("coderabbitai", "coderabbitai[bot]")))]' \
   <<< "$ALL_THREADS"
 ```
 
@@ -230,7 +230,7 @@ per-page `length` under-reports exactly as a per-page `group_by` would:
 
 ```bash
 jq '[.[] | select(.isResolved == false
-       and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))]
+       and (.comments.nodes[0].author.login | IN("coderabbitai", "coderabbitai[bot]")))]
     | length' <<< "$ALL_THREADS"
 ```
 

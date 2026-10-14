@@ -8,7 +8,9 @@ restated here.
 
 ## Identify
 
-A CodeRabbit thread's author login contains `coderabbitai` (`coderabbitai[bot]`).
+A CodeRabbit author's login is exactly `coderabbitai` in GraphQL or
+`coderabbitai[bot]` in REST — match it with `IN("coderabbitai", "coderabbitai[bot]")`,
+never a substring test (`resolve-pr-feedback` § Supported Reviewers).
 Its PR check is named `CodeRabbit`.
 
 ## Comment anatomy

@@ -16,7 +16,8 @@ Codecov reports through three channels, and review threads are the rare one:
 - an issue comment by `codecov[bot]` or `codecov-commenter`;
 - line annotations — PR review comments by those logins.
 
-A review thread whose author starts `codecov` is settled through
+A review thread whose author is exactly `codecov`, `codecov[bot]` or
+`codecov-commenter` (`resolve-pr-feedback` § Supported Reviewers) is settled through
 `resolve-pr-feedback` Step 4 like any other source's.
 
 ## Collect — three sources, head-scoped

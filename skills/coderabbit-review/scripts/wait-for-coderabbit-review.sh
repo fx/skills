@@ -306,7 +306,7 @@ count_coderabbit_threads() {
           }
         }
       }
-    }" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and (.comments.nodes[0].author.login | tostring | contains("coderabbitai")))] | length' 2>/dev/null
+    }" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and (.comments.nodes[0].author.login | IN("coderabbitai", "coderabbitai[bot]")))] | length' 2>/dev/null
 }
 
 is_terminal_state() {

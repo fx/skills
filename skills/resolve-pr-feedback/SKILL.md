@@ -74,14 +74,22 @@ Skill tool: skill="resolve-pr-feedback",
 
 ## Supported Reviewers
 
-| Reviewer | Author pattern | Reference |
+| Reviewer | Author logins — exact, GraphQL / REST | Reference |
 |---|---|---|
-| GitHub Copilot | `copilot-pull-request-reviewer` (GraphQL thread authors) / `copilot-pull-request-reviewer[bot]` (REST) — **never** the bare `Copilot`, which matches nothing | `references/copilot.md` |
-| CodeRabbit | `coderabbitai[bot]` | `references/coderabbit.md` |
-| Codecov | `codecov[bot]` / `codecov-commenter` | `references/codecov.md` |
+| GitHub Copilot | `copilot-pull-request-reviewer` / `copilot-pull-request-reviewer[bot]` — **never** the bare `Copilot`, which matches nothing | `references/copilot.md` |
+| CodeRabbit | `coderabbitai` / `coderabbitai[bot]` | `references/coderabbit.md` |
+| Codecov | `codecov` / `codecov[bot]`, and `codecov-commenter` | `references/codecov.md` |
+
+**Match these logins exactly, never by prefix or substring.** GraphQL drops the
+`[bot]` suffix that REST keeps, so each list carries both forms, and every filter
+in this skill and its references is a set-membership test over it — jq
+`IN("<login>", "<login>[bot]")` — never `startswith`, `contains` or `test`. A
+looser match categorises a human, or another bot, whose login merely begins with
+or contains one of these as owned, and the skill then replies to and resolves a
+thread `github` § PR Comments Prohibition forbids it to touch.
 
 These three are the roster — there is no fallback row. A reviewer absent from the
-table has no author pattern here and no reference to load, so this skill cannot
+table has no login list here and no reference to load, so this skill cannot
 settle it; do not treat the list as illustrative and do not infer a generic path
 for a fourth bot.
 
@@ -143,9 +151,10 @@ error — the response is well-formed and simply shorter. **Fetch `path`, `line`
 `body`, not just the author:** a disposition cannot be derived from an ID and a
 login.
 
-Categorise each unresolved thread by its first comment's author:
-`startswith("copilot-pull-request-reviewer")` → copilot,
-`contains("coderabbitai")` → coderabbit, `startswith("codecov")` → codecov.
+Categorise each unresolved thread by its first comment's author, matched exactly
+against § Supported Reviewers: `IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")` → copilot,
+`IN("coderabbitai", "coderabbitai[bot]")` → coderabbit,
+`IN("codecov", "codecov[bot]", "codecov-commenter")` → codecov.
 Anything else is one of two kinds, and neither is yours to settle: a human thread,
 which `github` § PR Comments Prohibition forbids you to touch, or a thread from an
 automated reviewer with no § Supported Reviewers row. **Report the second kind
@@ -170,9 +179,9 @@ gh pr view "$PR_NUMBER" --json mergeable,mergeStateStatus                       
 
 | Source | Present when |
 |---|---|
-| copilot | A review on the PR whose `user.login` starts with `copilot-pull-request-reviewer` — never the bare `Copilot` — or a thread (a) categorised copilot |
-| coderabbit | A check run or status named `CodeRabbit` on `HEAD_SHA` in any state, a review or issue comment whose `user.login` is `coderabbitai[bot]`, or a thread (a) categorised coderabbit |
-| codecov | A status context on `HEAD_SHA` starting `codecov/`, an issue comment whose `user.login` is `codecov[bot]` or `codecov-commenter`, or a thread (a) categorised codecov |
+| copilot | A review on the PR whose `user.login` is one of Copilot's § Supported Reviewers logins — never the bare `Copilot` — or a thread (a) categorised copilot |
+| coderabbit | A check run or status named `CodeRabbit` on `HEAD_SHA` in any state, a review or issue comment whose `user.login` is one of CodeRabbit's § Supported Reviewers logins, or a thread (a) categorised coderabbit |
+| codecov | A status context on `HEAD_SHA` starting `codecov/`, an issue comment whose `user.login` is one of Codecov's § Supported Reviewers logins, or a thread (a) categorised codecov |
 | ci | A check run on `HEAD_SHA` concluded `failure`, `cancelled`, `timed_out` or `action_required`, or a status is `failure` / `error` — **excluding `codecov/*` and the `CodeRabbit` check**, which their own references own; or the head has no checks at all and `mergeable` is `CONFLICTING` |
 
 **Every review, comment and thread signal counts only under its source's own
@@ -359,9 +368,9 @@ set:
 jq '[.[] | select(.isResolved == false) | .comments.nodes[0].author.login]
     | group_by(.) | map({reviewer: .[0], unresolved: length})
     | map(select(.reviewer
-          | startswith("copilot-pull-request-reviewer")
-            or contains("coderabbitai")
-            or startswith("codecov")))' <<< "$ALL_THREADS"
+          | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]",
+               "coderabbitai", "coderabbitai[bot]",
+               "codecov", "codecov[bot]", "codecov-commenter")))' <<< "$ALL_THREADS"
 ```
 
 Run that once, never per page: a per-page `group_by` splits one reviewer's threads
@@ -412,8 +421,8 @@ would read as full coverage.
    requested`; only present sources' references loaded (plus Copilot's for an
    unscoped run's convergence).
 2. Every in-scope thread from a categorised reviewer triaged, replied to and
-   resolved — Copilot matched on `copilot-pull-request-reviewer`, never the bare
-   `Copilot`. Suppressed comments open no thread and are not part of this
+   resolved — every author matched exactly against § Supported Reviewers' logins,
+   Copilot never on the bare `Copilot`. Suppressed comments open no thread and are not part of this
    (`copilot-review` **D4**).
 3. Coordinator-owned: nothing edited, committed or pushed here; the blocking set
    returned. Standalone: one implementer, one push.
