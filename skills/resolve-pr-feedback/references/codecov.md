@@ -111,4 +111,5 @@ current head shows zero missing lines (or every remaining gap is user-accepted a
 untestable), and the head's `codecov/*` statuses pass — read after the CI wait
 for that head reached a terminal verdict, since Codecov reports only once CI
 uploads coverage. That wait is `dev` Step 7.1's under a coordinator and
-`resolve-pr-feedback` Step 5's on a standalone run.
+`resolve-pr-feedback` Step 5's on a standalone run, where it runs every cycle,
+pushed or not.

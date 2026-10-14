@@ -285,29 +285,38 @@ With `sources:` given, return after Step 4; the caller loops.
 
 Unscoped, loop:
 
-1. **If a fix was pushed, the new head has to be re-covered** — the push created
-   unreviewed commits, and every reference's evidence is keyed to the old SHA.
-   Copilot does not re-review on its own (`references/copilot.md` § Converged).
-   A cycle that only replied and resolved did not move the head, and a review of
-   it already exists: skip the wait and go to step 3.
-2. Wait on the new head with the dedicated waiters — `copilot-review` for
-   Copilot, `coderabbit-review` for CodeRabbit, and, **when `ci` or `codecov` is
-   loaded**, `dev`'s CI waiter:
+1. **Fix the head this cycle is about.** If a fix was pushed, it is the post-push
+   head: the push created unreviewed commits, every reference's evidence is keyed
+   to the old SHA, and Copilot does not re-review on its own
+   (`references/copilot.md` § Converged). If the cycle only replied and resolved,
+   the head did not move and a review of it already exists, so the reviewer waits
+   below are skipped — **the CI wait is not**.
+2. **Wait on that head:**
+   - **Only after a push:** `copilot-review` for Copilot, `coderabbit-review` for
+     CodeRabbit.
+   - **Every cycle, pushed or not:** `dev`'s CI waiter, for the current head:
 
-   ```bash
-   bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> > <log> 2>&1
-   ```
+     ```bash
+     bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> > <log> 2>&1
+     ```
 
-   Run it as a long wait (`[SKILLS_DIR]/dev/references/background-waits.md`;
-   `[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits for the shape) and
-   read it the way `dev` Step 7.1 does: act only where `PR_HEAD_SHA=` equals the
-   new head, and only on `TERMINAL_PASS` / `TERMINAL_FAIL`. Codecov reports after
-   the CI run that uploads coverage, so its evidence is read after that terminal
-   verdict, never before. **Never hand-roll a polling loop in their place:** it
-   only observes, never requests, and accepts a result for a superseded commit.
-3. Re-run Step 1 in full on the new head — threads, reviews, checks, statuses and
-   comments — and re-triage every unresolved thread, including the ones the last
-   push created. The breakdown query below counts threads by reviewer; it cannot
+     Run it even when neither `ci` nor `codecov` is loaded yet. A head whose
+     checks are still running reads both absent — a check that has not failed yet
+     is not a failure, and Codecov comments only once CI has uploaded coverage —
+     so a detection taken before CI's terminal verdict misses both, and a run
+     with no push would then converge without ever seeing them.
+
+   Run each as a long wait (`[SKILLS_DIR]/dev/references/background-waits.md`;
+   `[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits for the shape).
+   Read the CI waiter the way `dev` Step 7.1 does: act only where `PR_HEAD_SHA=`
+   equals the current head, and branch on its `STATUS=` per that step's table —
+   `PENDING` is waited again, never read as a pass, and `NOT_CONFIGURED` goes to
+   `references/ci.md` § Conflict check. **Never hand-roll a polling loop in their
+   place:** it only observes, never requests, and accepts a result for a
+   superseded commit.
+3. Re-run Step 1 in full on the current head, **after** step 2's waits are
+   terminal — threads, reviews, checks, statuses and comments — and re-triage
+   every unresolved thread, including the ones the last push created. The breakdown query below counts threads by reviewer; it cannot
    feed Step 2, which needs a disposition per thread.
 4. **A reference loaded on an earlier cycle stays loaded until its `## Converged`
    condition holds.** Detection reads a moment: a CI fix's new head has no failed
@@ -316,7 +325,7 @@ Unscoped, loop:
    the fix not working.
 5. Stop when `fx-review` Step 7's ledger test holds **and** every loaded
    reference's `## Converged` condition holds on a head that was actually
-   reviewed — each on the evidence step 2's waiter produced for that head.
+   reviewed — each on the evidence step 2's waiters produced for that head.
    Otherwise go back through § Step 2 to § Step 4.
 
 **⛔ Zero new threads is not convergence unless a Copilot review has been RECEIVED
