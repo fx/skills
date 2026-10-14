@@ -299,6 +299,10 @@ Management), following `fx-review` Step 5. Codecov threads take the same path.
 Re-query and confirm `isResolved` for every thread you settled. Code changed but a
 thread left open is unfinished work.
 
+**A finding with no thread** — a CodeRabbit review-body item (`references/coderabbit.md`)
+— has nothing to reply to or resolve: record its disposition, and for a fixed one
+the commit, under "Findings with no thread" in the report.
+
 ## Step 5: Converge (unscoped invocation only)
 
 With `sources:` given, return after Step 4; the caller loops.
@@ -449,6 +453,7 @@ none. If threads remain, report which reviewers still have open feedback.
 
 ### Resolution
 - Threads settled: <n> (<count per disposition>)
+- Findings with no thread: <source>: <item> — <disposition> | none
 - Returned to the caller for its batched fix: <blocking set | none>
 - Reported, not fixed: <flaky / infrastructure / untestable | none>
 - Handed back: <source>: <the reference's hand-back reason> | none
@@ -484,7 +489,8 @@ would read as full coverage.
 
 - If no PR found: ask the user for the PR number.
 - If a fix or settle step fails: report which source's feedback remains open.
-- If API errors: retry with proper auth context.
+- If API errors: retry once with proper auth context. A read that still fails is a
+  hand-back naming the read — never a zero, an empty list or another cycle.
 - If a thread comes from an automated reviewer with no § Supported Reviewers row:
   this is not an error to work around and not a reason to improvise a reference.
   Report the reviewer and its open threads as uncategorised and hand them back to

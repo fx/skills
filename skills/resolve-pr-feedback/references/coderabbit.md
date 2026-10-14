@@ -131,3 +131,9 @@ loops:
   (`coderabbit-review` § CodeRabbit is optional when rate-limited).
 - **`PENDING` again on a re-run, or an `ERROR` that is not a rate limit** — hand
   back: "CodeRabbit check still pending on head `<sha>`", or the error.
+- **`TERMINAL_FAIL` with zero unresolved CodeRabbit threads** — `coderabbit-review`
+  Step 1c: a rate limit is the degradation above; actionable review-body items are
+  findings, triaged in `resolve-pr-feedback` Step 2 and fixed through its Step 3,
+  with dispositions recorded in the report because no thread exists to settle;
+  nothing actionable, or nothing blocking, is a hand-back with Step 1c's wording.
+- **Threads unreadable** after one retry — hand back; never read it as zero.

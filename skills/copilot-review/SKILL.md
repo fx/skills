@@ -224,7 +224,7 @@ on STATUS, not on prose.
 | STATUS | Exit | What to do |
 |---|---|---|
 | `TERMINAL_PASS` | 0 | A review covers the current head and no Copilot thread is open → **Step 2b**, then Step 4 to confirm. |
-| `TERMINAL_FAIL` | 1 | A review covers the current head and threads remain open (or the count could not be read) → **Step 2b**, then Step 3. Settled — do not re-run for a better answer. |
+| `TERMINAL_FAIL` | 1 | A review covers the current head and threads remain open (or the count could not be read) → **Step 2b**, then Step 3. Settled — do not re-run for a better answer. Where the count could not be read, Step 3's paginated read is the check; if it fails too, after one retry, hand back "Copilot threads unreadable on head `<sha>`" — never a zero, never another wait. |
 | `PENDING` | 2 | No review of the current head arrived within 900 s. **Not a failure and not a clean result.** Re-running is safe. If it still has not arrived, STOP and report: "Copilot review has not arrived for PR #N head `<sha>`. Cannot merge without it." **Never** record this as "no findings". |
 | `NOT_CONFIGURED` | 3 | **Never returned by this script.** Whether Copilot is "configured" has no answerable form — `requested_reviewers` does not work at all (**D1/D3**). Do not branch on it, and do not reinstate any "request again, then re-run" recovery keyed to it. |
 | `ERROR` | 4 | Bad arguments, `gh` too old, PR head unresolvable → report to the user. The wait never started. |
@@ -246,7 +246,10 @@ headline** and check whether Copilot opened any review threads:
   is passed. Go to Step 4 and confirm the thread count is zero. There is nothing
   to fix and nothing to reply to.
 - **Changes recommended**, or any headline accompanied by threads → go to Step 3
-  and handle the threads normally.
+  and handle the threads normally. **Changes recommended with zero threads** has
+  nothing to work through — the threads are the findings — so Step 3 settles
+  nothing and Step 4 passes it on conditions 1–2; do not re-run for a thread that
+  was never opened.
 
 **Do not open the suppressed-comments block as a matter of routine** (**D4**).
 `SUPPRESSED_COMMENTS=1` is context, not an instruction; it holds nothing open. Act

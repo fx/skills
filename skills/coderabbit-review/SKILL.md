@@ -97,13 +97,15 @@ on STATUS, not on prose.
 | STATUS | Exit | What to do |
 |---|---|---|
 | `TERMINAL_PASS` | 0 | Check settled clean, zero unresolved threads → the gate is met. Go to Step 1b only if you still need to read findings. |
-| `TERMINAL_FAIL` | 1 | Settled with a failing conclusion, or unresolved threads remain → **Step 1b**. Do not re-run for a better answer. |
-| `PENDING` | 2 | Still running at budget expiry. **Not a verdict, not a failure.** Re-running is safe and correct if you still need it. Never record it as "no findings". |
+| `TERMINAL_FAIL` | 1 | Settled with a failing conclusion, or unresolved threads remain → **Step 1b**; where Step 1b finds no unresolved CodeRabbit thread, **Step 1c**. Do not re-run for a better answer. |
+| `PENDING` | 2 | Still running at budget expiry. **Not a verdict, not a failure.** Re-running once is safe and correct if you still need it; `PENDING` again on that re-run is a hand-back: "CodeRabbit check still pending on head `<sha>`." Never record it as "no findings". |
 | `NOT_CONFIGURED` | 3 | The App is not installed for this repo. **Terminal — report once and proceed without the PR-level gate. Never retry, never wait.** A coordinator running several PRs also caches it per `[SKILLS_DIR]/dev/references/head-discipline.md` § Reviewer availability is cached for the run, rather than re-establishing it on each PR. |
 | `ERROR` | 4 | Bad args or `gh` failure; the wait never started → report. If it identifies a rate/quota limit, take the exception above. |
 
 `UNRESOLVED_THREADS=unknown` means the read **failed**, not that there are none;
-the script fails closed on it. Verify the threads yourself before any merge gate.
+the script fails closed on it. Verify the threads yourself with Step 1b's query
+before any merge gate; if that read fails too, after one retry, hand back "CodeRabbit
+threads unreadable on head `<sha>`" — never a zero, never another wait.
 
 ## Step 1b: Fetch the threads and triage them
 
@@ -159,6 +161,48 @@ carries a finding**. Yours is authoritative — you hold the Scope Brief;
 disposition; list it with the reason so its outdated/incorrect handling takes it
 (`fx-review` Step 3).
 
+## Step 1c: A failing check with no open thread
+
+`TERMINAL_FAIL` with zero unresolved CodeRabbit threads has nothing for Step 1b to
+triage, and Step 3's condition 1 can never hold on it by waiting: without this step
+the loop repeats the same failure. CodeRabbit puts some of its feedback in places
+that open no thread — the review body's "Actionable comments posted" and
+"Outside diff range" sections — and says why a check failed in its own output. Read
+both, for the current head only:
+
+```bash
+PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
+REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
+HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+
+# The check's own explanation — a check run's output, or a commit status's description
+gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/check-runs" \
+  | jq '[.[].check_runs[] | select(.name == "CodeRabbit") | {conclusion, title: .output.title, summary: .output.summary}]'
+gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status" \
+  --jq '[.statuses[] | select(.context == "CodeRabbit") | {state, description}]'
+
+# CodeRabbit's review bodies for this head
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+  | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("coderabbitai", "coderabbitai[bot]")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")'
+```
+
+Then exactly one of:
+
+- **A rate or quota limit** in the check output, the status description or a
+  CodeRabbit comment → § CodeRabbit is optional when rate-limited.
+- **Actionable items in a review body** → each is a finding. Triage it like a
+  thread (`fx-review` Steps 2–3), blocking ones into the batched fix like any other.
+  There is no thread to reply to or resolve, so record each item's disposition in
+  the report — and, for a fixed one, the commit. After a push CodeRabbit re-reviews:
+  back to Step 1. **If none of them is blocking, nothing is pushed and the check
+  stays failed: hand back** "CodeRabbit check failed on `<sha>`; its review-body
+  findings were triaged non-blocking: <items and dispositions>".
+- **Nothing actionable** → hand back: "CodeRabbit check failed on `<sha>` with no
+  actionable feedback: <check summary or status description>".
+
+A hand-back ends Step 3's loop. It is not settlement: the caller's merge gate stays
+unmet until the user decides.
+
 ## Step 2: Settle the threads through `resolve-pr-feedback`
 
 ```
@@ -187,7 +231,8 @@ more round trip, not a fix.
 
 CodeRabbit re-reviews after every push, so once a fix is pushed the check goes
 pending again — go back to Step 1. Per `fx-review` Step 7, repeat Steps
-1 → 1b → 2 until **all three** hold:
+1 → 1b (→ 1c) → 2 until **all three** hold, or a step hands back — Step 1's
+`PENDING`-again or unreadable-threads case, or Step 1c:
 
 1. The most-recent `CodeRabbit` check is terminal with conclusion `success` (or
    `skipped` / `neutral` if the repo configures it that way).
@@ -260,3 +305,6 @@ and the gate recorded `skipped (rate-limited)`. Throttling alone never blocks me
 
 Or `STATUS=NOT_CONFIGURED` — the App is not installed for this repo. Report once and
 proceed; there is no PR-level CodeRabbit gate to satisfy.
+
+A hand-back (Step 1, Step 1c) is **not** success: it ends the loop with its reason
+reported, and the gate stays unmet for the user to decide.
