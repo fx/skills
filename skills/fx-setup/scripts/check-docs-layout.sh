@@ -17,6 +17,8 @@
 #   - Never reads through a symlink. Content checks run only on regular files
 #     (is_plain), and directories are only listed when they are real directories.
 #   - Always exits 0. A missing file is an answer, not an error.
+#   - Every exit path prints every key below, through the one emit function. A
+#     caller parsing the output never has to tell "key missing" from "empty".
 #
 # Output: KEY=VALUE lines, in this order. List values are space-separated and may
 # be empty.
@@ -34,19 +36,46 @@
 #                       AGENTS.md reaches every reviewer where the Copilot file reaches one)
 #   NATIVE_CHANGELOG=<files/dirs> [generated-by:<release-please|semantic-release|changesets>]
 #   DOCS_SITE=<config files/dirs>
+#   WARNING=<reason>    (printed only when the root could not be entered; every
+#                       value above is then a default, not a finding)
 #
 # GitHub issues are deliberately not checked: that needs the network. A caller
 # that needs a tracker runs `gh repo view --json hasIssuesEnabled` itself.
 
 set -u
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
-echo "REPO_ROOT=$REPO_ROOT"
-if ! cd "$REPO_ROOT" 2>/dev/null; then
-    echo "FX_DOCS=not-adopted"
-    echo "FX_INSTRUCTIONS=not-adopted"
-    echo "WARNING=could not enter $REPO_ROOT; nothing was checked"
+# Every key, with the value it carries when nothing could be checked. The detection
+# below overwrites them; emit prints them all, so no exit path drops a key.
+FX_DOCS=not-adopted
+FX_DOCS_MISSING=
+FX_INSTRUCTIONS=not-adopted
+FX_INSTRUCTIONS_PRESENT=
+NATIVE_SPECS=
+NATIVE_TRACKING=
+NATIVE_REVIEW_RULES=
+NATIVE_CHANGELOG=
+DOCS_SITE=
+WARNING=
+
+emit() {
+    echo "REPO_ROOT=$REPO_ROOT"
+    echo "FX_DOCS=$FX_DOCS"
+    [ "$FX_DOCS" = adopted ] && echo "FX_DOCS_MISSING=$FX_DOCS_MISSING"
+    echo "FX_INSTRUCTIONS=$FX_INSTRUCTIONS"
+    echo "FX_INSTRUCTIONS_PRESENT=$FX_INSTRUCTIONS_PRESENT"
+    echo "NATIVE_SPECS=$NATIVE_SPECS"
+    echo "NATIVE_TRACKING=$NATIVE_TRACKING"
+    echo "NATIVE_REVIEW_RULES=$NATIVE_REVIEW_RULES"
+    echo "NATIVE_CHANGELOG=$NATIVE_CHANGELOG"
+    echo "DOCS_SITE=$DOCS_SITE"
+    [ -n "$WARNING" ] && echo "WARNING=$WARNING"
     exit 0
+}
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P 2>/dev/null)
+if [ -z "$REPO_ROOT" ] || ! cd "$REPO_ROOT" 2>/dev/null; then
+    WARNING="could not enter ${REPO_ROOT:-the repository root}; nothing was checked"
+    emit
 fi
 
 # -e follows symlinks, so a dangling link reads as absent. Always pair it with -L.
@@ -68,7 +97,6 @@ if is_plain docs/index.yml; then
 elif is_dir docs/changes && [ -n "$(find docs/changes -maxdepth 1 -type f -name '[0-9][0-9][0-9][0-9]-*.md' -print -quit 2>/dev/null)" ]; then
     FX_DOCS=adopted
 fi
-echo "FX_DOCS=$FX_DOCS"
 
 if [ "$FX_DOCS" = adopted ]; then
     missing=()
@@ -77,7 +105,7 @@ if [ "$FX_DOCS" = adopted ]; then
     exists docs/tasks.md  || missing+=("docs/tasks.md")
     exists docs/index.yml || missing+=("docs/index.yml")
     exists docs/index.md  || missing+=("docs/index.md")
-    echo "FX_DOCS_MISSING=$(join "${missing[@]+"${missing[@]}"}")"
+    FX_DOCS_MISSING=$(join "${missing[@]+"${missing[@]}"}")
 fi
 
 # ── instruction layer ─────────────────────────────────────────────────────────
@@ -94,8 +122,7 @@ elif ! exists AGENTS.md && ! exists REVIEW.md; then
 else
     FX_INSTRUCTIONS=partial
 fi
-echo "FX_INSTRUCTIONS=$FX_INSTRUCTIONS"
-echo "FX_INSTRUCTIONS_PRESENT=$(join "${present[@]+"${present[@]}"}")"
+FX_INSTRUCTIONS_PRESENT=$(join "${present[@]+"${present[@]}"}")
 
 # ── native conventions ────────────────────────────────────────────────────────
 specs=()
@@ -111,7 +138,7 @@ for d in "${spec_candidates[@]}"; do
     case " ${specs[*]-} " in *" $d "*) continue ;; esac
     specs+=("$d")
 done
-echo "NATIVE_SPECS=$(join "${specs[@]+"${specs[@]}"}")"
+NATIVE_SPECS=$(join "${specs[@]+"${specs[@]}"}")
 
 tracking=()
 tracking_candidates=(TODO.md TODO TASKS.md ROADMAP.md docs/TODO.md docs/roadmap.md)
@@ -121,7 +148,7 @@ if is_plain AGENTS.md; then
     tt=$(grep -m 1 -oiE 'task-tracking:[[:space:]]*[A-Za-z0-9_.-]+' AGENTS.md 2>/dev/null | sed -E 's/^[^:]*:[[:space:]]*//')
     [ -n "$tt" ] && tracking+=("task-tracking:$tt")
 fi
-echo "NATIVE_TRACKING=$(join "${tracking[@]+"${tracking[@]}"}")"
+NATIVE_TRACKING=$(join "${tracking[@]+"${tracking[@]}"}")
 
 review=()
 # AGENTS.md first: fx-review Step 6 appends to the first entry, and AGENTS.md is
@@ -133,7 +160,7 @@ if is_plain AGENTS.md && grep -iE '^#+[[:space:]].*review' AGENTS.md 2>/dev/null
     review+=(AGENTS.md)
 fi
 is_plain .github/copilot-instructions.md && review+=(.github/copilot-instructions.md)
-echo "NATIVE_REVIEW_RULES=$(join "${review[@]+"${review[@]}"}")"
+NATIVE_REVIEW_RULES=$(join "${review[@]+"${review[@]}"}")
 
 changelog=()
 for f in CHANGELOG.md CHANGES.md HISTORY.md; do is_plain "$f" && changelog+=("$f"); done
@@ -145,7 +172,7 @@ elif [ -n "$(find . -maxdepth 1 -name '.releaserc*' -print -quit 2>/dev/null)" ]
 elif exists .changeset/config.json; then
     changelog+=("generated-by:changesets")
 fi
-echo "NATIVE_CHANGELOG=$(join "${changelog[@]+"${changelog[@]}"}")"
+NATIVE_CHANGELOG=$(join "${changelog[@]+"${changelog[@]}"}")
 
 site=()
 exists mkdocs.yml && site+=(mkdocs.yml)
@@ -153,6 +180,6 @@ for f in docusaurus.config.*; do exists "$f" && site+=("$f"); done
 exists book.toml && site+=(book.toml)
 exists docs/conf.py && site+=(docs/conf.py)
 is_dir docs/.vitepress && site+=(docs/.vitepress/)
-echo "DOCS_SITE=$(join "${site[@]+"${site[@]}"}")"
+DOCS_SITE=$(join "${site[@]+"${site[@]}"}")
 
-exit 0
+emit

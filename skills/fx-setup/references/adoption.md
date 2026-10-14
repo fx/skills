@@ -27,6 +27,9 @@ The check is `fx-setup`'s `scripts/check-docs-layout.sh`; a `SKILL.md` runs it a
 | `NATIVE_REVIEW_RULES` | In this order: `AGENTS.md` when it has a review heading other than the fx `## Code Review Rules` pointer, then `.github/copilot-instructions.md`. The order is the write preference — `AGENTS.md` reaches Codex, Copilot and CodeRabbit, the Copilot file only Copilot — so `fx-review` Step 6 takes the first entry |
 | `NATIVE_CHANGELOG` | Changelog files or fragment directories, plus `generated-by:<tool>` when release tooling owns them |
 | `DOCS_SITE` | Docs-site configuration (MkDocs, Docusaurus, mdBook, Sphinx, VitePress) |
+| `WARNING` | Printed only when the repository root could not be entered. Every other key is still printed, at its default (`not-adopted`, empty lists) — a default, not a finding; report the warning instead of acting on the values |
+
+Every run prints every key in this order, on every exit path — `FX_DOCS_MISSING` only when `FX_DOCS=adopted`, `WARNING` only on failure.
 
 GitHub issues are not checked — that needs the network. A caller that needs a tracker runs `gh repo view --json hasIssuesEnabled` itself.
 
