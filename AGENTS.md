@@ -34,7 +34,7 @@ Format: `[a-z0-9-]+`, 1–64 chars, no leading/trailing hyphen, no `--`. That sa
 1. **The name is reserved by a host agent** — mandatory. `review` → `fx-review`, `upgrade` → `fx-upgrade`.
 2. **The name is a bare common noun another catalog would plausibly claim** — judgement, applied sparingly. `setup` → `fx-setup`. The flat namespace has no tiebreak, so the loser of a collision is whichever skill the host happens to load second.
 
-Everything else stays bare. Do not prefix a name that is already distinctive (`pr-preparer`, `tech-scout`, `coderabbit-review`), and do not rename an existing bare skill without one of the two triggers above — a rename breaks every cross-reference and every user's muscle memory.
+Everything else stays bare. Do not prefix a name that is already distinctive (`resolve-pr-feedback`, `tech-scout`, `coderabbit-review`), and do not rename an existing bare skill without one of the two triggers above — a rename breaks every cross-reference and every user's muscle memory.
 
 ### Reserved names
 

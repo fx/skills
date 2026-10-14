@@ -148,10 +148,10 @@ cd <repo-root> && grep -rn '<any-renamed-skill>' skills/
 
 ### Example 1: Skill Skipped a Step
 
-User says: "use /learn to update our sdlc skills - they should update PROJECT.md when creating PRs"
+User says: "use /learn — dev opened a PR without linking the change doc it implemented"
 
-1. Locate `skills/pr-preparer/SKILL.md`
-2. Add instruction to check PROJECT.md and update completed tasks
+1. Locate `skills/dev/SKILL.md` § STEP 5 and the `github` skill's PR conventions block
+2. Add the missing rule once, in the block that owns it, not as a copy in each caller
 3. Show diff, leave uncommitted
 
 ### Example 2: Explicit Skill Invocation Failed
@@ -168,6 +168,6 @@ User says: "I explicitly ran /github, but the skill did not load"
 
 User says: "/learn to never leave comments on PRs"
 
-1. Locate relevant skills (pr-preparer, resolve-pr-feedback, etc.)
+1. Locate relevant skills (`github`'s PR Comments Prohibition, `fx-review`'s shared rules, etc.)
 2. Add explicit prohibition with rationale
 3. Show diff, leave uncommitted

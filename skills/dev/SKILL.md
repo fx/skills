@@ -97,7 +97,7 @@ Choose by the **shape of the task**, not by how important it feels. Every Agent 
 | Size | Use for |
 |---|---|
 | **large** | Implementation (Step 4). Planning (Step 3). Requirements analysis (Step 2). Fix agents on an **undiagnosed** failure. Anything requiring design judgment. |
-| **medium** | PR preparation. Browser/test-plan verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
+| **medium** | Browser/test-plan verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
 | **small** | Pure inspection or summarisation with no judgment call. |
 
 **Request the tier, not a model name.** "Spawn a large-model sub-agent" resolves to whatever the host currently offers at that tier, so this table does not go stale every time a model ships — and a hardcoded name silently becomes wrong rather than failing loudly. Where the host requires an explicit model, map the tier to its general-purpose **coding** models and nothing else; a model specialised for another domain is the wrong choice at every tier regardless of its size. In Claude Code that means the three coding tiers only — **never select `fable`.**
@@ -566,7 +566,7 @@ Record the candidate head in the ledger. From here on `references/head-disciplin
 
 ### STEP 5: Pull Request Creation
 
-**MANDATORY: Prepare the PR directly from the coordinator, optionally loading `pr-preparer` in the coordinator session. Do not spawn a sub-agent solely to push a branch or create/edit PR metadata. ALL PRs MUST be created READY FOR REVIEW — never as drafts.**
+**MANDATORY: Create the PR yourself, in the coordinator session, with `gh pr create`.** Load `github` first (Skill tool: `skill="github"`): its **PR conventions block** is the rule set for the title and the body, and its **Mechanical body check** runs before and after creation. Do not spawn a sub-agent to push a branch or create/edit PR metadata. **ALL PRs MUST be created READY FOR REVIEW — never as drafts.**
 
 **⛔ NEVER use the `--draft` flag. NEVER create draft PRs.** Draft PRs have repeatedly been used as an excuse to skip downstream steps (reviewer waits, CI monitoring, CodeRabbit/Copilot resolution). The SDLC ALWAYS executes the full review/CI cycle from PR creation onward — opening as draft defeats this. If the work isn't ready for review, don't open the PR yet.
 
@@ -582,45 +582,20 @@ cat docs/index.yml 2>/dev/null
 
 If the work was driven by a specific change document or spec, note the paths for inclusion in the PR description.
 
-```
-Skill tool: skill="pr-preparer", args="
-           Create PR (ready for review, NOT draft) for current branch.
-           Task: [ORIGINAL TASK]
-           Summary: [WHAT WAS IMPLEMENTED]
+**Before `gh pr create`, confirm every item** — this is the checklist the old preparer prompt carried:
+- **The head.** The branch is already pushed at its candidate head (Step 4.7). Commit or amend nothing; the PR is created on that exact SHA.
+- **The title** follows the PR conventions block: a conventional-commit subject whose type comes from the dominant change; lowercase after the colon, imperative, no trailing period; no `#<number>` unless N is a real PR or issue on this repo that the PR references, and never a `(#N)` suffix; no wave, phase, step, or change-doc number, slug or path — even when the PR finalizes a change doc, reference the doc by path in the body only (`github` § The `#<number>` PR-Title Rule). A title taken from the task, an issue or the branch name is reformed, never passed through.
+- **The body** follows the block: why; `Closes #N` for the issue this run started from, if any; the related spec/change docs as repo-relative paths (e.g. `docs/specs/auth/` or `docs/changes/0003-add-oauth.md`); breaking changes and non-obvious decisions; and the Step 4.6 **Test plan with its recorded results** — verified items `- [x]`, failures the user accepted `- [ ] … — FAILED: <reason> (accepted by user)`, manual-only items `- [ ] … — requires manual testing`. An unaccepted failure never reaches here; Step 4.6.4 escalates it instead.
+- **No draft language** — no "draft", "WIP" or "for review" anywhere in the title or body.
 
-           Spec/Change context (include in PR body if applicable):
-           - Spec: [SPEC_PATH or 'none']
-           - Change: [CHANGE_DOC_PATH or 'none']
+Write the body to a file, run the Mechanical body check against that file, then create the PR:
 
-           CRITICAL: Do NOT pass --draft. The PR must be opened ready for review so
-           CI, Copilot, and CodeRabbit run from the start.
-           - The branch is already pushed at its candidate head [SHA] (Step 4.7).
-             Do NOT commit or amend anything — create the PR on that exact SHA.
-           - Create PR with: gh pr create  (NO --draft flag)
-           - Body MUST carry the Step 4.6 Test plan with its recorded results:
-             verified items already '- [x]', failed items the user accepted
-             '- [ ] … — FAILED: reason (accepted by user)', manual-only items
-             '- [ ] … — requires manual testing'. An unaccepted failure must not
-             reach here at all — Step 4.6.4 escalates it instead.
-             [PASTE THE STEP 4.6 TEST PLAN WITH RESULTS]
-           - Include links to related spec/change docs in the PR body
-             (use relative paths from repo root, e.g. docs/specs/auth/ or docs/changes/0003-add-oauth.md)
-           - Do NOT put spec/change references in the PR title — not as a number,
-             slug, or path, even when the PR finalizes a change doc. Describe the
-             work itself in the title; reference the doc by path in the body only.
-           - ⛔ NEVER put '#<number>' in the PR title ('#4', '(#4)', '#123')
-             unless N is a REAL existing PR/issue on the target repo that this PR
-             references. On squash-merge the title becomes the commit subject,
-             where '#N' auto-links to PR/issue #N. NEVER use '#N' for an
-             implementation wave, phase, step, or change-doc number, and NEVER
-             pre-add a '(#N)' suffix (GitHub appends the real PR number at squash
-             merge). No waves/phases/steps in the title at all — those go in the
-             body. See the github skill's '#<number> PR-Title Rule'.
-           - Reference related issues
-           - Do NOT include any 'this is a draft' / 'draft for review' language
-             anywhere in the title or body
-           - Return PR number and URL"
+```bash
+BODY_FILE=$(mktemp)    # write the body here — one line per prose paragraph
+gh pr create --title "<type(scope): description>" --body-file "$BODY_FILE"   # NO --draft
 ```
+
+After creating: re-check the title against every TITLE rule, run the Mechanical body check against the live body, fix with `gh pr edit`, and confirm `gh pr view <N> --json headRefOid` equals the candidate head.
 
 **Capture the PR number for remaining steps.**
 
@@ -1095,7 +1070,6 @@ All sub-agents are launched via the Agent tool. Each loads its skill via the Ski
 | 4,4.6.4,6.2 | Implementer | `dev`, in its **Implementer** role (Step 4 also writes the task-tracking update; Step 6.2 is ONE batched fix pass, not one per finding) |
 | 4.5 | Pre-PR Self-Review | `codex-review` (local `codex`, the ONLY local reviewer) — initial pass complete, then one batched fix; blocking findings resolved, latest affected delta verified |
 | 4.6.2 | Browser Verification | `verify-web-change` (pre-PR, against the branch) |
-| 5 | PR Preparer | `pr-preparer` |
 | 6.3 | Copilot Review | `copilot-review` (waiter backgrounded, concurrent with coderabbit-review) |
 | 6.3 | CodeRabbit Review | `coderabbit-review` (PR-level only, waiter backgrounded, concurrent with copilot-review; classify/deduplicate feedback and verify only affected deltas within bounds) |
 | 6.3 | PR Feedback Resolver | `resolve-pr-feedback` (meta — called by reviewer skills) |

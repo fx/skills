@@ -37,8 +37,6 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `copilot-feedback-resolver` | Processes and resolves existing GitHub Copilot review threads without creating PR-level comments. |
 | `rabbit-feedback-resolver` | Processes and resolves existing CodeRabbit review threads. |
 | `resolve-codecov-feedback` | Processes Codecov feedback and adds coverage required by an active workflow. |
-| `pr-preparer` | Prepares and opens a ready-for-review pull request from completed branch changes. |
-| `pr-check-monitor` | Monitors pull-request checks and coordinates explicitly requested CI remediation. |
 | `resolve-ci-failures` | Analyzes and fixes CI failures within an active explicitly requested PR workflow. |
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
 | `issue-updater` | Updates GitHub issues with planning, status, and implementation progress within an active workflow. |

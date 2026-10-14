@@ -21,7 +21,7 @@ to drive the `codex` CLI, and nothing else. Where the two appear to disagree,
 
 Codex is a **local, one-shot** reviewer against the current branch, and it is the
 **only** local reviewer in this SDLC — the entire pre-PR review pass
-(`dev` Step 4.5), run before `pr-preparer`.
+(`dev` Step 4.5), run before the PR is created (`dev` Step 5).
 
 > There is no local CodeRabbit pass — the `cr` CLI is not used anywhere. CodeRabbit
 > applies only at the PR level, and only when the repo's GitHub App is installed.

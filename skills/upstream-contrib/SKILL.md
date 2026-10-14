@@ -268,7 +268,7 @@ Change working directory to `$UPSTREAM_DIR` and run the normal lifecycle:
 Skill tool: skill="dev"
 ```
 
-Steps 0–4 of `dev` (auth, branch, requirements, plan, implementation) are already done. Run its PR creation, review, and CI stages — `pr-preparer`, the reviewers under `fx-review`, and `pr-check-monitor` — inside the upstream repo.
+Steps 0–4 of `dev` (auth, branch, requirements, plan, implementation) are already done. Run Step 4.5 onward inside the upstream repo — the Codex pre-PR review (4.5), PR creation (5), hosted review (6) and CI (7).
 
 **Re-check the PR body against the confidentiality rules above before it is opened.** The `dev` lifecycle writes PR descriptions from the branch diff and commit messages, which is exactly where a consumer-specific detail survives.
 
