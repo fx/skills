@@ -167,8 +167,9 @@ disposition; list it with the reason so its outdated/incorrect handling takes it
 triage, and Step 3's condition 1 can never hold on it by waiting: without this step
 the loop repeats the same failure. CodeRabbit puts some of its feedback in places
 that open no thread — the review body's "Actionable comments posted" and
-"Outside diff range" sections — and says why a check failed in its own output. Read
-both, for the current head only:
+"Outside diff range" sections — says why a check failed in its own output, and
+posts its rate-limit notice as a PR comment. Read all three, for the current head
+only:
 
 ```bash
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
@@ -188,6 +189,15 @@ gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status" \
 gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
   | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("coderabbitai", "coderabbitai[bot]")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")' \
   || echo "READ FAILED: reviews — not evidence"
+
+# CodeRabbit's PR comments, edited in place: keep those updated at or after the head commit
+if HEAD_DATE=$(gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}" --jq '.commit.committer.date'); then
+  gh api --paginate --slurp "/repos/${REPO_NWO}/issues/${PR_NUMBER}/comments" \
+    | jq --arg since "$HEAD_DATE" '[.[][] | select(.user.login | IN("coderabbitai", "coderabbitai[bot]")) | select(.updated_at >= $since) | {updated_at, body}]' \
+    || echo "READ FAILED: issue comments — not evidence"
+else
+  echo "READ FAILED: head commit date — not evidence"
+fi
 ```
 
 A `READ FAILED` line is not "nothing actionable": retry once, then hand back the
