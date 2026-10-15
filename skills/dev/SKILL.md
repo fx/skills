@@ -1023,9 +1023,12 @@ After this handoff, a later user message such as "merge it" is a standalone mech
 1. Complete STEPS 1-8 for first PR
 2. **STOP** - Wait for user approval
 3. Only after approval: Start next PR
-4. Track with TodoWrite
+4. Track the remaining PRs in the working brief
 
-**NEVER have multiple PRs open simultaneously**
+**In a standalone `dev` run, do not start the next PR until the user approves the
+previous one.** `dev` never merges, so that PR may still be open; that is expected.
+`team` runs several changes concurrently, each through this lifecycle, under its
+own rules.
 
 ---
 
