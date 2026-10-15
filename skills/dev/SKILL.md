@@ -107,7 +107,7 @@ Choose by the **shape of the task**, not by how important it feels. Every Agent 
 
 Two constraints worth knowing rather than rediscovering:
 
-- **Tier and reasoning effort are different dials, and not every host exposes both.** Where effort is settable per spawn (Codex), raise it too for the judgment-heavy roles, not just the tier. Where it is not (Claude Code, which inherits it from the session), the tier is the only lever you have — do not expect a `large` delegate to think harder merely because the task is hard.
+- **Tier and reasoning effort are different dials.** On Codex, raise effort too for the judgment-heavy roles, not just the tier (`host-adapters.md` § Codex). On Claude Code, per-spawn `effort` exists but this catalog leaves it to the session unless the user asks, so the tier is the only lever you pull — do not expect a `large` delegate to think harder merely because the task is hard.
 - **The smallest tier may carry a reduced context ceiling.** For read-heavy roles that is a feature: it bounds context growth for free. Check your host's limit in `[SKILLS_DIR]/dev/references/host-adapters.md` rather than assuming.
 
 `team` carries the same table for its coordinator spawns; keep the two in step.

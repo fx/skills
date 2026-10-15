@@ -41,7 +41,7 @@ Skills install into a flat shared directory, so a name that matches a host agent
 
 **Claude Code** reserves the names of all built-in slash commands and bundled skills, *including when those are disabled in the session*. Overriding is silent (docs: "A skill at any of these levels also overrides a bundled skill with the same name"). Verify against the current [commands reference](https://code.claude.com/docs/en/commands) rather than a stale copy; the list has ~127 entries and grows. Names this catalog specifically avoids: `review`, `upgrade`, `code-review`, `run`, `init`, `verify`, `debug`, `doctor`, `simplify`, `loop`, `schedule`, `security-review`, `plan`, `team-onboarding`, `workflows`, `workflow-authoring`. The directory name `synced` is reserved outright.
 
-**Codex** ships six system skills — `imagegen`, `openai-docs`, `plugin-creator`, `review-agent`, `skill-creator`, `skill-installer`. Codex does not shadow: a duplicate name yields two ambiguous entries in the picker, which is its own failure mode. Avoid them.
+**Codex** ships five system skills as of codex-cli 0.162.1 — `imagegen`, `openai-docs`, `review-agent`, `skill-creator`, `skill-installer` — plus skills from its bundled plugins, such as `visualize`; check `~/.codex/skills/.system` and the bundled plugins rather than this list. Earlier releases also shipped `plugin-creator`, so keep avoiding it. Codex does not shadow: a duplicate name yields two ambiguous entries in the picker, which is its own failure mode. Avoid them.
 
 **Pi** has no bundled skills and namespaces commands as `/skill:<name>`, so it constrains nothing. On a collision it keeps the first found and warns.
 
@@ -79,7 +79,7 @@ The orchestration skills are written against **seven operations** — delegate, 
 
 Two rules keep that honest:
 
-- **Never state a host's limitation as a universal.** "Sub-agents cannot spawn sub-agents" is true of Claude Code and false of Codex; written flatly it becomes a false architectural law that a reader on another host will either obey pointlessly or dismiss along with the rules around it. Put the limit in the host-notes block and keep the *rule* separate from the *reason* — a rule that survives on every host should say so, and say why.
+- **Never state a host's limitation as a universal.** "Ending your turn kills live delegates" is true of Codex and false of Claude Code; written flatly it becomes a false architectural law that a reader on another host will either obey pointlessly or dismiss along with the rules around it. Put the limit in the host-notes block and keep the *rule* separate from the *reason* — a rule that survives on every host should say so, and say why.
 - **Concrete syntax is an example, not the contract.** Showing a Claude Code `Agent tool:` block is fine and keeps the skills readable; writing every call twice is not, because the copies drift. Say once, near the first use, that the syntax is illustrative and point at the adapter.
 
 Model names are never hardcoded — request a tier (`large`/`medium`/`small`) and let the host resolve it. See the size tables in `dev` and `team`.
