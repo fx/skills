@@ -367,8 +367,8 @@ query($endCursor: String) {
 (`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
 carries the executable version). `gh` walks the cursor; flatten `nodes` across the
 slurped pages into one array. Nothing reduces that call, deliberately: `gh` rejects
-`--jq` under `--slurp`, and the `jq` below would consume the `pageInfo` the cursor
-lives in — and this query is the merge gate, the one place a false zero converts
+`--jq` under `--slurp`, and without `--slurp` the `jq` below would run once per
+page — and this query is the merge gate, the one place a false zero converts
 straight into "settled". **Accumulate, then filter, then count**, over the whole
 set:
 

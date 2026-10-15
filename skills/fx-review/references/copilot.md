@@ -335,9 +335,8 @@ fail-closed checks before reading the gate off it**
 (`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
 carries the executable version). `gh` walks the cursor and returns an array of
 pages; flatten `nodes` across them into one array. Note there is no `--jq` on that
-call, deliberately — `gh` rejects it under `--slurp`, and a filter that collapses
-the response to a count throws away the `pageInfo` `--paginate` needs to reach page
-2. Count once, over the accumulated set:
+call, deliberately — `gh` rejects it under `--slurp`, and without `--slurp` a
+`--paginate`d `--jq` runs once per page, so its count would be per page. Count once, over the accumulated set:
 
 ```bash
 jq '[.[] | select(.isResolved == false

@@ -675,9 +675,15 @@ jq '.data.repository.pullRequest | .headRefOid as $head | [.reviews.nodes[] | se
 # All Copilot reviews with their commits — diagnostic only, NOT a pass signal
 jq '.data.repository.pullRequest | .headRefOid as $head | [.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer") | {state, oid: .commit.oid, covers_head: (.commit.oid == $head)}]'
 
-# Unresolved Copilot threads
+# Unresolved Copilot threads — ONE PAGE ONLY, never a gate (see below)
 jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")] | length'
 ```
+
+**This summary is one page of each connection** — the first 20 reviews and the
+first 100 threads — so it can miss the head's review and undercount open threads
+on a long-running PR, and a `0` from it is not evidence. For the review gate use
+the paginated REST query in § Check Whether Copilot Has Reviewed the Current Head;
+for the thread count, `references/graphql-patterns.md` § Pagination Pattern.
 
 ### Status Interpretation
 

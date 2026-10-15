@@ -288,17 +288,29 @@ check_coderabbit_state() {
 # error previously became a literal `0`, which reads as "no unresolved threads" and
 # would let a caller pass a gate on a read that never happened. A failed read prints
 # `unknown` and returns non-zero; callers must branch on that, never on emptiness.
+#
+# ⛔ PAGINATED AND FAIL-CLOSED, BECAUSE THIS COUNT DECIDES THE VERDICT: report_terminal
+# emits TERMINAL_PASS only when it is 0. `reviewThreads(first: 100)` alone returns at
+# most 100 threads and no error, so on a larger PR an unresolved thread on page 2 was
+# never counted and TERMINAL_PASS went out over it. So: `gh` walks the cursor
+# (`--paginate --slurp`, no `--jq` — gh refuses it under `--slurp`), and the count is
+# taken once over the accumulated threads, and only if every page parsed, no page
+# carries GraphQL `errors`, and the accumulated total equals the server's
+# `totalCount`. Anything else is a failed read (the github skill's
+# references/graphql-patterns.md § Pagination Pattern has the full reasoning).
 count_coderabbit_threads() {
-    local owner repo
+    local owner repo pages
     owner="${REPO_NWO%%/*}"
     repo="${REPO_NWO##*/}"
     local dcap; dcap=$(diag_cap)
     if (( dcap <= 0 )); then return 1; fi
-    timeout "$dcap" gh api graphql -f query="
-    query {
-      repository(owner: \"$owner\", name: \"$repo\") {
-        pullRequest(number: $PR_NUMBER) {
-          reviewThreads(first: 100) {
+    pages=$(timeout "$dcap" gh api graphql --paginate --slurp -f query='
+    query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100, after: $endCursor) {
+            totalCount
+            pageInfo { hasNextPage endCursor }
             nodes {
               isResolved
               comments(first: 1) { nodes { author { login } } }
@@ -306,7 +318,17 @@ count_coderabbit_threads() {
           }
         }
       }
-    }" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and (.comments.nodes[0].author.login | IN("coderabbitai", "coderabbitai[bot]")))] | length' 2>/dev/null
+    }' -f owner="$owner" -f repo="$repo" -F pr="$PR_NUMBER" 2>/dev/null) || return 1
+    printf '%s' "$pages" | jq -er --argjson logins '["coderabbitai", "coderabbitai[bot]"]' '
+          if type != "array" or length == 0 then error("no pages")
+          elif any(.[]; type != "object" or has("errors")) then error("GraphQL errors")
+          elif any(.[]; (.data.repository.pullRequest.reviewThreads.nodes | type) != "array") then error("no reviewThreads")
+          else
+            [.[].data.repository.pullRequest.reviewThreads.nodes[]] as $all
+            | if ($all | length) != .[0].data.repository.pullRequest.reviewThreads.totalCount then error("short read")
+              else [$all[] | select(.isResolved == false and (.comments.nodes[0].author.login | IN($logins[])))] | length
+              end
+          end' 2>/dev/null
 }
 
 is_terminal_state() {

@@ -440,31 +440,55 @@ request_review_nudge() {
     echo "  Issued a Copilot review request (its response proves nothing — see D1)."
 }
 
-# Count unresolved Copilot review threads via GraphQL. Reported for context only:
-# a count of 0 does NOT mean the review was clean (D4).
+# Count unresolved Copilot review threads via GraphQL. A count of 0 does NOT mean
+# the review was clean (D4) — but a count above 0, or `unknown`, makes the verdict
+# TERMINAL_FAIL, so this is a gate read, not context.
+#
+# ⛔ PAGINATED AND FAIL-CLOSED, BECAUSE THIS COUNT DECIDES THE VERDICT: report_terminal
+# emits TERMINAL_PASS only when it is 0. `reviewThreads(first: 100)` alone returns at
+# most 100 threads and no error, so on a larger PR an unresolved thread on page 2 was
+# never counted and TERMINAL_PASS went out over it. So: `gh` walks the cursor
+# (`--paginate --slurp`, no `--jq` — gh refuses it under `--slurp`), and the count is
+# taken once over the accumulated threads, and only if every page parsed, no page
+# carries GraphQL `errors`, and the accumulated total equals the server's
+# `totalCount`. Anything else is a failed read (the github skill's
+# references/graphql-patterns.md § Pagination Pattern has the full reasoning).
+# Prints the count, or `unknown` on any failure — including the diagnostic tail
+# running out mid-pagination, which fails closed rather than counting what arrived.
 count_copilot_threads() {
-    local owner repo result
+    local owner repo pages result
     owner="${REPO_NWO%%/*}"
     repo="${REPO_NWO##*/}"
     local dcap; dcap=$(diag_cap)
     if (( dcap <= 0 )); then echo "unknown"; return; fi
-    if ! result=$(timeout "$dcap" gh api graphql -f query="
-    query {
-      repository(owner: \"$owner\", name: \"$repo\") {
-        pullRequest(number: $PR_NUMBER) {
-          reviewThreads(first: 100) {
+    if ! pages=$(timeout "$dcap" gh api graphql --paginate --slurp -f query='
+    query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100, after: $endCursor) {
+            totalCount
+            pageInfo { hasNextPage endCursor }
             nodes {
               isResolved
-              comments(first: 1) {
-                nodes {
-                  author { login }
-                }
-              }
+              comments(first: 1) { nodes { author { login } } }
             }
           }
         }
       }
-    }" --jq "[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == \"${COPILOT_LOGIN}\")] | length" 2>/dev/null); then
+    }' -f owner="$owner" -f repo="$repo" -F pr="$PR_NUMBER" 2>/dev/null); then
+        echo "unknown"
+        return
+    fi
+    if ! result=$(printf '%s' "$pages" | jq -er --argjson logins "[\"${COPILOT_LOGIN}\"]" '
+          if type != "array" or length == 0 then error("no pages")
+          elif any(.[]; type != "object" or has("errors")) then error("GraphQL errors")
+          elif any(.[]; (.data.repository.pullRequest.reviewThreads.nodes | type) != "array") then error("no reviewThreads")
+          else
+            [.[].data.repository.pullRequest.reviewThreads.nodes[]] as $all
+            | if ($all | length) != .[0].data.repository.pullRequest.reviewThreads.totalCount then error("short read")
+              else [$all[] | select(.isResolved == false and (.comments.nodes[0].author.login | IN($logins[])))] | length
+              end
+          end' 2>/dev/null); then
         echo "unknown"
         return
     fi
