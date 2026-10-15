@@ -904,9 +904,10 @@ Skill tool: skill="fx-review", args="with coderabbit — [NUMBER] — [STEP 2.5 
 ```
 ```bash
 # 3. Unresolved review threads — MUST be 0 (across ALL reviewers)
-# `gh pr view --json` has no reviewThreads field. Read every thread per the github
-# skill's references/graphql-patterns.md § Pagination Pattern — it fails closed on
-# an error or a short read — then count over the ALL_THREADS it builds:
+# `gh pr view` cannot return review threads (Unknown JSON field). Read every
+# thread per the github skill's references/graphql-patterns.md § Pagination
+# Pattern — it fails closed on an error or a short read — then count over the
+# ALL_THREADS it builds:
 jq '[.[] | select(.isResolved | not)] | length' <<< "$ALL_THREADS"
 
 # 4. Codecov — Step 7.2's codecov result for MERGE_HEAD: `not configured`, or clean

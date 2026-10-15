@@ -512,7 +512,7 @@ gh pr view 13
 gh pr view 13 --json title,body,state
 ```
 
-`gh pr view --json` has no `reviewThreads` field (`Unknown JSON field`, gh 2.102.0).
+`gh pr view` cannot return review threads (`Unknown JSON field: "reviewThreads"`, gh 2.102.0).
 Read review threads through GraphQL with `references/graphql-patterns.md`
 § Pagination Pattern.
 
