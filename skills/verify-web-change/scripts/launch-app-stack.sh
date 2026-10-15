@@ -5,8 +5,10 @@
 # Usage: ./launch-app-stack.sh [project_dir]
 #
 # Outputs:
-#   DEV_PID written to /tmp/dev-server.pid
-#   Dev server logs written to /tmp/dev-server.log
+#   VERIFY_DIR=<absolute path> printed to stdout — a fresh mktemp -d directory
+#   DEV_PID written to $VERIFY_DIR/dev-server.pid (also the dev server's process group)
+#   Dev server logs written to $VERIFY_DIR/dev-server.log
+#   Stop the server by its process group, never by pattern (SKILL.md Step 8)
 #   Detected port printed to stdout
 #
 # Exit codes:
@@ -259,7 +261,7 @@ wait_for_server() {
         # Check if the process died
         if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
             echo "[Server] ❌ Process exited unexpectedly. Last output:"
-            tail -20 /tmp/dev-server.log 2>/dev/null || true
+            tail -20 "$VERIFY_DIR/dev-server.log" 2>/dev/null || true
             return 1
         fi
 
@@ -269,7 +271,7 @@ wait_for_server() {
 
     echo "[Server] ⚠️  Server may not be ready after ${max_attempts} attempts."
     echo "[Server] Last output:"
-    tail -10 /tmp/dev-server.log 2>/dev/null || true
+    tail -10 "$VERIFY_DIR/dev-server.log" 2>/dev/null || true
     return 0  # Proceed anyway — Playwright navigate may trigger lazy startup
 }
 
@@ -310,9 +312,16 @@ if [[ -n "$PACKAGE_MANAGER" ]] && [[ -n "$DEV_COMMAND" ]]; then
     echo "=== Starting dev server ==="
     echo "Running: $PACKAGE_MANAGER run $DEV_COMMAND"
 
-    $PACKAGE_MANAGER run $DEV_COMMAND > /tmp/dev-server.log 2>&1 &
+    VERIFY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/verify-web-change.XXXXXX")
+    echo "VERIFY_DIR=$VERIFY_DIR"
+
+    # Own process group, so a group stop also reaches the server child the
+    # package manager launches; killing only the PM's PID orphans it.
+    set -m
+    $PACKAGE_MANAGER run $DEV_COMMAND > "$VERIFY_DIR/dev-server.log" 2>&1 < /dev/null &
     DEV_PID=$!
-    echo "$DEV_PID" > /tmp/dev-server.pid
+    set +m
+    echo "$DEV_PID" > "$VERIFY_DIR/dev-server.pid"
     echo "Dev server PID: $DEV_PID"
 
     wait_for_server "$PORT" "$DEV_PID"
@@ -320,8 +329,8 @@ if [[ -n "$PACKAGE_MANAGER" ]] && [[ -n "$DEV_COMMAND" ]]; then
     echo ""
     echo "=== Stack is running ==="
     echo "  URL: http://localhost:$PORT"
-    echo "  PID: $DEV_PID (saved to /tmp/dev-server.pid)"
-    echo "  Log: /tmp/dev-server.log"
+    echo "  PID: $DEV_PID, also its process group (saved to $VERIFY_DIR/dev-server.pid)"
+    echo "  Log: $VERIFY_DIR/dev-server.log"
 else
     echo ""
     echo "[Warning] Could not detect how to start the application."

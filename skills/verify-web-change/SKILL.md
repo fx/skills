@@ -315,7 +315,7 @@ Start and stop every process per the `shell` skill (§ Stop a process by PID or 
 Start the server in its own process group, so Step 8 can stop the server child the package-manager script launches, and keep its PID and log in a fresh scratch directory (`shell` → `references/process-control.md` § Start it in its own process group). The start runs in `bash` because zsh refuses `set -m` without a terminal. Carry the printed `VERIFY_DIR` into every later step:
 
 ```bash
-VERIFY_DIR=$(mktemp -d)
+VERIFY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/verify-web-change.XXXXXX")
 echo "VERIFY_DIR=$VERIFY_DIR"
 PM="$PM" DEV_CMD="$DEV_CMD" VERIFY_DIR="$VERIFY_DIR" bash <<'EOF'
 set -m
@@ -523,7 +523,7 @@ For detailed Playwright MCP tool documentation, see: `references/playwright-mcp.
 
 ## Bundled Scripts
 
-- `scripts/launch-app-stack.sh` - Detect and launch application stack (standalone usage)
+- `scripts/launch-app-stack.sh` - Detect and launch application stack (standalone usage); prints the `VERIFY_DIR` that Step 8 stops the server from
 - `scripts/check-playwright-mcp.sh` - Verify Playwright MCP availability
 
 ## Common Application Ports
