@@ -20,10 +20,10 @@ Run this when CodeRabbit has no head evidence and no open thread. CodeRabbit is
 signal on this PR — a `CodeRabbit` check or status on any of its commits, or a
 review or comment by a CodeRabbit login.
 
-- **None** → `not configured`, the same verdict `coderabbit-review`'s waiter
+- **None** → `not configured`, the same verdict `fx-review`'s CodeRabbit waiter
   reports as `NOT_CONFIGURED`. Absent; gates nothing.
 - **Any** → `configured, no report on head <sha>`: next action "wait on
-  CodeRabbit for `<sha>`" — `coderabbit-review`'s waiter, which this skill never
+  CodeRabbit for `<sha>`" — `fx-review`'s CodeRabbit waiter, which this skill never
   runs.
 
 ## Comment anatomy
@@ -122,25 +122,25 @@ needs explicit configuration — do not copy it here.
 
 ## State on head
 
-The waiter, rate-limit detection and `NOT_CONFIGURED` are `coderabbit-review`'s,
+The waiter, rate-limit detection and `NOT_CONFIGURED` are `fx-review` → `references/coderabbit.md`'s,
 and so is every wait: CodeRabbit re-reviews every push by itself, so there is
 nothing to request — only a wait, which is the caller's. Report CodeRabbit as
 exactly one, for `resolve-pr-feedback` Step 5:
 
 - **`clean on head <sha>`** — the most recent `CodeRabbit` check on the head is
   terminal with `success` (or `skipped` / `neutral` where the repo configures
-  that), and zero unresolved CodeRabbit threads remain (`coderabbit-review`
+  that), and zero unresolved CodeRabbit threads remain (`fx-review` → `references/coderabbit.md`
   Step 3, conditions 1–2; the ledger condition is `fx-review` Step 7).
 - **Threads settled, re-review due** — this round pushed `<sha>`: next action
-  "wait on CodeRabbit for `<sha>`" (`coderabbit-review` Step 3; `dev` 6.3).
+  "wait on CodeRabbit for `<sha>`" (`fx-review` → `references/coderabbit.md` Step 3; `dev` 6.3).
 - **Check pending on the head** — next action "wait on CodeRabbit for `<sha>`".
 - **`configured, no report on head <sha>`** (§ Configured) — the same next action.
 - **`not configured`** — open CodeRabbit threads are still settled this round;
   the check half no longer applies.
 - **Rate-limited** — every thread it already posted is settled and its blocking
   findings are in the fix; record `skipped (rate-limited)`, met as degraded
-  (`coderabbit-review` § CodeRabbit is optional when rate-limited).
-- **Check failed with zero unresolved CodeRabbit threads** — `coderabbit-review`
+  (`fx-review` → `references/coderabbit.md` § CodeRabbit is optional when rate-limited).
+- **Check failed with zero unresolved CodeRabbit threads** — `fx-review` → `references/coderabbit.md`
   Step 1c's reads, done here once: a rate limit is the degraded state above;
   actionable review-body items are findings, triaged in `resolve-pr-feedback`
   Step 2 and fixed through its Step 3, dispositions recorded in the report since

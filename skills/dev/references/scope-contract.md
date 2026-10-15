@@ -47,7 +47,7 @@ Build it **once**, as early as possible — the first skill to act on a user req
 
 ## Injecting the brief into reviews
 
-**Every review invocation MUST carry the Scope Brief.** This applies to `fx-review` and every adapter over it — `codex-review`, `coderabbit-review`, `copilot-review`, and `resolve-pr-feedback` — and to any other reviewer a user invokes directly over the same change.
+**Every review invocation MUST carry the Scope Brief.** This applies to `fx-review` — with or without a tool — and `resolve-pr-feedback`, and to any other reviewer a user invokes directly over the same change.
 
 **The reviewers this catalog *drives* are Codex, Copilot and CodeRabbit, and no others.** Codex runs locally before the PR; Copilot and CodeRabbit — the latter only where its GitHub App is installed — run on the PR. No workflow here runs a Claude-side review pass: `/code-review`, `/simplify`, and reviewing sub-agents are not lifecycle gates. A user can still invoke them by hand, and when they do, the brief applies to them too.
 

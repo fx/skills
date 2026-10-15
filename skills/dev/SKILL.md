@@ -126,7 +126,7 @@ duvet# During an explicitly invoked `dev` lifecycle, the coordinator MUST delega
 - ❌ NEVER skip tests (`test.skip`, `it.skip`, `describe.skip` are FORBIDDEN)
 - ❌ NEVER select a skill as an agent type — the delegate loads it from its prompt (in Claude Code: not via `subagent_type`)
 - ✅ ALWAYS delegate requirements analysis and implementation roles — implementation to a sub-agent that loads `dev` in its Implementer role
-- ❌ NEVER delegate review to a reviewing sub-agent — review is Codex, Copilot, and CodeRabbit, each driven by its own skill from the coordinator session
+- ❌ NEVER delegate review to a reviewing sub-agent — review is Codex, Copilot, and CodeRabbit, each driven by `fx-review with <tool>` from the coordinator session
 - ✅ ALWAYS instruct delegated role agents to load their named skills via the Skill tool
 - ✅ ALWAYS perform straightforward status checks, branch synchronization, PR metadata updates, and an explicitly approved merge directly when delegation adds no independent judgment
 - ✅ ALWAYS verify each lifecycle gate before proceeding, except where the user explicitly waives a procedural pass that is not a mandatory correctness, security, privacy, test, or merge gate
@@ -369,8 +369,8 @@ git diff main --stat
 
 **Batch the findings, then fix once** (`references/head-discipline.md` § Batch findings) — Codex's findings, the test failures, and the Step 4.6 verification results are one batch, taken through one fix pass before the Step 4.7 push. Do not fix and re-run between channels. This is the last stage where a fix costs nothing but a local rerun, so spend the thoroughness here rather than after the push.
 
-**This pass follows `fx-review`** — the canonical review procedure
-(Skill tool: `skill="fx-review"`), which each reviewer skill loads first. This
+**This pass is `fx-review with codex`** — the canonical review procedure, run
+through its Codex reference, in one load. This
 step does not restate it. In particular: **the pass MUST receive the Step 2.5
 Scope Brief verbatim**, and a pass run without it is incomplete — rerun it with
 the brief rather than filtering its output.
@@ -378,7 +378,7 @@ the brief rather than filtering its output.
 **Codex (local, via `codex`)** — independent one-shot branch review:
 
 ```
-Skill tool: skill="codex-review", args="<Scope Brief>"
+Skill tool: skill="fx-review", args="with codex — <Scope Brief>"
 ```
 
 **Codex is the ONLY local reviewer.** The reviewer roster for this SDLC is exactly Codex locally, then Copilot and — where its GitHub App is installed — CodeRabbit at the PR level (Step 6.3). There is no local CodeRabbit pass (the `cr` CLI is not used anywhere in this SDLC), and no Claude-side review pass: do not run `/code-review`, `/simplify`, or a general-purpose reviewing sub-agent as an SDLC gate. The user may still invoke those directly; they are not part of this lifecycle.
@@ -672,7 +672,7 @@ If a wake arrives while nothing else is outstanding and its channel is the only 
 
 Where the diff changed **materially** since Step 4.5 converged — a fix push that touched new files or new behaviour, not a one-line correction — re-enter **Step 4.5's Codex pass on the delta** before any hosted waiter starts, and count that invocation against `references/scope-contract.md` § The iteration bound. The trigger is a material change to the diff, **not** a head move: a head that moved without changing what the reviewed code does needs no re-run, and there is no other local reviewer to reach for.
 
-**"On the delta" is carried by the prompt, never by a flag.** `codex review` rejects a scope flag passed together with a prompt, and the Scope Brief prompt is mandatory, so the prompt-only form is the only correct invocation — which reviews the whole branch against its base every time (`codex-review` § Scope flags and a custom prompt are mutually exclusive). There is no flag that narrows it, and Codex re-reading the whole branch is expected rather than a defect. Scope the re-run in the prompt, with two things:
+**"On the delta" is carried by the prompt, never by a flag.** `codex review` rejects a scope flag passed together with a prompt, and the Scope Brief prompt is mandatory, so the prompt-only form is the only correct invocation — which reviews the whole branch against its base every time (`fx-review` → `references/codex.md` § Scope flags and a custom prompt are mutually exclusive). There is no flag that narrows it, and Codex re-reading the whole branch is expected rather than a defect. Scope the re-run in the prompt, with two things:
 
 1. **The boundary** — the revision Step 4.5 recorded when it ran ("record the revision it reviewed"), named in the prompt as the last reviewed SHA, so Codex can tell which commits are new. Where an earlier re-run already fired, the boundary is the revision *it* recorded, not the original Step 4.5 one.
 2. **The convergence prefix** — `fx-review` § The external-reviewer block, **Part 1**, which lists every prior finding with its disposition and the classes swept closed since the last pass. That is the mechanism that keeps the pass delta-scoped: it is what stops the re-run re-reporting ground the previous pass already settled. A re-run sent without it is a second broad pass wearing a delta's name, whatever the boundary says.
@@ -722,12 +722,12 @@ Then invoke `resolve-pr-feedback` scoped to each reviewer's source to settle its
 
 > **CodeRabbit is PR-level only.** There is no local CodeRabbit pass — Step 4.5 runs Codex alone. CodeRabbit applies here when the repo's GitHub App auto-reviews PRs, and its waiter reports `STATUS=NOT_CONFIGURED` when it does not, which is the common case and is terminal. Prefer a passing check and resolve received feedback; if CodeRabbit rate-limits, resolve what it already delivered — blocking findings fixed, every posted thread settled — then record `skipped (rate-limited)` and continue without blocking.
 
-##### Reviewer-by-reviewer skills
+##### Reviewer by reviewer
 
-| Reviewer | Skill | Notes |
+| Reviewer | Invocation | Notes |
 |----------|-------|-------|
-| GitHub Copilot | `copilot-review` | Auto-reviews; we explicitly request via API as a defensive belt. Does NOT re-review on push by default. |
-| CodeRabbit | `coderabbit-review` | PR-level only — there is no local pass. Applies when the GitHub App auto-reviews PRs: re-reviews after pushes and exposes state via the `CodeRabbit` check. Classify new feedback in the shared ledger and settle its threads within the bounds below. `STATUS=NOT_CONFIGURED` means the App is absent — report once and skip. |
+| GitHub Copilot | `fx-review with copilot` | Auto-reviews; we explicitly request via API as a defensive belt. Does NOT re-review on push by default. |
+| CodeRabbit | `fx-review with coderabbit` | PR-level only — there is no local pass. Applies when the GitHub App auto-reviews PRs: re-reviews after pushes and exposes state via the `CodeRabbit` check. Classify new feedback in the shared ledger and settle its threads within the bounds below. `STATUS=NOT_CONFIGURED` means the App is absent — report once and skip. |
 
 ##### Run every waiter concurrently
 
@@ -742,22 +742,22 @@ Then invoke `resolve-pr-feedback` scoped to each reviewer's source to settle its
 # On another host, same two waiters, that host's shape (§ Long waits).
 # Headless session: foreground, per host-adapters.md § Headless sessions.
 mkdir -p [AGENT_DIR]/team/waits && \
-bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh [PR_NUMBER] \
+bash [SKILLS_DIR]/fx-review/scripts/wait-for-copilot-review.sh [PR_NUMBER] \
      > [AGENT_DIR]/team/waits/copilot-[PR_NUMBER].log 2>&1
 
 mkdir -p [AGENT_DIR]/team/waits && \
-bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NUMBER] \
+bash [SKILLS_DIR]/fx-review/scripts/wait-for-coderabbit-review.sh [PR_NUMBER] \
      > [AGENT_DIR]/team/waits/rabbit-[PR_NUMBER].log 2>&1
 ```
 
 ###### Then, per reviewer, on its wake
 
-1. Read the log and branch on its `STATUS=` line (each reviewer skill documents its own table; the five states are shared):
+1. Read the log and branch on its `STATUS=` line (each tool's `fx-review` reference documents its own table; the five states are shared):
    - `TERMINAL_PASS` / `TERMINAL_FAIL` — settled. Do **not** re-run for a better answer.
    - `PENDING` — not a verdict and not a failure. Re-run once if you still need it; `PENDING` again is a hand-back to the user. **Never** record it as "no findings" or "CI passed".
-   - `NOT_CONFIGURED` — that reviewer does not apply to this repo. Terminal: report once, proceed without it, never retry. A CodeRabbit thread already on the PR still goes through step 2 and `resolve-pr-feedback` (`coderabbit-review`'s `NOT_CONFIGURED` row).
+   - `NOT_CONFIGURED` — that reviewer does not apply to this repo. Terminal: report once, proceed without it, never retry. A CodeRabbit thread already on the PR still goes through step 2 and `resolve-pr-feedback` (`fx-review` → `references/coderabbit.md`'s `NOT_CONFIGURED` row).
    - `ERROR` — the wait never started. Report it — a hand-back to the user, never step 2.
-2. Read its unresolved threads and classify them in the shared ledger **before** invoking `resolve-pr-feedback`. A CodeRabbit `TERMINAL_FAIL` with no unresolved CodeRabbit thread goes through `coderabbit-review` Step 1c instead: its review-body findings enter the ledger like threads, and its hand-back is that reviewer's outcome for this head — reported, and an unmet 8.1 gate for the user, never a re-wait. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
+2. Read its unresolved threads and classify them in the shared ledger **before** invoking `resolve-pr-feedback`. A CodeRabbit `TERMINAL_FAIL` with no unresolved CodeRabbit thread goes through `fx-review` → `references/coderabbit.md` Step 1c instead: its review-body findings enter the ledger like threads, and its hand-back is that reviewer's outcome for this head — reported, and an unmet 8.1 gate for the user, never a re-wait. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
 3. **Fix before you dispatch.** Take every blocking entry this wake produced, together with every other channel's outstanding blocking entries, through **one** Step 6.2 pass, and push once. Then invoke `resolve-pr-feedback` scoped to that reviewer's source (`sources: copilot` or `sources: coderabbit`), passing a disposition for every thread that carries a finding — `blocking` annotated `already fixed in <sha>`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions). A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. An un-fixed `blocking` disposition only comes back to you unfixed: fixing is always Step 6.2's one batched pass.
 4. **After the Step 6.2 push** — that push — `resolve-pr-feedback` never pushes under a coordinator — is what moves the head under this ordering — record the new SHA as the candidate head and re-cover it:
    - **Apply 6.1's material-change test to the delta first — including its blocking-finding consequence, which fixes and pushes before any relaunch below.** Where it fires, its delta-scoped Codex re-entry runs *before* the relaunches, so a materially changed diff never reaches Copilot or CodeRabbit with no local pass behind it. Most pushes fall straight through.
@@ -775,7 +775,7 @@ Fix every **blocking** finding and only those (`references/scope-contract.md` §
 ##### Skip rules
 
 - If a reviewer is **not configured** for the repo (its waiter reports `STATUS=NOT_CONFIGURED` — e.g. no `CodeRabbit` check ever appears), report this once and proceed without that reviewer. That status is terminal: never retry or wait it out.
-- If **CodeRabbit reports a rate/quota limit or cooldown**, report it once, mark CodeRabbit `skipped (rate-limited)`, and proceed immediately. Do not raise timeouts, sleep, poll, or retry for CodeRabbit throttling. **The degradation waives only the review passes that never ran** (`coderabbit-review`, rate-limit rule): anything CodeRabbit already delivered still counts — fix its blocking findings and settle every thread it already posted before recording the skip, or the PR carries an open thread past a gate that requires none.
+- If **CodeRabbit reports a rate/quota limit or cooldown**, report it once, mark CodeRabbit `skipped (rate-limited)`, and proceed immediately. Do not raise timeouts, sleep, poll, or retry for CodeRabbit throttling. **The degradation waives only the review passes that never ran** (`fx-review` → `references/coderabbit.md` § CodeRabbit is optional when rate-limited): anything CodeRabbit already delivered still counts — fix its blocking findings and settle every thread it already posted before recording the skip, or the PR carries an open thread past a gate that requires none.
 - Do not apply this exception to Copilot or other reviewers. A merely slow CodeRabbit check with no rate-limit signal still follows the normal timeout behavior.
 
 **⛔ DO NOT PROCEED until every required reviewer has settled. CodeRabbit is satisfied by a passing result, or by an explicit `skipped (rate-limited)` degradation once everything it already delivered is resolved.**
@@ -845,7 +845,7 @@ Skill tool: skill="resolve-pr-feedback", args="[PR_NUMBER] — [STEP 2.5 SCOPE B
 
 Both sources are requested, so both references load whatever detection finds (`resolve-pr-feedback` Step 1, which references load), and each reference's § Configured check settles a source with no report on this head: Codecov `not configured` is not a failure and gates nothing; Codecov `configured, no report on head <sha>` is never a pass. `resolve-pr-feedback` runs one round and waits for nothing (its § One round), so the one re-wait is yours: on the first such report after `TERMINAL_PASS` or `TERMINAL_FAIL`, re-run Step 7.1's wait once for `<sha>` and invoke this step again; reported a second time, it is Codecov's "did not report on head" hand-back, and Step 8.1's Codecov gate stays unmet and goes to the user. **After `NOT_CONFIGURED` there is no re-wait** — there is no CI for Codecov to wait on — so a configured Codecov is that hand-back at once. It then reads the failing checks' logs, assesses coverage, and **returns the diagnosed blocking set**: CI failures by category, coverage gaps as uncovered lines. It fixes and pushes nothing (its Step 3). Flaky and infrastructure failures come back reported, not fixed — they are the user's call, never a blind re-run. If the set is empty, there is nothing to fix: on `TERMINAL_PASS` proceed to Step 8. **On `TERMINAL_FAIL`, route every failing check by its owner before concluding anything** — the CI reference excludes the checks other sources own, so an empty set does not mean every failure was transient:
 
-- a failing **`CodeRabbit` check** is CodeRabbit's: return to Step 6.3's CodeRabbit path (`coderabbit-review`, its rate-limit degradation included), never a CI fix and never flaky;
+- a failing **`CodeRabbit` check** is CodeRabbit's: return to Step 6.3's CodeRabbit path (`fx-review with coderabbit`, its rate-limit degradation included), never a CI fix and never flaky;
 - a failing **`codecov/*` status** is Codecov's: act on the `codecov` result this call returned — a coverage gap is in the blocking set; a status failing with no patch gap is reported as Codecov's for the user's decision (`resolve-pr-feedback`'s `references/codecov.md` § Assess);
 - **On `NOT_CONFIGURED`**, nothing is fixable and nothing loops: the CI result is a base-branch conflict — the blocking finding § Error Handling → Git conflict stops on — or the "no CI ran on head" hand-back; the Codecov result is `not configured` (gates nothing) or the "did not report on head" hand-back. STOP and report both; Step 8.1's CI gate cannot pass on a head with no CI;
 - only a failure **no source owns**, categorised flaky or infrastructure by the CI reference, is the STOP: report it with the evidence. Coverage gets one fix iteration of the three below (`references/codecov.md` § Hand-off); gaps still open after it are reported to the user, not looped on.
@@ -886,18 +886,18 @@ MERGE_HEAD=$(gh pr view [NUMBER] --json headRefOid --jq '.headRefOid')   # must 
 gh pr checks [NUMBER]
 
 # 2. Automated reviewers — MUST be settled and resolved (if not already done in Step 6.3)
-# Reuse Step 6.3 evidence when it covers the current head SHA. Invoke a dedicated
-# reviewer skill only when its check, threads, or reviewed SHA changed; do not restart
+# Reuse Step 6.3 evidence when it covers the current head SHA. Invoke fx-review
+# with a tool only when its check, threads, or reviewed SHA changed; do not restart
 # a settled review loop solely because finalization was reached.
-# Use the dedicated skills — NEVER raw gh api commands. That ban is about
-# reviewers that HAVE a skill (Copilot, CodeRabbit): reaching past one loses its
-# head-SHA scoping. A reviewer with no adapter is the documented exception —
+# Use fx-review with copilot / with coderabbit — NEVER raw gh api commands. That ban
+# is about reviewers fx-review HAS a reference for (Copilot, CodeRabbit): reaching
+# past one loses its head-SHA scoping. A reviewer with no adapter is the documented exception —
 # settle it by hand per references/scope-contract.md § Injecting the brief into
 # reviews, which is the only route available and is not a bypass.
 ```
 ```
-Skill tool: skill="copilot-review",     args="[NUMBER] — [STEP 2.5 SCOPE BRIEF VERBATIM]"
-Skill tool: skill="coderabbit-review",  args="[NUMBER] — [STEP 2.5 SCOPE BRIEF VERBATIM]"
+Skill tool: skill="fx-review", args="with copilot — [NUMBER] — [STEP 2.5 SCOPE BRIEF VERBATIM]"
+Skill tool: skill="fx-review", args="with coderabbit — [NUMBER] — [STEP 2.5 SCOPE BRIEF VERBATIM]"
 ```
 ```bash
 # 3. Unresolved review threads — MUST be 0 (across ALL reviewers)
@@ -928,7 +928,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 - [ ] Every gate below was verified against `MERGE_HEAD`, and the head has not moved since
 - [ ] **PR title is a conventional-commit subject** (`type(scope): description`) — verify `gh pr view [NUMBER] --json title -q .title | grep -Eq '^(feat|fix|docs|refactor|chore|test|perf|build|ci|style|revert)(\(.+\))?!?: .+'`; a plain prose title FAILS — rename with `gh pr edit [NUMBER] --title "type(scope): …"` BEFORE merging (squash bakes the title into `main`). Also no stray `#<number>`/wave/phase wording.
 - [ ] ALL CI checks green
-- [ ] Copilot review RECEIVED and ALL threads resolved (via `copilot-review` skill — NEVER raw `gh api`)
+- [ ] Copilot review RECEIVED and ALL threads resolved (via `fx-review with copilot` — NEVER raw `gh api`)
 - [ ] CodeRabbit is passing with all received threads resolved, not configured, or explicitly recorded as `skipped (rate-limited)`. CodeRabbit throttling is optional and never blocks merge.
 - [ ] Zero unresolved **blocking** ledger entries (`references/scope-contract.md` § Blocking) — `required-by-contract`, `regression-caused-by-change`, and any entry blocking by tier; the latest affected delta is verified within the stopping bounds
 - [ ] Every test plan item **settled** (Step 5.5): verified, user-confirmed as a manual pass, or explicitly accepted by the user — as a known failure, or as knowingly unverified. An unanswered `— requires manual testing` is pending, not settled, and blocks
@@ -1043,11 +1043,11 @@ All sub-agents are launched via the Agent tool. Each loads its skill via the Ski
 |------|---------------|------------|
 | 2 | Requirements Analyzer | `requirements-analyzer` |
 | 4,4.6.4,6.2 | Implementer | `dev`, in its **Implementer** role (Step 4 also writes the task-tracking update; Step 6.2 is ONE batched fix pass, not one per finding) |
-| 4.5 | Pre-PR Self-Review | `codex-review` (local `codex`, the ONLY local reviewer) — initial pass complete, then one batched fix; blocking findings resolved, latest affected delta verified |
+| 4.5 | Pre-PR Self-Review | `fx-review with codex` (local `codex`, the ONLY local reviewer) — initial pass complete, then one batched fix; blocking findings resolved, latest affected delta verified |
 | 4.6.2 | Browser Verification | `verify-web-change` (pre-PR, against the branch) |
-| 6.3 | Copilot Review | `copilot-review` (waiter backgrounded, concurrent with coderabbit-review) |
-| 6.3 | CodeRabbit Review | `coderabbit-review` (PR-level only, waiter backgrounded, concurrent with copilot-review; classify/deduplicate feedback and verify only affected deltas within bounds) |
-| 6.3, 7.2 | PR Feedback Resolver | `resolve-pr-feedback` (coordinator session; scoped by `sources:` — the reviewer skills call it for their own source, Step 7.2 for `ci,codecov`; one round — it returns each source's next wait or re-request for you to run) |
+| 6.3 | Copilot Review | `fx-review with copilot` (waiter backgrounded, concurrent with CodeRabbit) |
+| 6.3 | CodeRabbit Review | `fx-review with coderabbit` (PR-level only, waiter backgrounded, concurrent with Copilot; classify/deduplicate feedback and verify only affected deltas within bounds) |
+| 6.3, 7.2 | PR Feedback Resolver | `resolve-pr-feedback` (coordinator session; scoped by `sources:` — `fx-review`'s Copilot and CodeRabbit references call it for their own source, Step 7.2 for `ci,codecov`; one round — it returns each source's next wait or re-request for you to run) |
 
 **Pattern for every sub-agent call:**
 ```

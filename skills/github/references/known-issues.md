@@ -71,7 +71,7 @@ gh api graphql -f query='
   }' -f threadId="$THREAD_ID"
 ```
 
-**Reference:** See `copilot-review` and `resolve-pr-feedback` (its `references/copilot.md`) for the complete Copilot review workflow.
+**Reference:** See `fx-review` (its `references/copilot.md`) and `resolve-pr-feedback` (its `references/copilot.md`) for the complete Copilot review workflow.
 
 ## General Best Practices
 

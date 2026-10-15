@@ -56,7 +56,7 @@ Everything else — the Scope Brief, the Codex pre-PR review, reviewer and CI wa
               - Commit locally. Do NOT open a PR; push only if told to here."
    ```
 
-2. **Every PR passes `dev` Step 4.5 before it is pushed or opened.** You run the local Codex review (`codex-review`, carrying the Scope Brief) over the implementer's branch and converge it — `dev`'s Local-Convergence Stopping Condition — before the Step 4.7 push. A PR with no converged Codex pass behind it does not get opened, and does not get merged.
+2. **Every PR passes `dev` Step 4.5 before it is pushed or opened.** You run the local Codex review (`fx-review with codex`, carrying the Scope Brief) over the implementer's branch and converge it — `dev`'s Local-Convergence Stopping Condition — before the Step 4.7 push. A PR with no converged Codex pass behind it does not get opened, and does not get merged.
 
 ## ⛔ Critical Architecture Rule: Coordinator Owns the SDLC
 
@@ -397,8 +397,8 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 |---|------|--------------|-----------|
 | 1 | **Required CI checks green** | `gh pr checks <NUMBER>` — every required non-CodeRabbit check must pass | YES |
 | 1b | **Codecov clean (if configured)** | `dev` Step 7.2's `codecov` result for the head: `not configured`, or 0 missing lines in the Codecov comment with `codecov/*` statuses passing — a green `codecov/patch` alone does not pass, and `configured, no report on head` is unmet and goes to the user | YES |
-| 2 | **Copilot review RECEIVED and feedback RESOLVED** | Invoke `copilot-review` skill — confirm 0 unresolved Copilot threads | YES |
-| 2b | **CodeRabbit reviewed or correctly degraded** | Invoke `coderabbit-review`: prefer a passing check with received feedback resolved; if CodeRabbit rate-limits, report once, resolve what it already delivered (blocking findings fixed, every posted thread settled), and record `skipped (rate-limited)` without blocking | NO when rate-limited |
+| 2 | **Copilot review RECEIVED and feedback RESOLVED** | Invoke `fx-review with copilot` — confirm 0 unresolved Copilot threads | YES |
+| 2b | **CodeRabbit reviewed or correctly degraded** | Invoke `fx-review with coderabbit`: prefer a passing check with received feedback resolved; if CodeRabbit rate-limits, report once, resolve what it already delivered (blocking findings fixed, every posted thread settled), and record `skipped (rate-limited)` without blocking | NO when rate-limited |
 | 3 | **Implementation matches spec/task** | Read the diff and verify against requirements | YES |
 | 4 | **Spec task marked complete** | Per `dev` Step 8.2 — the `[DOC_PATH]` diff check; N/A when `[DOC_PATH]` is `none` | YES |
 | 5 | **PR description is clear** | Read PR body | YES |
@@ -410,7 +410,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 
 ### ⛔ Reviewer Gates (Gates 2 + 2b) — CRITICAL
 
-> **Codex runs LOCALLY first — and it is the ONLY local reviewer.** You run it as `dev` Step 4.5, via the `codex-review` skill over the implementer's branch, passing the Scope Brief, and converge it before the Step 4.7 push (gate 7). Implementers do not run it: their role launches no reviewer. **Not `codex review --base main`** — that CLI rejects `--base` together with a prompt, so the promptless form cannot carry the brief and reports the work the change deliberately did not do. Prefer it **converged** (`[SKILLS_DIR]/dev/references/scope-contract.md` § Convergence — no blocking finding left unresolved, not zero output). **There is no local CodeRabbit pass; the `cr` CLI is not used.** Gate 2b is the PR-level CodeRabbit review, which applies only when the GitHub App is configured — its waiter reports `STATUS=NOT_CONFIGURED` otherwise, which is terminal and expected for most repos. If CodeRabbit rate-limits, resolve findings already received, record `skipped (rate-limited)`, and continue; never wait for its cooldown.
+> **Codex runs LOCALLY first — and it is the ONLY local reviewer.** You run it as `dev` Step 4.5, via `fx-review with codex` over the implementer's branch, passing the Scope Brief, and converge it before the Step 4.7 push (gate 7). Implementers do not run it: their role launches no reviewer. **Not `codex review --base main`** — that CLI rejects `--base` together with a prompt, so the promptless form cannot carry the brief and reports the work the change deliberately did not do. Prefer it **converged** (`[SKILLS_DIR]/dev/references/scope-contract.md` § Convergence — no blocking finding left unresolved, not zero output). **There is no local CodeRabbit pass; the `cr` CLI is not used.** Gate 2b is the PR-level CodeRabbit review, which applies only when the GitHub App is configured — its waiter reports `STATUS=NOT_CONFIGURED` otherwise, which is terminal and expected for most repos. If CodeRabbit rate-limits, resolve findings already received, record `skipped (rate-limited)`, and continue; never wait for its cooldown.
 
 **As coordinator, YOU own reviewer waits, and you never spend turns polling them.** Launch the Copilot and CodeRabbit waiters — the only two that exist — concurrently, in the shape your host's row prescribes (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits): on Claude Code, one message with every call backgrounded to its own log, woken by a completion notification per reviewer, and no sub-agent involved; on Codex, one small-tier waiter child per reviewer that you `wait_agent` on; in a headless session, in the foreground per § Headless sessions. There is no execution mode to pick — read your host's row and follow it.
 
@@ -424,9 +424,9 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 # before the waiter ever starts, so you get no STATUS line at all — the one failure
 # the whole protocol exists to prevent. `mkdir -p` is idempotent; never rely on an
 # earlier step having created it.
-Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> \
+Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/fx-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> \
         > [AGENT_DIR]/team/waits/copilot-<PR_NUMBER>.log 2>&1
-Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh <PR_NUMBER> \
+Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/fx-review/scripts/wait-for-coderabbit-review.sh <PR_NUMBER> \
         > [AGENT_DIR]/team/waits/rabbit-<PR_NUMBER>.log 2>&1
 
 # LATER — once the reviewers above have converged on this head:
@@ -454,9 +454,9 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-
 
 Waiters exist for Copilot and CodeRabbit only, and those are the only two this workflow requests. Should an automated reviewer outside `resolve-pr-feedback`'s § Supported Reviewers table post threads anyway, they still gate the merge and you settle them by hand (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into reviews) — a clean `resolve-pr-feedback` report does not cover them.
 
-Apply `dev` Steps 2.5 and 6.3 as the canonical reviewer policy: maintain the coordinator-owned finding ledger, fix every **blocking** finding and only those (`[SKILLS_DIR]/dev/references/scope-contract.md` § Blocking — the class name does not decide it; a reviewer-originated Material or Substantive entry blocks whatever its class), and rerun only reviewer state invalidated by the latest delta. Do not restart every reviewer after each push or seek zero suggestions. Settle all required threads within the bounded remediation rounds. **If CodeRabbit reports a rate/quota limit or cooldown at any point, stop its loop immediately, report once, record `skipped (rate-limited)`, and continue without waiting or escalating — after fixing the blocking findings it already delivered and settling every thread it already posted.** The degradation waives only the passes that never ran (`coderabbit-review`, rate-limit rule), never work already on the PR. Copilot must still satisfy its mandatory review gate.
+Apply `dev` Steps 2.5 and 6.3 as the canonical reviewer policy: maintain the coordinator-owned finding ledger, fix every **blocking** finding and only those (`[SKILLS_DIR]/dev/references/scope-contract.md` § Blocking — the class name does not decide it; a reviewer-originated Material or Substantive entry blocks whatever its class), and rerun only reviewer state invalidated by the latest delta. Do not restart every reviewer after each push or seek zero suggestions. Settle all required threads within the bounded remediation rounds. **If CodeRabbit reports a rate/quota limit or cooldown at any point, stop its loop immediately, report once, record `skipped (rate-limited)`, and continue without waiting or escalating — after fixing the blocking findings it already delivered and settling every thread it already posted.** The degradation waives only the passes that never ran (`fx-review` → `references/coderabbit.md` § CodeRabbit is optional when rate-limited), never work already on the PR. Copilot must still satisfy its mandatory review gate.
 
-If CodeRabbit is not configured (its waiter reports `STATUS=NOT_CONFIGURED`, exit 3), report once and proceed — that status is terminal, so never retry or wait it out — after settling any CodeRabbit thread already on the PR (`coderabbit-review`'s `NOT_CONFIGURED` row). Do not silently skip ordinary failures; the optional exception is specifically for CodeRabbit throttling.
+If CodeRabbit is not configured (its waiter reports `STATUS=NOT_CONFIGURED`, exit 3), report once and proceed — that status is terminal, so never retry or wait it out — after settling any CodeRabbit thread already on the PR (`fx-review` → `references/coderabbit.md`'s `NOT_CONFIGURED` row). Do not silently skip ordinary failures; the optional exception is specifically for CodeRabbit throttling.
 
 ### Browser Verification Gate (Gate 6)
 
@@ -564,8 +564,8 @@ When all tasks are complete and all PRs merged:
 - **ALWAYS paste the `github` PR conventions block into every spawn prompt whose agent may open or edit a PR** — load that skill before authoring your first prompt. A spawned agent inherits your prompt, not your skills; a rule you do not restate is a rule that does not reach it.
 - **NEVER skip PR inspection** — every PR gets reviewed before marking ready
 - **NEVER merge without completing the MERGE GATE CHECKLIST** — every gate must pass, every time, for every PR
-- **NEVER merge without Copilot review** — always invoke `copilot-review` yourself. No exceptions.
-- **ALWAYS attempt CodeRabbit when configured, but never block on its rate limits** — invoke `coderabbit-review`; resolve feedback already received, then record `skipped (rate-limited)` and continue immediately if throttled.
+- **NEVER merge without Copilot review** — always invoke `fx-review with copilot` yourself. No exceptions.
+- **ALWAYS attempt CodeRabbit when configured, but never block on its rate limits** — invoke `fx-review with coderabbit`; resolve feedback already received, then record `skipped (rate-limited)` and continue immediately if throttled.
 - **NEVER `sleep` or poll on a wait.** Every reviewer and CI wait is a long-running script whose result you reconcile once, on the wake your host provides (notification on Claude Code, a returning `wait_agent` on Codex — **Waiting and reconciliation**), or — in a headless session — by blocking on it in the foreground and never ending your turn while one is outstanding. The only timer permitted in a run is one long `ScheduleWakeup` silence backstop. The full wait discipline — what counts as an external completion, and how a hand-rolled wait fails silently and totally — is in `[SKILLS_DIR]/dev/references/background-waits.md`.
 - **ALWAYS run each PR through `[SKILLS_DIR]/dev/references/head-discipline.md`** — § The candidate head for the order, § Evidence is SHA-scoped for what a result proves, § Batch findings before any fix spawn, § Waiter scheduling order for launches, § Reviewer availability is cached for the run for `NOT_CONFIGURED`. Those rules live there and are not restated here; a coordinator that has not read them will reproduce the CI churn this workflow was rewritten to remove.
 - **NEVER mark a teammate's PR as ready** until you've inspected it

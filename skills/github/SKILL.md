@@ -93,7 +93,7 @@ Use this skill only when the user explicitly invokes or names it, or when an act
 | CodeRabbit comments resolved (if received) | Resolve **every** thread CodeRabbit already posted, rate limit or not. Throttling waives the review passes that never ran, never a thread already on the PR | ⛔ YES for delivered threads |
 | Codecov clean (if configured) | 0 missing lines in the Codecov comment for the head **and** `codecov/*` statuses pass — a passing `codecov/patch` alone is not enough, and a configured Codecov with no report on the head is unmet (`resolve-pr-feedback`'s `references/codecov.md` § Assess and § Configured; `dev` Step 7.2 assesses it) | ⛔ YES |
 
-> **CodeRabbit is PR-level only** — see `coderabbit-review`. There is no local CodeRabbit pass; the `cr` CLI is not used, and Codex is the only local pre-PR reviewer (`dev` Step 4.5). The PR-level review applies only when the GitHub App auto-reviews PRs; its waiter reports `STATUS=NOT_CONFIGURED` otherwise, which is terminal and expected for most repos. **CodeRabbit is optional when it reports a rate/quota limit or cooldown:** report once, resolve findings already received **and settle every thread it already posted**, record `skipped (rate-limited)`, and continue without waiting or retrying. The degradation waives the passes that never ran, never work already on the PR. Other merge gates remain mandatory.
+> **CodeRabbit is PR-level only** — see `fx-review with coderabbit`. There is no local CodeRabbit pass; the `cr` CLI is not used, and Codex is the only local pre-PR reviewer (`dev` Step 4.5). The PR-level review applies only when the GitHub App auto-reviews PRs; its waiter reports `STATUS=NOT_CONFIGURED` otherwise, which is terminal and expected for most repos. **CodeRabbit is optional when it reports a rate/quota limit or cooldown:** report once, resolve findings already received **and settle every thread it already posted**, record `skipped (rate-limited)`, and continue without waiting or retrying. The degradation waives the passes that never ran, never work already on the PR. Other merge gates remain mandatory.
 
 Verify the Copilot gate with a **head-SHA-scoped** query — an unscoped one accepts a
 review of a superseded commit as coverage for the code you are about to merge:
@@ -113,7 +113,7 @@ A result of `0` means **the commit you are about to merge is UNREVIEWED**, whate
 older reviews the PR carries.
 
 **If a Copilot review of the current head has NOT been received:** WAIT — using
-`copilot-review`, which owns the head-SHA-aware waiter. **Do not hand-roll a
+`fx-review with copilot`, which owns the head-SHA-aware waiter. **Do not hand-roll a
 polling loop here.** Hand-rolled loops reliably accept a review of a superseded
 commit and re-derive the broken `requested_reviewers` readiness check. Do NOT merge
 without it.
@@ -543,8 +543,8 @@ EOF
 empty `requested_reviewers` array regardless, and a `422` is equally
 uninformative — neither tells you whether a review is coming. Issue it and ignore
 the result. The only sound signal is a review whose `commit_id` equals the PR's
-current `headRefOid`; see `copilot-review` ("Known GitHub API Behaviour",
-D1–D3) and use that skill, which wraps this together with a head-SHA-aware waiter.
+current `headRefOid`; see `fx-review` → `references/copilot.md` ("Known GitHub API Behaviour",
+D1–D3) and use `fx-review with copilot`, which wraps this together with a head-SHA-aware waiter.
 
 **Do this again after every push to the PR branch.** Copilot will not reliably look at new commits on its own, and a stale review must never be read as coverage for the current head.
 
@@ -561,7 +561,7 @@ Other ways a review can be triggered, none of which replace the request above:
 **Do not try.** `reviewRequests` / `requested_reviewers` is **empirically always
 empty** for the Copilot bot — 200 with `requested_reviewers: []` every time, and the
 GraphQL `reviewRequests` node is empty too, including while a review is genuinely on
-its way and after it has landed. See `copilot-review` (**D1**/**D3**).
+its way and after it has landed. See `fx-review` → `references/copilot.md` (**D1**/**D3**).
 
 Because that field is always empty, an "if non-empty → pending" check has only one
 reachable branch: the negative one. Wired into a workflow it concludes "nobody asked
@@ -622,7 +622,7 @@ query {
 }' --jq '.data.repository.pullRequest | .headRefOid as $head | [.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer") | {state, submittedAt, oid: .commit.oid, covers_head: (.commit.oid == $head)}]'
 ```
 
-**Prefer `copilot-review` over any of the above.** It wraps the request and a
+**Prefer `fx-review with copilot` over any of the above.** It wraps the request and a
 head-SHA-aware wait, and it prints the review body so the verdict headline — which
 no thread query surfaces — can be read.
 
@@ -687,8 +687,8 @@ negative branch on every PR (**D3**).
 | Condition | Meaning |
 |-----------|---------|
 | Review whose `commit_id` == the PR's `headRefOid` | Review completed **for the code you are about to merge**. Read its verdict headline (**D4**) |
-| Review exists, but its `commit_id` is an older commit | **Current head is UNREVIEWED.** Nudge, then wait via `copilot-review` — do not treat this as reviewed |
-| No Copilot review at all | **Nothing has reviewed this PR yet.** Wait via `copilot-review`. This is not "clean", and it is *not* evidence that no review was requested — you cannot determine that at all (**D1**) |
+| Review exists, but its `commit_id` is an older commit | **Current head is UNREVIEWED.** Nudge, then wait via `fx-review with copilot` — do not treat this as reviewed |
+| No Copilot review at all | **Nothing has reviewed this PR yet.** Wait via `fx-review with copilot`. This is not "clean", and it is *not* evidence that no review was requested — you cannot determine that at all (**D1**) |
 | Unresolved threads with Copilot author | Feedback needs attention |
 | Zero unresolved threads | Clean **once** a review covers the current head — on an older commit it says nothing about the code being merged |
 | `reviewRequests` / `requested_reviewers` empty | **Means nothing.** It is always empty. Do not derive any status from it (**D1**) |
