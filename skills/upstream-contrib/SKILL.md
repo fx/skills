@@ -15,9 +15,11 @@ It is deliberately ecosystem-neutral. Nothing here assumes a language, package m
 
 ## When to Use
 
+Invoked explicitly (`/upstream-contrib`). In scope:
+
 - A local component, module, or fix duplicates or extends something a dependency already owns
 - A patch is being carried locally (a vendored file, a `patches/` entry, a fork) that should go upstream instead
-- The user says "upstream this", "contribute this to <project>", "send this to <dependency>"
+- A change the user asks to contribute to a named dependency
 
 **Not for:** opening a PR on a repository you are already working in — that is `dev`. This skill exists for the two-repository case, where the change has to cross a dependency boundary and the consumer has to be re-pointed afterwards.
 

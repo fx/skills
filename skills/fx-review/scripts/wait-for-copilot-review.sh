@@ -10,9 +10,11 @@
 #
 # ⛔ RUN THIS IN THE BACKGROUND (`run_in_background: true`), redirecting stdout and
 #    stderr to a log file. The Bash tool caps a FOREGROUND `timeout` at 600 000 ms,
-#    which is BELOW this script's budget — a foreground call is guaranteed to be
-#    killed mid-poll, printing no STATUS and no exit code. That kill is exactly what
-#    made the old re-run protocol unreachable. Backgrounded processes are not
+#    which is BELOW this script's budget — a foreground call returns before the
+#    script finishes, with no STATUS line: Claude Code 2.1.296 moves it to the
+#    background at the cap; older versions killed it mid-poll (exit 143).
+#    That kill, on the older versions, is what made the old re-run protocol
+#    unreachable. Backgrounded processes are not
 #    subject to that cap, which is why the budget can now exceed it.
 #    Headless sessions are the one exception — nothing can wake the caller there,
 #    so it runs this in the FOREGROUND with TIMEOUT_SECONDS below that cap and
@@ -343,6 +345,20 @@ current_head_sha() {
     printf '%s' "$out"
 }
 
+# EVERY review on the PR, as one JSON array of pages (`[[...], [...]]`). Takes the
+# `timeout` cap; returns gh's (or timeout's) status unchanged.
+#
+# ⛔ PAGINATED, OR THE HEAD'S REVIEW CAN BE INVISIBLE. REST returns 30 reviews per
+# page, oldest first, so on a PR with more than 30 the newest — the one covering the
+# head — sits on a later page, and an unpaginated read reported PENDING and "never
+# reviewed this commit" for a review that was there. `--paginate --jq` would run the
+# filter once PER PAGE and print one result per page; `--slurp` refuses `--jq`. So
+# fetch every page here and filter with a separate `jq` over `.[][]`. `--slurp`
+# needs gh 2.48.0, below MIN_GH_VERSION.
+fetch_reviews() {
+    timeout "$1" gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews?per_page=100"
+}
+
 # THE readiness signal (D3). REST /reviews rather than `gh pr view --json reviews`
 # because only REST exposes `commit_id` — without it there is no way to tell a
 # review of this push from a review of the last one.
@@ -359,12 +375,12 @@ check_review_submitted() {
     local sha="$1" cap rc=0 out
     cap=$(wait_cap)
     if (( cap <= 0 )); then return 2; fi
-    out=$(timeout "$cap" gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" --jq \
-        "[.[] | select(.user.login | IN(\"${COPILOT_LOGIN}\", \"${COPILOT_LOGIN}[bot]\")) | select(.commit_id == \"${sha}\") | (.state // \"UNKNOWN\")] | unique | join(\", \")" \
-        2>/dev/null) || rc=$?
+    out=$(fetch_reviews "$cap" 2>/dev/null) || rc=$?
     if (( rc == 124 )); then return 2; fi
     if (( rc != 0 )); then return 1; fi
-    printf '%s' "$out"
+    printf '%s' "$out" | jq -r \
+        "[.[][] | select(.user.login | IN(\"${COPILOT_LOGIN}\", \"${COPILOT_LOGIN}[bot]\")) | select(.commit_id == \"${sha}\") | (.state // \"UNKNOWN\")] | unique | join(\", \")" \
+        2>/dev/null || return 1
 }
 
 # The bodies of ALL Copilot reviews of a specific commit, concatenated. The caller
@@ -380,11 +396,12 @@ check_review_submitted() {
 # on whether the output is empty: an empty body is a LEGAL, observed Copilot
 # result, so emptiness cannot distinguish "no findings" from "never fetched".
 review_bodies() {
-    local sha="$1" cap
+    local sha="$1" cap pages
     cap=$(diag_cap)
     if (( cap <= 0 )); then return 1; fi   # tail spent; `timeout 0` would uncap
-    timeout "$cap" gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" --jq \
-        "[.[] | select(.user.login | IN(\"${COPILOT_LOGIN}\", \"${COPILOT_LOGIN}[bot]\")) | select(.commit_id == \"${sha}\") | .body] | join(\"\n\n----- (next Copilot review of this same commit) -----\n\n\")"
+    pages=$(fetch_reviews "$cap") || return 1
+    printf '%s' "$pages" | jq -r \
+        "[.[][] | select(.user.login | IN(\"${COPILOT_LOGIN}\", \"${COPILOT_LOGIN}[bot]\")) | select(.commit_id == \"${sha}\") | .body] | join(\"\n\n----- (next Copilot review of this same commit) -----\n\n\")"
 }
 
 # The commit of the newest Copilot review of ANY commit. Diagnostic only — used to
@@ -403,10 +420,11 @@ review_bodies() {
 # `timeout` exiting non-zero lands in the caller's "read failed" branch, which
 # already says the answer is UNKNOWN — the correct thing to say.
 latest_review_commit() {
-    local cap; cap=$(diag_cap)
+    local cap pages; cap=$(diag_cap)
     if (( cap <= 0 )); then return 1; fi
-    timeout "$cap" gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" --jq \
-        "[.[] | select(.user.login | IN(\"${COPILOT_LOGIN}\", \"${COPILOT_LOGIN}[bot]\")) | .commit_id] | last // empty"
+    pages=$(fetch_reviews "$cap") || return 1
+    printf '%s' "$pages" | jq -r \
+        "[.[][] | select(.user.login | IN(\"${COPILOT_LOGIN}\", \"${COPILOT_LOGIN}[bot]\")) | .commit_id] | last // empty"
 }
 
 # Best-effort nudge. See D1: the response is discarded on purpose. Issued because
@@ -424,31 +442,55 @@ request_review_nudge() {
     echo "  Issued a Copilot review request (its response proves nothing — see D1)."
 }
 
-# Count unresolved Copilot review threads via GraphQL. Reported for context only:
-# a count of 0 does NOT mean the review was clean (D4).
+# Count unresolved Copilot review threads via GraphQL. A count of 0 does NOT mean
+# the review was clean (D4) — but a count above 0, or `unknown`, makes the verdict
+# TERMINAL_FAIL, so this is a gate read, not context.
+#
+# ⛔ PAGINATED AND FAIL-CLOSED, BECAUSE THIS COUNT DECIDES THE VERDICT: report_terminal
+# emits TERMINAL_PASS only when it is 0. `reviewThreads(first: 100)` alone returns at
+# most 100 threads and no error, so on a larger PR an unresolved thread on page 2 was
+# never counted and TERMINAL_PASS went out over it. So: `gh` walks the cursor
+# (`--paginate --slurp`, no `--jq` — gh refuses it under `--slurp`), and the count is
+# taken once over the accumulated threads, and only if every page parsed, no page
+# carries GraphQL `errors`, and the accumulated total equals the server's
+# `totalCount`. Anything else is a failed read (the github skill's
+# references/graphql-patterns.md § Pagination Pattern has the full reasoning).
+# Prints the count, or `unknown` on any failure — including the diagnostic tail
+# running out mid-pagination, which fails closed rather than counting what arrived.
 count_copilot_threads() {
-    local owner repo result
+    local owner repo pages result
     owner="${REPO_NWO%%/*}"
     repo="${REPO_NWO##*/}"
     local dcap; dcap=$(diag_cap)
     if (( dcap <= 0 )); then echo "unknown"; return; fi
-    if ! result=$(timeout "$dcap" gh api graphql -f query="
-    query {
-      repository(owner: \"$owner\", name: \"$repo\") {
-        pullRequest(number: $PR_NUMBER) {
-          reviewThreads(first: 100) {
+    if ! pages=$(timeout "$dcap" gh api graphql --paginate --slurp -f query='
+    query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100, after: $endCursor) {
+            totalCount
+            pageInfo { hasNextPage endCursor }
             nodes {
               isResolved
-              comments(first: 1) {
-                nodes {
-                  author { login }
-                }
-              }
+              comments(first: 1) { nodes { author { login } } }
             }
           }
         }
       }
-    }" --jq "[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == \"${COPILOT_LOGIN}\")] | length" 2>/dev/null); then
+    }' -f owner="$owner" -f repo="$repo" -F pr="$PR_NUMBER" 2>/dev/null); then
+        echo "unknown"
+        return
+    fi
+    if ! result=$(printf '%s' "$pages" | jq -er --argjson logins "[\"${COPILOT_LOGIN}\"]" '
+          if type != "array" or length == 0 then error("no pages")
+          elif any(.[]; type != "object" or has("errors")) then error("GraphQL errors")
+          elif any(.[]; (.data.repository.pullRequest.reviewThreads.nodes | type) != "array") then error("no reviewThreads")
+          else
+            [.[].data.repository.pullRequest.reviewThreads.nodes[]] as $all
+            | if ($all | length) != .[0].data.repository.pullRequest.reviewThreads.totalCount then error("short read")
+              else [$all[] | select(.isResolved == false and (.comments.nodes[0].author.login | IN($logins[])))] | length
+              end
+          end' 2>/dev/null); then
         echo "unknown"
         return
     fi

@@ -88,7 +88,7 @@ Skill tool: skill="resolve-pr-feedback",
 
 | Reviewer | Author logins — exact, GraphQL / REST | Reference |
 |---|---|---|
-| GitHub Copilot | `copilot-pull-request-reviewer` / `copilot-pull-request-reviewer[bot]` — **never** the bare `Copilot`, which matches nothing | `references/copilot.md` |
+| GitHub Copilot | `copilot-pull-request-reviewer` / `copilot-pull-request-reviewer[bot]` — **never** the bare `Copilot` on GraphQL threads or REST `/reviews`, where it matches nothing (the REST review-comments endpoint does report `Copilot`; categorise threads via GraphQL) | `references/copilot.md` |
 | CodeRabbit | `coderabbitai` / `coderabbitai[bot]` | `references/coderabbit.md` |
 | Codecov | `codecov` / `codecov[bot]`, and `codecov-commenter` | `references/codecov.md` |
 
@@ -367,8 +367,8 @@ query($endCursor: String) {
 (`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
 carries the executable version). `gh` walks the cursor; flatten `nodes` across the
 slurped pages into one array. Nothing reduces that call, deliberately: `gh` rejects
-`--jq` under `--slurp`, and the `jq` below would consume the `pageInfo` the cursor
-lives in — and this query is the merge gate, the one place a false zero converts
+`--jq` under `--slurp`, and without `--slurp` the `jq` below would run once per
+page — and this query is the merge gate, the one place a false zero converts
 straight into "settled". **Accumulate, then filter, then count**, over the whole
 set:
 

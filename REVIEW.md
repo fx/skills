@@ -10,7 +10,7 @@ is pasted verbatim into reviewer prompts — write rules out in full, never
 reference another file.
 
 ## PR Review Checklist (CRITICAL)
-<!-- KEEP THIS SECTION UNDER 4000 CHARS - Copilot only reads the first ~4000 -->
+<!-- Keep this section focused and first: the highest-value rules lead the file. -->
 
 ### Security and Privacy
 
@@ -26,7 +26,7 @@ reference another file.
 
 ### Host Portability
 
-- Flag a host limitation stated as a universal. "Sub-agents cannot spawn sub-agents" is Claude Code's constraint, not Codex's — it belongs in a host-notes block, not an architectural rule. A rule holding on every host must say so, and why.
+- Flag a host limitation stated as a universal. "Ending your turn kills live delegates" is Codex's constraint, not Claude Code's — it belongs in a host-notes block, not an architectural rule. A rule holding on every host must say so, and why.
 - Concrete `Agent tool:` / `Skill tool:` syntax is fine as illustration. Flag it only where presented as the sole spelling, or where a host-coupled operation has no entry in `skills/dev/references/host-adapters.md`.
 - **`host-adapters.md` is where concrete, host-specific syntax belongs — do not flag it there.** The illustrative-syntax rule governs the *skills*, and it works by pointing at the adapter file; that file's job is to carry each host's exact spelling, including a namespaced tool call such as Codex's `to=functions.collaboration.spawn_agent`. Verbatim host wording in an adapter row is a citation, not a hardcoded contract.
 - Flag hardcoded model names; tiers (`large`/`medium`/`small`) are resolved by the host.

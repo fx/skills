@@ -201,7 +201,7 @@ This applies however the body is authored — heredoc, `--body-file`, or `gh api
 
 ### PR conventions block (paste verbatim into any agent prompt that may open or edit a PR)
 
-A convention that lives only in this skill does not survive delegation: an agent spawned with an ad-hoc prompt never loads it. Whenever you delegate PR creation — a `/team` PR preparer opening a PR, an agent editing a body, any sub-agent running `gh pr create` — paste this block into that agent's prompt verbatim. Quote it by name ("the github skill's PR conventions block") when referring to it from another skill.
+A convention that lives only in this skill does not survive delegation: an agent spawned with an ad-hoc prompt never loads it. Whenever you delegate PR creation outside the `dev` and `team` lifecycles (which never delegate it, `dev` Step 5) — an agent editing a body, any sub-agent running `gh pr create` — paste this block into that agent's prompt verbatim. Quote it by name ("the github skill's PR conventions block") when referring to it from another skill.
 
 ~~~markdown
 ### PR conventions (mandatory)
@@ -509,11 +509,12 @@ gh api graphql -f query='
 gh pr view 13
 
 # Get specific fields as JSON
-gh pr view 13 --json title,body,state,reviewThreads
-
-# Filter with jq
-gh pr view 13 --json reviewThreads --jq '.reviewThreads[] | select(.isResolved == false)'
+gh pr view 13 --json title,body,state
 ```
+
+`gh pr view` cannot return review threads (`Unknown JSON field: "reviewThreads"`, gh 2.102.0).
+Read review threads through GraphQL with `references/graphql-patterns.md`
+§ Pagination Pattern.
 
 ## Copilot Review Management
 
@@ -521,7 +522,7 @@ GitHub Copilot can automatically review pull requests. This section covers how t
 
 ### Key Facts
 
-- **Copilot username**: `copilot-pull-request-reviewer` (GraphQL) or `copilot-pull-request-reviewer[bot]` (REST API)
+- **Copilot username**: `copilot-pull-request-reviewer` (GraphQL) or `copilot-pull-request-reviewer[bot]` (REST `/reviews`). The REST review-comments endpoint (`/pulls/N/comments`) reports `Copilot` instead; categorise threads through GraphQL
 - **Review state**: Copilot only leaves `COMMENTED` state reviews, never `APPROVED` or `CHANGES_REQUESTED`
 - **Reviews are per-commit**: each review carries a `commit_id`. A review of an earlier commit says nothing about the current head.
 - **Pushing does NOT re-trigger a review** unless the repo's ruleset enables "Review new pushes". Assume it does not.
@@ -674,9 +675,15 @@ jq '.data.repository.pullRequest | .headRefOid as $head | [.reviews.nodes[] | se
 # All Copilot reviews with their commits — diagnostic only, NOT a pass signal
 jq '.data.repository.pullRequest | .headRefOid as $head | [.reviews.nodes[] | select(.author.login == "copilot-pull-request-reviewer") | {state, oid: .commit.oid, covers_head: (.commit.oid == $head)}]'
 
-# Unresolved Copilot threads
+# Unresolved Copilot threads — ONE PAGE ONLY, never a gate (see below)
 jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == "copilot-pull-request-reviewer")] | length'
 ```
+
+**This summary is one page of each connection** — the first 20 reviews and the
+first 100 threads — so it can miss the head's review and undercount open threads
+on a long-running PR, and a `0` from it is not evidence. For the review gate use
+the paginated REST query in § Check Whether Copilot Has Reviewed the Current Head;
+for the thread count, `references/graphql-patterns.md` § Pagination Pattern.
 
 ### Status Interpretation
 

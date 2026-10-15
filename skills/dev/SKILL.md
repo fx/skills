@@ -107,7 +107,7 @@ Choose by the **shape of the task**, not by how important it feels. Every Agent 
 
 Two constraints worth knowing rather than rediscovering:
 
-- **Tier and reasoning effort are different dials, and not every host exposes both.** Where effort is settable per spawn (Codex), raise it too for the judgment-heavy roles, not just the tier. Where it is not (Claude Code, which inherits it from the session), the tier is the only lever you have — do not expect a `large` delegate to think harder merely because the task is hard.
+- **Tier and reasoning effort are different dials.** On Codex, raise effort too for the judgment-heavy roles, not just the tier (`host-adapters.md` § Codex). On Claude Code, per-spawn `effort` exists but this catalog leaves it to the session unless the user asks, so the tier is the only lever you pull — do not expect a `large` delegate to think harder merely because the task is hard.
 - **The smallest tier may carry a reduced context ceiling.** For read-heavy roles that is a feature: it bounds context growth for free. Check your host's limit in `[SKILLS_DIR]/dev/references/host-adapters.md` rather than assuming.
 
 `team` carries the same table for its coordinator spawns; keep the two in step.
@@ -831,7 +831,7 @@ Then branch on the trailing `STATUS=` line:
 | STATUS | Exit | What to do |
 |---|---|---|
 | `TERMINAL_PASS` | 0 | Every check completed, none failed → **proceed to Step 7.2** for the Codecov assessment; Step 8 once it returns nothing to fix |
-| `TERMINAL_FAIL` | 1 | Every check completed, at least one failed → **proceed to Step 7.2** |
+| `TERMINAL_FAIL` | 1 | Every check completed, at least one failed or was cancelled (`CHECKS_CANCELLED=`) → **proceed to Step 7.2** |
 | `PENDING` | 2 | Still running at budget expiry. Not a verdict. Re-run once to keep waiting; `PENDING` again on that re-run → report the wait as unfinished and STOP — a hand-back to the user, never Step 7.2. **Never** record it as "CI passed". |
 | `NOT_CONFIGURED` | 3 | No checks appeared within the discovery grace — this PR has no CI configured. **This is NOT a pass**: a merge gate requiring green CI is not satisfied by the absence of CI. **Proceed to Step 7.2** all the same: its CI reference runs § Conflict check — a conflicting PR shows exactly this status — and reports "no CI ran on head" otherwise, and its Codecov reference classifies a configured Codecov that therefore never reported. Then report it and confirm against branch protection. |
 | `ERROR` | 4 | Bad arguments, `gh` unauthenticated, or the checks API could not be read → report and STOP — a hand-back to the user, never Step 7.2. A failed read is not "no checks". |
@@ -904,8 +904,11 @@ Skill tool: skill="fx-review", args="with coderabbit — [NUMBER] — [STEP 2.5 
 ```
 ```bash
 # 3. Unresolved review threads — MUST be 0 (across ALL reviewers)
-gh pr view [NUMBER] --json reviewThreads \
-  --jq '[.reviewThreads[] | select(.isResolved == false)] | length'
+# `gh pr view` cannot return review threads (Unknown JSON field). Read every
+# thread per the github skill's references/graphql-patterns.md § Pagination
+# Pattern — it fails closed on an error or a short read — then count over the
+# ALL_THREADS it builds:
+jq '[.[] | select(.isResolved | not)] | length' <<< "$ALL_THREADS"
 
 # 4. Codecov — Step 7.2's codecov result for MERGE_HEAD: `not configured`, or clean
 #    per resolve-pr-feedback's references/codecov.md — 0 missing lines in the comment
@@ -1021,9 +1024,12 @@ After this handoff, a later user message such as "merge it" is a standalone mech
 1. Complete STEPS 1-8 for first PR
 2. **STOP** - Wait for user approval
 3. Only after approval: Start next PR
-4. Track with TodoWrite
+4. Track the remaining PRs in the working brief
 
-**NEVER have multiple PRs open simultaneously**
+**In a standalone `dev` run, do not start the next PR until the user approves the
+previous one.** `dev` never merges, so that PR may still be open; that is expected.
+`team` runs several changes concurrently, each through this lifecycle, under its
+own rules.
 
 ---
 

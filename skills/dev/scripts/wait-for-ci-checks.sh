@@ -7,8 +7,10 @@
 #
 # ⛔ RUN THIS IN THE BACKGROUND (`run_in_background: true`), redirecting stdout and
 #    stderr to a log file. The Bash tool caps a FOREGROUND `timeout` at 600 000 ms,
-#    which is BELOW this script's budget — a foreground call is guaranteed to be
-#    killed mid-poll, printing no STATUS and no exit code. Backgrounded processes
+#    which is BELOW this script's budget — a foreground call returns before the
+#    script finishes, with no STATUS line: Claude Code 2.1.296 moves it to the
+#    background at the cap; older versions killed it mid-poll (exit 143).
+#    Backgrounded processes
 #    are not subject to that cap.
 #    Headless sessions are the one exception — nothing can wake the caller there,
 #    so it runs this in the FOREGROUND with TIMEOUT_SECONDS below that cap and
@@ -21,8 +23,8 @@
 # Read the STATUS line; it is the primary signal.
 #
 #   STATUS=TERMINAL_PASS   exit 0  Every check completed and none failed.
-#   STATUS=TERMINAL_FAIL   exit 1  Every check completed and at least one failed.
-#                                  Settled — fix the failures, do not re-run to get
+#   STATUS=TERMINAL_FAIL   exit 1  Every check completed and at least one failed or
+#                                  was cancelled. Settled — fix the failures, do not re-run to get
 #                                  a different answer.
 #   STATUS=PENDING         exit 2  Checks still running when the budget expired. NOT
 #                                  a verdict and NOT a failure. Re-running is safe.
@@ -47,7 +49,8 @@
 # a bounded, deliberate tail rather than an open-ended one.
 #
 # Additional machine-readable lines emitted before STATUS:
-#   CHECKS_TOTAL=<n>  CHECKS_PASSED=<n>  CHECKS_FAILED=<n>  CHECKS_SKIPPED=<n>
+#   CHECKS_TOTAL=<n>  CHECKS_PASSED=<n>  CHECKS_FAILED=<n>  CHECKS_CANCELLED=<n>
+#   CHECKS_SKIPPED=<n>
 #   PR_HEAD_SHA=<sha|unknown>   on every TERMINAL verdict — TERMINAL_PASS,
 #                               TERMINAL_FAIL, and NOT_CONFIGURED alike. PENDING
 #                               and ERROR are not verdicts, so they carry none.
@@ -69,9 +72,15 @@
 #
 # gh pr checks --json fields: bucket, completedAt, description, event,
 #   link, name, startedAt, state, workflow
-# state values: SUCCESS, FAILURE, PENDING, SKIPPED, STARTUP_FAILURE,
+# state values: SUCCESS, FAILURE, CANCELLED, PENDING, SKIPPED, STARTUP_FAILURE,
 #   STALE, ERROR, EXPECTED, REQUESTED, WAITING, QUEUED, IN_PROGRESS
-# bucket values: pass, fail, skipping, pending
+# bucket values: pass, fail, pending, skipping, cancel (`gh pr checks --help`, 2.102.0)
+#
+# A CANCELLED CHECK IS A FAILED ONE. It did not pass, so it cannot count toward
+# TERMINAL_PASS — counting only `fail` reported a PR with a cancelled required check
+# as "All CI checks passed." `resolve-pr-feedback`'s CI reference classifies
+# `cancel` as failing too; this waiter must not disagree with it. A cancel caused by
+# a superseding push is already caught by the PR_HEAD_SHA bracket.
 
 set -euo pipefail
 
@@ -331,7 +340,7 @@ emit_head_sha() {
     echo "PR_HEAD_SHA=unknown"
 }
 
-# Count checks in a bucket (pass, fail, skipping, pending).
+# Count checks in a bucket (pass, fail, pending, skipping, cancel).
 count_by_bucket() {
     local json="$1" bucket="$2"
     printf '%s' "$json" | jq -r "[.[] | select(.bucket == \"$bucket\")] | length"
@@ -455,7 +464,9 @@ while (( SECONDS < TIMEOUT )); do
         echo ""
         echo "=== CI Check Results ==="
 
-        failed_checks=$(count_by_bucket "$checks" "fail")
+        failed_only=$(count_by_bucket "$checks" "fail")
+        cancelled_checks=$(count_by_bucket "$checks" "cancel")
+        failed_checks=$(( failed_only + cancelled_checks ))
         passed_checks=$(count_by_bucket "$checks" "pass")
         skipped_checks=$(count_by_bucket "$checks" "skipping")
 
@@ -465,7 +476,8 @@ while (( SECONDS < TIMEOUT )); do
         emit_head_sha "$head_before"
         echo "CHECKS_TOTAL=${total}"
         echo "CHECKS_PASSED=${passed_checks}"
-        echo "CHECKS_FAILED=${failed_checks}"
+        echo "CHECKS_FAILED=${failed_only}"
+        echo "CHECKS_CANCELLED=${cancelled_checks}"
         echo "CHECKS_SKIPPED=${skipped_checks}"
 
         if (( failed_checks == 0 )); then
@@ -476,9 +488,9 @@ while (( SECONDS < TIMEOUT )); do
 
         echo ""
         echo "=== Failed Checks ==="
-        printf '%s' "$checks" | jq -r '.[] | select(.bucket == "fail") | "  \(.state): \(.name)"'
+        printf '%s' "$checks" | jq -r '.[] | select(.bucket == "fail" or .bucket == "cancel") | "  \(.state): \(.name)"'
         echo ""
-        echo "${failed_checks} check(s) failed."
+        echo "${failed_only} check(s) failed, ${cancelled_checks} cancelled."
         finish TERMINAL_FAIL
     fi
 

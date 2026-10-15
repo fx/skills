@@ -61,8 +61,8 @@ expanded and referenced files are **not** read. Write the rules directly in the
 file — never `See docs/conventions.md`.
 
 Keep it focused. A long `REVIEW.md` dilutes the rules that matter. Put the
-highest-value rules first: Copilot weights roughly the first 4000 characters
-most heavily.
+highest-value rules first. GitHub's current guidance for Copilot is to keep an
+instruction file under about 1,000 lines; it states no character limit.
 
 ## Where feedback resolvers write
 

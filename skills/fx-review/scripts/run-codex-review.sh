@@ -9,7 +9,8 @@
 #
 # Env:
 #   CODEX_REVIEW_OUT=<path>    also tee the review to this file
-#   CODEX_REVIEW_DRY_RUN=1     print the resolved command and exit 0 without running
+#   CODEX_REVIEW_DRY_RUN=1     run the MCP preflight, print the resolved command, and
+#                              exit 0 without reviewing
 #   CODEX_REVIEW_MODEL=<id>    override the review model     (default below)
 #   CODEX_REVIEW_EFFORT=<lvl>  override reasoning effort     (default below)
 #
@@ -53,8 +54,8 @@
 #                     `CODEX_EXIT=<n>` line, which carries codex's status even when
 #                     the exit code cannot — see the next paragraph.
 #   STATUS=DRY_RUN    exit 0
-#                     CODEX_REVIEW_DRY_RUN=1 — the resolved command was printed and
-#                     no review ran.
+#                     CODEX_REVIEW_DRY_RUN=1 — the MCP preflight passed, the resolved
+#                     command was printed, and no review ran.
 #   STATUS=ERROR      exit 3 for the documented setup failures below; exit 4 from the
 #                     EXIT trap on an internal abort; 128+N when signal N kills the
 #                     runner (SIGTERM -> 143, SIGHUP -> 129) before the outcome is
@@ -105,9 +106,10 @@
 # which. 3 and 4 are this script's own codes and are never codex's.
 #
 # Exit 3 covers exactly: a usage error, `codex` missing from PATH, an unreadable or
-# empty scope prompt, and a failed MCP enumeration. Deliberately not 1 or 2 — those
-# are reserved by `codex` itself, and conflating them would make "the reviewer
-# failed" look like "the reviewer had opinions".
+# empty scope prompt, a failed MCP enumeration, and a failed MCP preflight (codex
+# rejects the disable flags, or still reports a server enabled under them).
+# Deliberately not 1 or 2 — those are reserved by `codex` itself, and conflating them
+# would make "the reviewer failed" look like "the reviewer had opinions".
 #
 # WHY NOT THE FIVE-STATE PROTOCOL the polling waiters in this catalog use: there is
 # no budget here and nothing can time out, so `PENDING` cannot occur; there is no
@@ -140,9 +142,13 @@
 #    and `codex review` has no approval-policy flag, so the turn never advances.
 #
 #    `-c 'mcp_servers={}'` does NOT work — the map is merged, not replaced, so every
-#    server stays loaded. It LOOKS like it worked, because a run that happens not to
-#    call a tool shows no MCP output. Setting CODEX_HOME to a sanitized directory
-#    does not work either.
+#    server stays loaded (re-verified on 0.162.1). It LOOKS like it worked, because a
+#    run that happens not to call a tool shows no MCP output. Setting CODEX_HOME to a
+#    sanitized directory does not work either. What does work is one `mcp_servers`
+#    table naming every server with a disabled stub of its own transport; the block
+#    that builds it says why each simpler form fails. A preflight then asks codex
+#    what it loaded under those flags, so a rejected or partial flag set is an ERROR
+#    before the review starts, never a COMPLETED run that reviewed nothing.
 #
 #    Enumeration uses `codex mcp list --json`, never a `config.toml` scrape: servers
 #    also arrive from project-scoped and managed configuration, and a scrape silently
@@ -370,20 +376,67 @@ fi
 # Codex reads AGENTS.md. It does NOT read REVIEW.md or CLAUDE.md — it is the one
 # reviewer that needs a pointer, and only where a REVIEW.md exists to point at.
 # Checked from the repository root, so a run from a subdirectory does not report
-# a bridge that is actually present. Report and continue on defaults; never
-# invoke fx-setup or fx-upgrade from here (fx-review Step 6).
-BRIDGE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+# a bridge that is actually present. Never invoke fx-setup or fx-upgrade from here
+# (fx-review Step 6), and never write the pointer: that is the user's call.
+#
+# Without the pointer, the rules still reach Codex for THIS run: REVIEW.md is
+# PREPENDED to the scope prompt, so the prompt still ends with the BLOCKING block,
+# which fx-review requires to be its last part. Nothing on disk changes. A
+# REVIEW.md that is unreadable, empty, not a regular file, or reached through a
+# symlink falls back to reviewing on defaults.
+#
+# ⛔ NEVER READ IT THROUGH A SYMLINK. The prompt leaves this machine: a REVIEW.md
+# that is a link — or sits under a linked directory — would paste a file from
+# outside the repository into it. `-f` and `cat` follow a link at any component
+# silently, so every component below the root is tested with `-L` first; the same
+# rule fx-setup's check-docs-layout.sh `safe()` applies to instruction files.
+BRIDGE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
+
+# Print why <root>/<rel> must not be read and return 1, or return 0 when it is a
+# regular file that no component below <root> reaches through a symlink.
+unsafe_repo_file() {
+    local acc="$1" rel="$2" c
+    local -a parts
+    IFS='/' read -ra parts <<< "$rel"
+    for c in "${parts[@]}"; do
+        [[ -z "$c" || "$c" == . ]] && continue
+        acc="$acc/$c"
+        if [[ -L "$acc" ]]; then
+            if [[ "$acc" == "$1/$rel" ]]; then echo "$rel is a symlink"
+            else echo "$rel lies under the symlink ${acc#"$1"/}"; fi
+            return 0
+        fi
+    done
+    if [[ ! -f "$acc" ]]; then echo "$rel is not a regular file"; return 0; fi
+    return 1
+}
 if [[ ! -e "$BRIDGE_ROOT/REVIEW.md" && ! -L "$BRIDGE_ROOT/REVIEW.md" ]]; then
     echo "REVIEW.md: absent — nothing to bridge; Codex reviews on AGENTS.md and the scope prompt."
 elif grep -q "## Code Review Rules" "$BRIDGE_ROOT/AGENTS.md" 2>/dev/null; then
     echo "AGENTS.md -> REVIEW.md pointer: present"
 else
     echo "WARNING: REVIEW.md exists but AGENTS.md has no '## Code Review Rules' section."
-    echo "         Codex cannot see REVIEW.md, so it will review on defaults."
-    echo "         The pointer is fx-upgrade's M1.4, applied when the user asks for it —"
-    echo "         not from this review."
-    echo "         If Codex flags something REVIEW.md explicitly permits, this is why:"
-    echo "         say so rather than silently applying the finding."
+    review_rules=""
+    skip_reason="REVIEW.md could not be read or is empty"
+    if why=$(unsafe_repo_file "$BRIDGE_ROOT" REVIEW.md); then
+        skip_reason="REVIEW.md not read (${why}; never read through a link)"
+    elif [[ -r "$BRIDGE_ROOT/REVIEW.md" ]]; then
+        review_rules=$(cat "$BRIDGE_ROOT/REVIEW.md" 2>/dev/null) || review_rules=""
+    fi
+    if [[ -n "${review_rules//[[:space:]]/}" ]]; then
+        SCOPE_PROMPT=$(printf '%s\n\n%s\n\n%s\n\n%s' \
+            "These are this repository's code review rules, from its REVIEW.md. Apply them to this review:" \
+            "$review_rules" \
+            "--- end of REVIEW.md ---" \
+            "$SCOPE_PROMPT")
+        echo "REVIEW.md: prepended to the scope prompt for this run (no Code Review Rules pointer)."
+        echo "         The pointer is fx-upgrade's M1.4, applied when the user asks for it —"
+        echo "         not from this review."
+    else
+        echo "         ${skip_reason} — not prepended; Codex reviews on defaults."
+        echo "         If Codex flags something REVIEW.md explicitly permits, this is why:"
+        echo "         say so rather than silently applying the finding."
+    fi
 fi
 
 # ── Disable every locally configured MCP server, individually, by name ───────
@@ -409,40 +462,89 @@ if ! mcp_names=$(printf '%s' "$mcp_json" | jq -r '.[].name' 2>/dev/null); then
     finish ERROR
 fi
 
-# A server name is a TOML KEY SEGMENT, and only [A-Za-z0-9_-] may appear bare. A
-# name containing a dot — `acme.review` — pasted in raw builds
-# `mcp_servers.acme.review.enabled`, which is a NESTED PATH, not that server: the
-# server stays enabled and can hang the run this script exists to protect. Quote and
-# escape anything that is not a bare key.
+# ONE `-c` THAT REPLACES EACH SERVER'S ENTRY WITH A DISABLED STUB OF THE SAME TRANSPORT.
+# Each of the simpler forms fails on codex-cli 0.162.1, verified:
 #
-# The quoted form follows the TOML spec for quoted key segments. It has been checked
-# against this function's output but NOT exercised end-to-end against a real server
-# whose name needs quoting — none was available. If `codex` ever rejects a `-c` with
-# a quoted segment, that is where to look; the bare-name path is unaffected.
-toml_key() {
-    local k="$1"
-    if [[ "$k" =~ ^[A-Za-z0-9_-]+$ ]]; then
-        printf '%s' "$k"
-    else
-        k=${k//\\/\\\\}     # backslashes first
-        k=${k//\"/\\\"}     # then quotes
-        printf '"%s"' "$k"
-    fi
-}
+#   - `-c mcp_servers.<name>.enabled=false` is REJECTED for a server that `mcp list`
+#     reports but `config.toml` does not declare (`code-review`, for one): the
+#     override creates a table with no transport, and codex refuses to load —
+#     `invalid transport in mcp_servers.<name>`. The review never starts, while this
+#     script used to report it COMPLETED.
+#   - A per-server `-c` cannot address a name containing a dot: `-c` dotted paths do
+#     not honour TOML quoted segments (`mcp_servers."a.b".enabled` is read as
+#     `mcp_servers."a`), and such names are legal (`codex mcp add a.b -- true`).
+#   - Mixing per-server `-c`s with an `mcp_servers={...}` table is order-dependent: a
+#     later table replaces the earlier per-server overrides, re-enabling them.
+#
+# So the whole set goes into one inline table, every key quoted by `tojson` (a JSON
+# string is a valid TOML basic string, and a quoted key is honoured there). The table
+# MERGES into the configured servers per key — it does not replace the map — so each
+# stub must be valid on top of whatever is already declared: a stdio server gets
+# `command="true"`, an HTTP one a dead loopback `url`. Putting `command` on an HTTP
+# server is rejected (`url is not supported for stdio`). Any other transport is
+# refused rather than guessed at. The preflight below proves the result either way.
+if ! mcp_table=$(printf '%s' "$mcp_json" | jq -er '
+        [ .[] | (.name | tojson) + "=" + (
+            if .transport.type == "stdio" then "{command=\"true\",enabled=false}"
+            elif .transport.type == "streamable_http" then "{url=\"http://127.0.0.1:9/\",enabled=false}"
+            else error("server \(.name | tojson) has unsupported transport \(.transport.type | tojson)")
+            end) ]
+        | "mcp_servers={" + join(",") + "}"' 2>&1); then
+    echo "Error: could not build the MCP disable table: $mcp_table" >&2
+    echo "Refusing to run with a server left enabled." >&2
+    finish ERROR
+fi
 
 if [[ -n "$mcp_names" ]]; then
     while IFS= read -r name; do
-        if [[ -n "$name" ]]; then
-            MCP_NAMES+=("$name")
-            MCP_OFF+=(-c "mcp_servers.$(toml_key "$name").enabled=false")
-        fi
+        if [[ -n "$name" ]]; then MCP_NAMES+=("$name"); fi
     done <<< "$mcp_names"
+    MCP_OFF=(-c "$mcp_table")
+fi
+
+# PREFLIGHT: ASK CODEX WHAT IT ACTUALLY LOADED UNDER THESE FLAGS, IN DRY RUN TOO. A
+# flag codex rejects makes `codex review` exit before reviewing anything, and a flag
+# it accepts but misreads leaves a server enabled; both looked like success before
+# this check existed.
+#
+# ⛔ CHECK WHAT WAS EXPECTED, NOT ONLY WHAT CAME BACK. `all(.enabled == false)` over
+# the returned list passes on a list that dropped a server — or on `[]` — so the
+# preflight's set of names must EQUAL the enumerated set (same names, same count),
+# and every one of them must report `enabled == false`. A missing, extra or
+# duplicated name is an ERROR, just as the thread reads fail closed on a short read
+# against `totalCount`. Zero enumerated and zero returned is the one empty case that
+# passes.
+#
+# stderr is kept out of the capture — codex can print warnings there, which would
+# break the JSON — and fetched by a second run only when there is an error to show.
+if ! preflight_out=$(codex "${MCP_OFF[@]}" mcp list --json 2>/dev/null); then
+    echo "Error: codex rejected the MCP disable flags, so the review cannot start:" >&2
+    codex "${MCP_OFF[@]}" mcp list --json 2>&1 >/dev/null | sed 's/^/  /' >&2 || true
+    finish ERROR
+fi
+if ! preflight_problems=$(printf '%s' "$preflight_out" | jq -r --argjson want "$mcp_json" '
+        if type != "array" or any(.[]; type != "object") then "  output is not a list of servers"
+        else
+          ($want | map(.name) | sort) as $w | (map(.name) | sort) as $g
+          | ([$w[] | select(. as $n | $g | index($n) | not)] | map("  missing: " + .)),
+            ([$g[] | select(. as $n | $w | index($n) | not)] | map("  unexpected: " + .)),
+            (if ($w | length) != ($g | length) then ["  count: enumerated \($w | length), preflight returned \($g | length)"] else [] end),
+            ([.[] | select(.enabled != false) | "  still enabled: " + .name])
+          | .[]
+        end' 2>/dev/null); then
+    preflight_problems="  output could not be parsed"
+fi
+if [[ -n "$preflight_problems" ]]; then
+    echo "Error: the MCP preflight does not match the enumerated servers:" >&2
+    printf '%s\n' "$preflight_problems" >&2
+    echo "Refusing to run: a server left enabled can block the review indefinitely." >&2
+    finish ERROR
 fi
 
 # Echo the resolved flag set so a PARTIAL one is visible. A partial set is the worst
 # outcome — the command looks correct, most servers are disabled, and the one it
 # missed hangs the run exactly as before.
-echo "MCP servers disabled for this run: ${#MCP_NAMES[@]}"
+echo "MCP servers disabled for this run: ${#MCP_NAMES[@]} (preflight: the same ${#MCP_NAMES[@]}, all enabled=false)"
 if (( ${#MCP_NAMES[@]} == 0 )); then
     echo "  (enumeration succeeded and reported no configured servers)"
 else

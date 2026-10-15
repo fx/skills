@@ -9,7 +9,7 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
 
-Migrates a repository to the **current** these conventions. Unlike `fx-setup`,
+Migrates a repository to the **current** conventions. Unlike `fx-setup`,
 this skill is **intentionally intrusive**: it moves content between files,
 rewrites files in place, resolves symlinks, and deletes obsolete paths.
 
@@ -20,7 +20,7 @@ The two skills split along one line: **who is allowed to destroy something.**
 | | `fx-setup` | `fx-upgrade` |
 |---|---|---|
 | Invocation | **Explicit only** for writes — the user asks for it by name; any other load is a read-only check | **Explicit only** — the user asks for it by name |
-| May create missing files | yes | yes (via fx-setup) |
+| May create missing files | yes | yes, directly (Step 5 seeds from fx-setup's seed blocks; never by invoking fx-setup) |
 | May append a missing marker block | yes | yes |
 | May move, merge, overwrite, or delete | **never** | yes, that is the point |
 | On finding a legacy layout | reports it and stops | migrates it |
@@ -36,10 +36,12 @@ a legacy layout, it reports and recommends — it does not migrate.
 
 **This skill migrates instruction files only.** A bare "upgrade" is ambiguous — "upgrade React", "upgrade the database", "upgrade to Node 24" are ordinary code work and belong to `dev`. If the request does not clearly concern AI instruction files or these conventions, **ask before assuming**; this skill rewrites files.
 
-- User says "migrate conventions", "update instruction files", "upgrade instruction-file conventions", "migrate to AGENTS.md"
-- `fx-setup` reported a legacy layout and told the user to run this
-- After pulling a catalog update that changed a convention
-- User says "adopt duvet" or asks for requirements traceability — Step 6 offers it, and it runs even when there is nothing to migrate, so this skill is a valid entry point for adoption alone
+Invoked explicitly (`/fx-upgrade`). In scope:
+
+- Migrating a repository's instruction files to these conventions — moving to `AGENTS.md`, updating instruction-file layout
+- A legacy layout `fx-setup` reported, after the user chooses to run this
+- A convention changed by a catalog update the user pulled
+- Adopting duvet requirements traceability — Step 6 offers it, and it runs even when there is nothing to migrate, so an explicit `/fx-upgrade` is a valid entry point for adoption alone
 
 ## Migration Registry
 

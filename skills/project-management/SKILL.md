@@ -81,7 +81,7 @@ Projects MAY define a preference for external task tracking in their AGENTS.md. 
 
 ### Workflow 1: Feature Requests
 
-When user says "add a feature that does X" or "improve X to allow Y":
+For a feature request, within an explicit `/project-management` run:
 
 1. **Analyze deeply** using Explore and tech-scout sub-agents
 2. **Check if a relevant spec exists** in `docs/specs/` or the native spec directory
@@ -92,7 +92,7 @@ When user says "add a feature that does X" or "improve X to allow Y":
 
 ### Workflow 2: "Work on Next"
 
-When user says "work on next", "next task", "what's next":
+For picking the next task, within an explicit `/project-management` run:
 
 1. **Adopted:** **Scan `docs/changes/`** for change documents with status `in-progress` or `draft` that have uncompleted tasks
 2. **Adopted:** **Scan `docs/tasks.md`** for uncompleted items (top = highest priority)

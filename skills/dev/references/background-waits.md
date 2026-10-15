@@ -41,7 +41,7 @@ Launch independent waits **concurrently** — on Claude Code, every call in one 
 
 ## Why not the foreground
 
-**Every host with a row in `host-adapters.md` § Long waits** caps the call that holds a wait below the 900 s budget these scripts run to, so on those hosts a wait held in the calling turn is *guaranteed* to be cut off mid-poll, printing no `STATUS` and no exit code — which is exactly what used to force blind re-runs. That table names each ceiling and the shape that survives it. A host whose row establishes no ceiling is not covered by this paragraph — but read the row before concluding that, because the reason travels: 900 s is a long time to hold one call open, and a host that cannot is the common case, not the exception.
+**Every host with a row in `host-adapters.md` § Long waits** caps the call that holds a wait below the 900 s budget these scripts run to, so on those hosts a wait held in the calling turn is *guaranteed* to be cut off mid-poll — killed, or on current Claude Code moved to the background (see that row) — returning no `STATUS` and no exit code to the turn — which is exactly what used to force blind re-runs. That table names each ceiling and the shape that survives it. A host whose row establishes no ceiling is not covered by this paragraph — but read the row before concluding that, because the reason travels: 900 s is a long time to hold one call open, and a host that cannot is the common case, not the exception.
 
 **A headless session is the one place a foreground wait is required**, and it survives the ceiling the only way it can: by passing the waiter a budget below it and relaunching on `PENDING` (`host-adapters.md` § Headless sessions). Never hold the default 900 s budget in the foreground.
 

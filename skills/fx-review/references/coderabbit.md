@@ -132,8 +132,8 @@ fail-closed checks before triaging off it**
 (`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern, which
 carries the executable version). `gh` walks the cursor and returns an array of
 pages; flatten `nodes` across them into one array. There is no `--jq` on that call
-because `gh` rejects it under `--slurp`, and a filter reducing the response to an
-array of matches would discard the `pageInfo` `--paginate` pages from.
+because `gh` rejects it under `--slurp`, and without `--slurp` a `--paginate`d
+`--jq` filters page by page.
 **Accumulate, then filter** — once, over the whole set:
 
 ```bash
@@ -278,8 +278,8 @@ query($endCursor: String) {
 mechanism Step 1b uses
 (`[SKILLS_DIR]/github/references/graphql-patterns.md` § Pagination Pattern). `gh`
 walks the cursor; flatten `nodes` across the slurped pages. Keep the call free of a
-reducing `--jq` — `gh` rejects it under `--slurp`, and it would otherwise strip the
-`pageInfo` `--paginate` pages from. **Accumulate, then filter, then count** — a
+reducing `--jq` — `gh` rejects it under `--slurp`, and without `--slurp` it would
+run once per page. **Accumulate, then filter, then count** — a
 per-page `length` under-reports exactly as a per-page `group_by` would:
 
 ```bash

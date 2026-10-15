@@ -210,14 +210,22 @@ echo "Package manager: $PM"
 Many apps won't start without environment configuration:
 
 ```bash
-# Check for env templates that need to be copied
-for tmpl in .env.example .env.template .env.sample; do
-    if [[ -f "$tmpl" ]] && [[ ! -f ".env" ]] && [[ ! -f ".env.local" ]]; then
-        echo "⚠️  Found $tmpl but no .env or .env.local — copying $tmpl to .env"
-        cp "$tmpl" .env
-        break
-    fi
-done
+# Check for env templates that need to be copied. Never copy through a symlink:
+# a dangling .env link passes `! -f .env` and `cp` writes through it, and a linked
+# template copies a file from outside the repository.
+if [[ -L ".env" ]]; then
+    echo "⚠️  .env is a symlink — not copying a template through it."
+elif [[ ! -f ".env" ]] && [[ ! -f ".env.local" ]]; then
+    for tmpl in .env.example .env.template .env.sample; do
+        if [[ -L "$tmpl" ]]; then
+            echo "⚠️  $tmpl is a symlink — not copying it to .env."
+        elif [[ -f "$tmpl" ]]; then
+            echo "⚠️  Found $tmpl but no .env or .env.local — copying $tmpl to .env"
+            cp "$tmpl" .env
+            break
+        fi
+    done
+fi
 
 # Check if required env files exist
 if [[ -f ".env.local" ]] || [[ -f ".env" ]] || [[ -f ".env.development" ]]; then

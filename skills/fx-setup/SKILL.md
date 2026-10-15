@@ -57,9 +57,13 @@ When it finds anything needing those — a `CLAUDE.md` full of conventions, an o
 ```bash
 ls -la docs/ 2>/dev/null
 ls docs/specs/ docs/changes/ 2>/dev/null
-test -f docs/tasks.md && echo "tasks.md exists" || echo "tasks.md missing"
-test -f docs/index.yml && echo "index.yml exists" || echo "index.yml missing"
-test -f docs/index.md && echo "index.md exists" || echo "index.md missing"
+# -f follows links, so a dangling link would read as "missing" and be created through.
+# A symlink — the file or docs/ itself — is skipped: never created, never written.
+for f in docs/tasks.md docs/index.yml docs/index.md; do
+  if [ -L docs ] || [ -L "$f" ]; then echo "$f: symlink — skipped"
+  elif [ -f "$f" ]; then echo "$f exists"
+  else echo "$f missing"; fi
+done
 ```
 
 **If all docs/ files exist**, skip to Step 5.5 (instruction files). Do not overwrite existing docs/ files.
@@ -309,7 +313,10 @@ That single line is the whole file. Claude Code expands the import at load time,
 If Step 5.5 found one, do not touch it and do not create `REVIEW.md` from it — report and defer to `/fx-upgrade`, which folds its rules into `REVIEW.md`.
 
 ```bash
-test -f REVIEW.md && echo "REVIEW.md exists" || echo "REVIEW.md missing — will create"
+# -f follows links: a dangling REVIEW.md link would read as missing and be created through.
+if [ -L REVIEW.md ]; then echo "REVIEW.md: symlink — skipped (fx-upgrade migrates it)"
+elif [ -f REVIEW.md ]; then echo "REVIEW.md exists"
+else echo "REVIEW.md missing — will create"; fi
 ```
 
 #### 8.2 Check for CURRENT language
