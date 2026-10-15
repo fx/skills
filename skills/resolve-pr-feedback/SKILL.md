@@ -15,8 +15,8 @@ round**: it detects which feedback sources are on the PR, loads
 `references/<source>.md` for each one requested or present, triages every
 finding, fixes once or returns the blocking set, settles every thread, reports
 each source's state on the head, and returns. `fx-review` owns the procedure;
-each reference holds only its source's mechanics (`fx-review` § What a platform
-skill adds). Where they disagree, `fx-review` wins.
+each reference holds only its source's mechanics (`fx-review` § What a tool
+reference adds). Where they disagree, `fx-review` wins.
 
 **"Every" is a claim the queries below have to earn, and one page does not earn
 it.** `reviewThreads(first: 100)` returns *at most* the first 100 threads, not the
@@ -42,7 +42,7 @@ or a re-request.** This skill runs no waiter (Copilot's, CodeRabbit's or CI's),
 never nudges Copilot, never re-requests a review, and never loops back to detect
 again. Every wait,
 re-request and convergence loop is the caller's — `dev` Steps 6.3 and 7,
-`copilot-review` Steps 1–2 and 5, `coderabbit-review` Steps 1 and 3 — which
+`fx-review` → `references/copilot.md` Steps 1–2 and 5, `fx-review` → `references/coderabbit.md` Steps 1 and 3 — which
 already runs them under its own head discipline. A loop in here duplicated the
 caller's: it re-requested reviews the caller was about to request and re-invoked
 the adapter that had called it. The report (§ Step 5) is the hand-off — per
@@ -51,8 +51,9 @@ source, its state on the head and the next wait or re-request the caller owns.
 ## Invocation Boundary
 
 Use this skill only when the user names it, or an active explicitly invoked
-workflow calls it by name: `copilot-review` Step 3 (`sources: copilot`),
-`coderabbit-review` Step 2 (`sources: coderabbit`), `dev` Step 6.3 (each
+workflow calls it by name: `fx-review with copilot` (Step 3 of its Copilot
+reference, `sources: copilot`), `fx-review with coderabbit` (Step 2 of its
+CodeRabbit reference, `sources: coderabbit`), `dev` Step 6.3 (each
 reviewer's own source) and Step 7.2 (`sources: ci,codecov`, the lifecycle's only
 Codecov pass). A mention of PR comments,
 review threads, coverage or failing checks does not load it.
@@ -68,8 +69,8 @@ Skill tool: skill="resolve-pr-feedback",
   from the conversation and the PR description, and say that you did
   (`fx-review` Step 1).
 - **`sources:` given → those sources; omitted → every source is detected.** Either
-  way the skill runs Steps 1–5 once and returns. `copilot-review` and
-  `coderabbit-review` name their own source; `dev` Step 7.2 names `ci,codecov`.
+  way the skill runs Steps 1–5 once and returns. `fx-review`'s Copilot and
+  CodeRabbit references name their own source; `dev` Step 7.2 names `ci,codecov`.
 - **Dispositions are authoritative** (`[SKILLS_DIR]/dev/references/scope-contract.md`
   § Resolver dispositions). The caller set them with the Scope Brief and the
   ledger in hand; a classification from comment text alone does not override
@@ -292,7 +293,7 @@ and no push.**
   that batched fix, unless the caller says it already landed.
 
 **Standalone** — no lifecycle coordinator: the user invoked this skill, or
-`copilot-review` / `coderabbit-review`, directly. Spawn **one** implementer — a
+`fx-review with copilot` / `with coderabbit`, directly. Spawn **one** implementer — a
 sub-agent that loads `dev` in its Implementer role — with the Scope Brief, the
 whole blocking set across every source, review-rule entries included, and the
 `WRITE TARGETS` line of `dev` Step 4's implementer prompt verbatim (a MIRROR of
@@ -399,9 +400,9 @@ state as it stands is the answer, and the caller's loop acts on it.
 
 | Condition on the head | Next action in the report | The caller step that acts |
 |---|---|---|
-| This round pushed `<sha>` | "re-request / re-wait on `<sha>`" for every source with head evidence: Copilot nudge and wait, CodeRabbit wait, CI wait | `dev` 6.3 per-reviewer step 4 and Step 7; `copilot-review` Step 5; `coderabbit-review` Step 3 |
-| Copilot absent, stale or `configured, no report on head` | "request and wait for Copilot on `<sha>`" — Copilot review is mandatory | `copilot-review` Steps 1–2; `dev` 6.3 |
-| CodeRabbit check pending, or `configured, no report on head` | "wait on CodeRabbit for `<sha>`" | `coderabbit-review` Step 1; `dev` 6.3 |
+| This round pushed `<sha>` | "re-request / re-wait on `<sha>`" for every source with head evidence: Copilot nudge and wait, CodeRabbit wait, CI wait | `dev` 6.3 per-reviewer step 4 and Step 7; `fx-review` → `references/copilot.md` Step 5; `fx-review` → `references/coderabbit.md` Step 3 |
+| Copilot absent, stale or `configured, no report on head` | "request and wait for Copilot on `<sha>`" — Copilot review is mandatory | `fx-review` → `references/copilot.md` Steps 1–2; `dev` 6.3 |
+| CodeRabbit check pending, or `configured, no report on head` | "wait on CodeRabbit for `<sha>`" | `fx-review` → `references/coderabbit.md` Step 1; `dev` 6.3 |
 | CI `configured, no report on head` (checks pending) | "wait on CI for `<sha>`" | `dev` 7.1 |
 | Codecov `configured, no report on head` | after a `TERMINAL_*` CI verdict: "re-run the CI wait once for `<sha>`, then re-invoke with `codecov`"; on a head with no CI (`NOT_CONFIGURED`): the "did not report on head" hand-back at once | `dev` 7.2 |
 | A reference's hand-back | "hand-back: `<reason>`" — the user's decision | the caller, then the user |
@@ -461,7 +462,7 @@ would read as full coverage.
 2. Every in-scope thread from a categorised reviewer triaged, replied to and
    resolved — every author matched exactly against § Supported Reviewers' logins,
    Copilot never on the bare `Copilot`. Suppressed comments open no thread and are not part of this
-   (`copilot-review` **D4**).
+   (`fx-review` → `references/copilot.md` **D4**).
 3. Coordinator-owned: nothing edited, committed or pushed here; the blocking set
    returned. Standalone: one implementer, one push.
 4. One round: no waiter run, no nudge, no re-request, no second detection pass;

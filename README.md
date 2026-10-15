@@ -26,10 +26,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `dev` | Runs the complete attended SDLC lifecycle through requirements, implementation, review, CI, and finalization, stopping at an unmerged PR; also defines the Implementer role its coordinators delegate implementation to. |
 | `team` | Wraps `dev`: runs its lifecycle for every change in the approved scope, unattended, and merges each PR itself once the merge gates pass. |
 | `requirements-analyzer` | Analyzes supplied implementation requirements, repository context, and acceptance criteria, and produces the implementation outline the lifecycle implements from. |
-| `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows. |
-| `codex-review` | Runs a scoped one-shot Codex CLI branch review as an external review adapter. |
-| `copilot-review` | Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review. |
-| `coderabbit-review` | Handles CodeRabbit's PR-level review as an optional review adapter with Scope Brief triage and rate-limit degradation. |
+| `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure every reviewer in this catalog follows; `with codex` runs a scoped one-shot Codex CLI branch review, `with copilot` requests, waits for and settles a head-scoped GitHub Copilot review, and `with coderabbit` handles CodeRabbit's optional PR-level review with rate-limit degradation. |
 | `resolve-pr-feedback` | Settles one round of automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions for the sources requested or present, then reports and returns; it never waits or re-requests a review, and any other configured reviewer is settled by hand by the caller. |
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
 | `project-management` | Manages project tracking through `docs/tasks.md` and `docs/changes/` where the fx docs layout is adopted, the repo's own tracker where it is not, or an explicitly selected external tracker. |
@@ -51,7 +48,7 @@ A workflow's authority ends at its documented handoff. A later status question o
 
 ## `[SKILLS_DIR]`
 
-Several skills invoke scripts bundled with a *sibling* skill — `dev` runs `coderabbit-review`'s waiter, for example. Those paths are written as `[SKILLS_DIR]/<skill>/scripts/<script>.sh`, where `[SKILLS_DIR]` is the directory the skills are installed into (`.claude/skills/`, `~/.agents/skills/`, …). Each affected `SKILL.md` restates this at the top.
+Several skills invoke scripts bundled with a *sibling* skill — `dev` runs `fx-review`'s CodeRabbit waiter, for example. Those paths are written as `[SKILLS_DIR]/<skill>/scripts/<script>.sh`, where `[SKILLS_DIR]` is the directory the skills are installed into (`.claude/skills/`, `~/.agents/skills/`, …). Each affected `SKILL.md` restates this at the top.
 
 For sibling scripts to resolve, install the skills that reference each other into the same directory. Installing `dev` alone will leave its waiter invocations unresolvable.
 
@@ -75,7 +72,7 @@ Everything else keeps its plain name. `AGENTS.md` has the avoid-list and the che
 
 ## Requirements
 
-Most skills assume `git` and the GitHub CLI (`gh`), authenticated. Beyond that: `codex-review` needs the Codex CLI; `verify-web-change` needs the Playwright MCP server; `coderabbit-review` and `copilot-review` need those GitHub Apps installed on the repository, and degrade to a `NOT_CONFIGURED` status when they are not. Review is exactly those three: Codex locally before the PR, then Copilot and CodeRabbit on the PR.
+Most skills assume `git` and the GitHub CLI (`gh`), authenticated. Beyond that: `fx-review with codex` needs the Codex CLI; `verify-web-change` needs the Playwright MCP server; `fx-review with copilot` and `with coderabbit` need those GitHub Apps installed on the repository, and degrade to a `NOT_CONFIGURED` status when they are not. Review is exactly those three: Codex locally before the PR, then Copilot and CodeRabbit on the PR.
 
 ## Contributing
 

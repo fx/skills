@@ -50,7 +50,7 @@ GitHub issues are not checked — that needs the network. A caller that needs a 
 ## Who gates on what
 
 - **Docs-layer writers gate on `FX_DOCS`:** `spec-writer`, `project-management`, and `dev`/`team` task tracking.
-- **Instruction-layer writers gate on the one file they would write**, never on `FX_INSTRUCTIONS`: `fx-review` Step 6 on `REVIEW.md`; `codex-review` on `REVIEW.md` before it reports a missing Codex pointer; `resolve-pr-feedback`'s CodeRabbit reference on `REVIEW.md` before it checks `filePatterns`.
+- **Instruction-layer writers gate on the one file they would write**, never on `FX_INSTRUCTIONS`: `fx-review` Step 6 on `REVIEW.md`; `fx-review with codex` on `REVIEW.md` before it reports a missing Codex pointer; `resolve-pr-feedback`'s CodeRabbit reference on `REVIEW.md` before it checks `filePatterns`.
 - **Every writer writes only inside the repository, never through a symlink.** Before writing or creating any target — a docs-layer file, a native spec or tracker, a review-rules file — check its path from `REPO_ROOT` down: it is relative, has no `..` component, and **no component is a symlink, ancestors included** (`[ -L ]` on each of `.github` and `.github/copilot-instructions.md`, not the file alone). A path that fails is not a target: write nothing, name the path in the report, and take the skill's next fallback. Checking only the last component lets `docs -> /elsewhere` turn a write to `docs/changes/` into a write outside the repository. Paths the check above reports already pass this; the rule binds every path a writer chooses or creates itself. Writers cite this rule; none restates it — except a spawn prompt, whose delegate cannot follow a link: `dev` Step 4's and Step 6.2's implementer prompts, `team`'s implementer and fix prompts, and `resolve-pr-feedback`'s standalone implementer carry it as one marked-MIRROR `WRITE TARGETS:` line.
 - **Completing an adopted docs layer is not adoption.** Where `FX_DOCS=adopted` and `FX_DOCS_MISSING` names a path, the skill that owns that path may create it inside `docs/` when it first needs it (§ Partial adoption).
 
@@ -62,8 +62,8 @@ GitHub issues are not checked — that needs the network. A caller that needs a 
 | `docs/index.yml` present, `docs/changes/` missing | adopted (missing `docs/changes/`) | `spec-writer` creates `docs/changes/` when it writes the first change document; `project-management` creates `docs/tasks.md` from its template when it adds the first orphan task |
 | `docs/changes/0001-x.md`, no index | adopted (missing the index files) | `spec-writer` recreates the index from its own templates the next time it updates the index |
 | `docs/tasks.md` only | not-adopted | `docs/tasks.md` is a native tracker, edited in its own format |
-| `REVIEW.md` only | instruction: partial | `fx-review` Step 6 writes to `REVIEW.md`; `codex-review` reports the missing Codex pointer; the CodeRabbit reference reports a missing `filePatterns` entry |
-| `AGENTS.md` only | instruction: partial | `fx-review` Step 6 uses its fallback; `codex-review` says nothing about the pointer — there is no `REVIEW.md` to point at |
+| `REVIEW.md` only | instruction: partial | `fx-review` Step 6 writes to `REVIEW.md`; `fx-review with codex` reports the missing Codex pointer; the CodeRabbit reference reports a missing `filePatterns` entry |
+| `AGENTS.md` only | instruction: partial | `fx-review` Step 6 uses its fallback; `fx-review with codex` says nothing about the pointer — there is no `REVIEW.md` to point at |
 
 ## Following the repo's convention
 

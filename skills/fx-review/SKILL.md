@@ -1,6 +1,6 @@
 ---
 name: fx-review
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Provides the canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows."
+description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Provides the canonical Scope Brief, triage, materiality, convergence, and reporting procedure every reviewer in this catalog follows, and runs one named reviewer — Codex, Copilot, or CodeRabbit — when invoked with that tool."
 ---
 
 # Review — Shared Reviewer Procedure
@@ -8,18 +8,22 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
+>
+> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
+> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
+> Substitute it; never write a literal `.claude/` path on another host.
 
-**The one procedure every reviewer in this catalog follows.** The platform skills —
-`codex-review`, `coderabbit-review`, `copilot-review`, and `resolve-pr-feedback`
-with its per-source references — are adapters. They
+**The one procedure every reviewer in this catalog follows.** The per-tool
+references under `references/` — `codex.md`, `copilot.md`, `coderabbit.md` — and
+`resolve-pr-feedback` with its per-source references are adapters. They
 describe how to drive one particular tool: its command, its
 flags and quirks, the shape of its output, the threads or checks it exposes.
 Everything else — what to review, what to report, what to fix, when to stop —
 lives here and is identical for all of them.
 
-**Load order:** this skill first, then the platform skill. A platform skill that
-contradicts this one is stale; this one wins, and the contradiction is a bug to
-report.
+**Load order:** this skill first, then the tool's reference (§ Invocation). An
+adapter that contradicts this skill is stale; this skill wins, and the
+contradiction is a bug to report.
 
 ## Why this skill exists
 
@@ -39,7 +43,8 @@ This skill is the application of `[SKILLS_DIR]/dev/references/scope-contract.md`
 | **This skill** | **Procedure.** How a reviewer applies those definitions, in order, from first pass to final report. |
 
 Neither restates the other. Where this skill needs a definition it names the
-section; where a platform skill needs either, it names them rather than copying.
+section; where a tool reference or `resolve-pr-feedback` needs either, it names
+them rather than copying.
 
 **One exception, and only one: text sent verbatim to an external tool.** A prompt
 handed to `codex review` or any reviewer outside this repo cannot follow a
@@ -47,6 +52,37 @@ link, so it MUST inline the rule. Such a block is a **mirror**: mark it as one,
 keep it a faithful restatement, and update it in the same commit that changes the
 canonical text. Nothing an agent reads directly qualifies — only strings crossing
 a process boundary.
+
+## Invocation
+
+```
+Skill tool: skill="fx-review", args="with <tool> — [<PR_NUMBER> — ]<Scope Brief verbatim>"
+```
+
+That spelling is illustrative (`[SKILLS_DIR]/dev/references/host-adapters.md`). On
+a host with no skill arguments, the tool is whatever the request names —
+"/fx-review with coderabbit", "use fx-review with copilot on PR 12". `with <tool>`
+comes first, and the tool name matches case-insensitively.
+
+| Tool | What it runs | Reads | Script | Called from |
+|---|---|---|---|---|
+| `codex` | A scoped one-shot Codex CLI review of the current branch, run locally. No PR number. | `references/codex.md` | `[SKILLS_DIR]/fx-review/scripts/run-codex-review.sh` | `dev` Step 4.5 and its Step 6.1 delta re-entry; `team` through `dev` |
+| `copilot` | Requests, waits for, inspects and settles a head-scoped GitHub Copilot review. PR number required. | `references/copilot.md` | `[SKILLS_DIR]/fx-review/scripts/wait-for-copilot-review.sh` | `dev` Steps 6.3 and 8.1; `team` gate 2 |
+| `coderabbit` | The CodeRabbit GitHub App's PR-level check and threads, optional, with rate-limit degradation. PR number required. | `references/coderabbit.md` | `[SKILLS_DIR]/fx-review/scripts/wait-for-coderabbit-review.sh` | `dev` Steps 6.3 and 8.1; `team` gate 2b |
+
+- **With a tool:** read its reference, and apply Steps 1–8 through it. Inside a
+  reference, "this skill" means `fx-review` invoked with that tool; a bare step
+  number names that file's own step, and "`fx-review` Step N" names this file's.
+- **The Scope Brief is mandatory in every form** (Step 1).
+- **Exactly one tool per invocation.** Two tools, or one not in the table: stop,
+  name the three valid tools, and run nothing. A caller that needs two reviewers
+  makes two calls, as `dev` Step 8.1 does — running several from one call would be
+  orchestration no caller asked for.
+- **No tool named:** Steps 1–8 are the whole procedure, applied by you to the
+  diff, branch or spec in front of you. No reference is loaded and no external
+  reviewer runs — **never fan out to all three.** Requesting a Copilot review or
+  starting a waiter acts on someone's PR; doing it because no tool was named is an
+  implicit lifecycle trigger, which this catalog's explicit-use rule forbids.
 
 ---
 
@@ -329,8 +365,8 @@ covers it, none silently fixed and none silently dropped.
 
 **One reviewer reads a string rather than this file: `codex review`, via its
 prompt.** It cannot follow a link, so it needs the rules inlined — the one case
-§ The two canonical sources exempts. There is **one** such block, here, and the
-Codex adapter sends this text rather than writing its own.
+§ The two canonical sources exempts. There is **one** such block, here, and
+`references/codex.md` sends this text rather than writing its own.
 
 (Copilot and the CodeRabbit GitHub App accept no prompt at all, so the brief
 reaches them only at triage — see `fx-review` Step 8.)
@@ -428,7 +464,7 @@ reasoned.
 If the artifact is internally consistent and matches the tree, say so plainly.
 ```
 
-## What a platform skill adds
+## What a tool reference adds
 
 Only what is true of that tool and nothing else:
 
@@ -437,11 +473,11 @@ Only what is true of that tool and nothing else:
 - the threads, checks or gates it exposes, and how to settle them;
 - its authentication and availability rules, and its degradation path.
 
-**A platform skill MUST NOT restate Steps 1–8.** If it needs one, it names the
+**A tool reference MUST NOT restate Steps 1–8.** If it needs one, it names the
 step. If it genuinely needs different behaviour, change it here, for everyone.
 
-`resolve-pr-feedback`'s per-source `references/<source>.md` files are platform
-adapters in exactly this sense: each holds one source's mechanics, and none
+`resolve-pr-feedback`'s per-source `references/<source>.md` files are adapters in
+exactly this sense: each holds one source's mechanics, and none
 restates Steps 1–8.
 
 ## Shared rules that bite in every platform
@@ -458,8 +494,3 @@ restates Steps 1–8.
   a poll that saw nothing, and a timeout are all *unreviewed*, not clean.
 - **Resolution is not the same as a fix.** A thread ends resolved either way; only
   a blocking finding requires the artifact to change.
-
-## When to use this skill directly
-
-Reviewing code with no particular tool in mind — a diff, a branch, a spec. Then
-this skill is the whole procedure, and there is no adapter to load.

@@ -34,7 +34,7 @@ Format: `[a-z0-9-]+`, 1–64 chars, no leading/trailing hyphen, no `--`. That sa
 1. **The name is reserved by a host agent** — mandatory. `review` → `fx-review`, `upgrade` → `fx-upgrade`.
 2. **The name is a bare common noun another catalog would plausibly claim** — judgement, applied sparingly. `setup` → `fx-setup`. The flat namespace has no tiebreak, so the loser of a collision is whichever skill the host happens to load second.
 
-Everything else stays bare. Do not prefix a name that is already distinctive (`resolve-pr-feedback`, `tech-scout`, `coderabbit-review`), and do not rename an existing bare skill without one of the two triggers above — a rename breaks every cross-reference and every user's muscle memory.
+Everything else stays bare. Do not prefix a name that is already distinctive (`resolve-pr-feedback`, `tech-scout`), and do not rename an existing bare skill without one of the two triggers above — a rename breaks every cross-reference and every user's muscle memory.
 
 ### Reserved names
 
@@ -70,7 +70,7 @@ Do not write descriptions that auto-trigger on generic task semantics — "codin
 
 A workflow's instructions apply only to the request that invoked it and end at its documented handoff. Later standalone requests do not inherit the old workflow's orchestration rules: a status query, branch sync, PR metadata change, or explicitly approved merge is handled directly unless the user starts another workflow.
 
-Internal delegation stays valid — `dev` may name `requirements-analyzer`, the reviewer skills, and itself in its Implementer role as part of its active lifecycle. That does not authorize those skills to load themselves for unrelated requests.
+Internal delegation stays valid — `dev` may name `requirements-analyzer`, `fx-review`, and itself in its Implementer role as part of its active lifecycle. That does not authorize those skills to load themselves for unrelated requests.
 
 **No skill adopts the fx layout as a side effect.** Gate every write to an fx docs-layer or instruction-layer file on `fx-setup` → `references/adoption.md`, follow the target repo's own convention when it has not adopted the layout, and never load `fx-setup` as a prerequisite — only an explicit `/fx-setup` or `/fx-upgrade` adopts. A prerequisite load once dropped `AGENTS.md`, `REVIEW.md`, `.coderabbit.yaml` and duvet wiring into unrelated spec and implementation PRs.
 
@@ -122,7 +122,7 @@ This applies to skill bodies, references, scripts, test fixtures, and commit mes
 
 - **Imperative.** "Do X", "Never do Y" — not "you should consider".
 - **Explain non-obvious rules.** A rule whose reason is missing gets relaxed by the next editor who cannot see the failure it prevents.
-- **One source of truth.** Shared review procedure lives in `fx-review`; adapters describe only their own tool's mechanics. A copied rule is a rule that will drift, and the stale copy is reliably the narrower one.
+- **One source of truth.** Shared review procedure lives in `fx-review`; its per-tool references (and `resolve-pr-feedback`'s per-source references) describe only their own tool's mechanics. A copied rule is a rule that will drift, and the stale copy is reliably the narrower one.
 - **Prefer `references/`** over inflating `SKILL.md`. The body is always in context; references are read on demand.
 
 ## Specs and duvet

@@ -21,16 +21,16 @@ reports nothing to do and the merge gate stays unsatisfiable.
 
 ## Configured
 
-Copilot review is mandatory (`copilot-review`), so it is always configured and is
+Copilot review is mandatory (`fx-review` → `references/copilot.md`), so it is always configured and is
 never reported `not configured`. With no Copilot review of the head, report
 `configured, no report on head <sha>`: next action "request and wait for Copilot
-on `<sha>`" — `copilot-review` Steps 1–2, never this skill.
+on `<sha>`" — `fx-review` → `references/copilot.md` Steps 1–2, never this skill.
 
 ## Read the verdict of the current head's reviews
 
 The verdict headline decides whether there is work: *Approval recommended* and
 *Needs a closer look* both pass when no Copilot threads are open; *Changes
-recommended* means work through its threads (`copilot-review` § Reading
+recommended* means work through its threads (`fx-review` → `references/copilot.md` § Reading
 Copilot's Verdict). Read every Copilot review **of the current head commit** —
 scope by `commit_id`, or after a push you read the previous commit's verdict and
 record a check as satisfied for code that review never covered:
@@ -50,10 +50,10 @@ Empty output means **no Copilot review covers the head** — unreviewed, not
 clean. This reads every review of that commit, not `| last`: two reviews of one
 commit are routine. Confirm the command succeeded before reading silence; an
 empty result from a failed fetch looks exactly like a review with an empty body.
-Where the caller has a `copilot-review` waiter log, it already prints these bodies.
+Where the caller has a Copilot waiter log, it already prints these bodies.
 
 A `Suppressed comments` block in the review body opens no thread and is ignored
-by default (`copilot-review` **D4**). An absolutely-dire suppressed item that is
+by default (`fx-review` → `references/copilot.md` **D4**). An absolutely-dire suppressed item that is
 acted on has no thread to settle — record its outcome in the commit message or
 PR body.
 
@@ -107,7 +107,7 @@ literal `null`, which then gets compared against a SHA — an unreviewed head
 presented as a concrete-looking value instead of an obvious absence.
 
 "Received" is the only test — never "was requested": the request API is inert, so
-whether a request happened is not a determinable fact (`copilot-review` **D1**).
+whether a request happened is not a determinable fact (`fx-review` → `references/copilot.md` **D1**).
 Branch on the `COPILOT_COVERAGE=` line: `unknown` is a failed read — retry once,
 then hand it back — never `not-covered`. Report Copilot as exactly one:
 
@@ -116,10 +116,10 @@ then hand it back — never `not-covered`. Report Copilot as exactly one:
   block never makes it otherwise.
 - **Threads settled, re-review due** — this round pushed `<sha>`. Copilot does not
   re-review a push on its own: next action "request and wait for Copilot on
-  `<sha>`" (`copilot-review` Step 5 → Steps 1–2; `dev` 6.3 per-reviewer step 4).
+  `<sha>`" (`fx-review` → `references/copilot.md` Step 5 → Steps 1–2; `dev` 6.3 per-reviewer step 4).
 - **`configured, no report on head <sha>`** — not covered, whether Copilot never
   reviewed this head or reviewed only an older one: the same next action. Copilot
   is mandatory, so this is never clean.
 - **Hand-back** — the caller's waiter ended `PENDING` again or `ERROR`
-  (`copilot-review`'s `PENDING` row: "Copilot review has not arrived for head
+  (`fx-review` → `references/copilot.md`'s `PENDING` row: "Copilot review has not arrived for head
   `<sha>`"), or the thread count stayed unreadable after one retry.
