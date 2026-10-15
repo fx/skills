@@ -38,18 +38,27 @@ echo "$pid" > "$dir/server.pid"
 
 ## Stop it
 
-**TERM the group, wait a bounded time, then KILL.** The leading `-` addresses the process group; `--` keeps `kill` from reading `-<pid>` as a signal name.
+**TERM the group, wait a bounded time, then KILL — and fail if it is still there.** The leading `-` addresses the process group; `--` keeps `kill` from reading `-<pid>` as a signal name.
 
 ```bash
-pid=$(cat "$dir/server.pid")
+pid=$(cat "$dir/server.pid") || exit 1
 kill -TERM -- "-$pid" 2>/dev/null
 for i in $(seq 1 10); do
   kill -0 -- "-$pid" 2>/dev/null || break
   sleep 0.5
 done
-kill -0 -- "-$pid" 2>/dev/null && kill -KILL -- "-$pid"
+if kill -0 -- "-$pid" 2>/dev/null; then
+  kill -KILL -- "-$pid"
+  sleep 0.5
+fi
+if kill -0 -- "-$pid" 2>/dev/null; then
+  echo "process group $pid still running" >&2
+  exit 1
+fi
 rm -f "$dir/server.pid"
 ```
+
+The pid file is removed only once the group is confirmed gone; a stop that cannot finish exits 1 and keeps the PID you need for the next attempt.
 
 For a single process, not a group, drop the `-` in front of `$pid`.
 

@@ -64,8 +64,14 @@ for i in $(seq 1 30); do
   kill -0 "$pid" 2>/dev/null || break
   sleep 2
 done
-"$ready" || { echo "server not ready"; tail -n 20 "$dir/server.log"; }
+if ! "$ready"; then
+  echo "server not ready" >&2
+  tail -n 20 "$dir/server.log" >&2
+  exit 1
+fi
 ```
+
+`exit 1` ends the whole command with a failing status, so nothing after the poll runs and the failure is visible; inside a function, use `return 1` instead. Never end a failure branch on its diagnostic (`echo`, `tail`) — that branch then exits 0 and the gate passes.
 
 - **The condition is the state you need** — a ready line in the log, an HTTP 2xx, a resource reporting `Ready` — never "the process is gone". Waits on real state were the ones observed finishing in under a minute.
 
@@ -85,7 +91,7 @@ The full bash / zsh / fish table: `references/dialects.md`.
 
 **A pipeline reports the status of its last command.** `make test | tail -20` exits 0 when the tests fail, and when the call times out it shows nothing at all, because `tail` prints only at the end.
 
-- **Redirect to a log, then read it:** `make test > "$dir/test.log" 2>&1; echo "exit=$?"; tail -n 40 "$dir/test.log"`.
+- **Redirect to a log, then read it:** `make test > "$dir/test.log" 2>&1; rc=$?; tail -n 40 "$dir/test.log"; exit "$rc"` — the `tail` is for you, the status is the command's.
 - **When you must pipe**, `set -o pipefail` or read `PIPESTATUS` (bash) / `pipestatus` (zsh). Under `pipefail`, a producer that `head` cut off exits 141 (SIGPIPE) — that is `head` closing early, not a failure.
 - **Cap what you read.** `head -n`, `grep -m`, `cut -c1-200`; read big files in slices (`sed -n '200,260p'`). A dump of tens of kilobytes costs the context of everything that follows it.
 
