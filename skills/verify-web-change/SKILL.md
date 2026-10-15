@@ -328,19 +328,21 @@ echo "Dev server started (PID and process group: $DEV_PID)"
 
 #### 4.7 Wait for Server to be Ready
 
-**Do NOT use a fixed sleep.** Poll until the server responds:
+**Do NOT use a fixed sleep.** Poll until the server answers 2xx/3xx. If it never does, this step stops the server's process group and fails — do not go on to Step 5 against a server that is not ready. `curl -f` is what makes a 500 count as not ready; plain `curl -s` exits 0 on any HTTP response.
 
 ```bash
 DEV_PID=$(cat "$VERIFY_DIR/dev-server.pid")
 echo "Waiting for server at http://localhost:$PORT..."
+READY=false
 for i in $(seq 1 30); do
-    if curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT" 2>/dev/null | grep -qE '^[23]'; then
+    if curl -fsS -o /dev/null "http://localhost:$PORT" 2>/dev/null; then
         echo "Server is ready! (attempt $i)"
+        READY=true
         break
     fi
 
-    # Check if the process died
-    if ! kill -0 "$DEV_PID" 2>/dev/null; then
+    # Check if the dev server's process group died
+    if ! kill -0 -- "-$DEV_PID" 2>/dev/null; then
         echo "❌ Dev server exited unexpectedly. Last output:"
         tail -20 "$VERIFY_DIR/dev-server.log"
         exit 1
@@ -350,11 +352,18 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
-# Final readiness check
-if ! curl -s -o /dev/null "http://localhost:$PORT" 2>/dev/null; then
-    echo "⚠️  Server may not be ready. Last output:"
-    tail -10 "$VERIFY_DIR/dev-server.log"
-    echo "Proceeding anyway — Playwright navigate may trigger lazy startup."
+if ! "$READY"; then
+    echo "❌ Server not ready after 30 attempts:"
+    curl -fsS -o /dev/null "http://localhost:$PORT" || true
+    echo "Last output (log kept at $VERIFY_DIR/dev-server.log):"
+    tail -20 "$VERIFY_DIR/dev-server.log"
+    kill -TERM -- "-$DEV_PID" 2>/dev/null
+    for i in $(seq 1 10); do
+        kill -0 -- "-$DEV_PID" 2>/dev/null || break
+        sleep 0.5
+    done
+    kill -KILL -- "-$DEV_PID" 2>/dev/null
+    exit 1
 fi
 ```
 
@@ -388,7 +397,7 @@ If critical errors exist, report them and investigate.
 
 Confirm the application loads and shows expected content. If it doesn't load:
 - Check dev server logs: `tail -30 "$VERIFY_DIR/dev-server.log"`
-- Check if server process is still running: `kill -0 "$(cat "$VERIFY_DIR/dev-server.pid")" 2>/dev/null && echo "running" || echo "dead"`
+- Check if server process is still running: `kill -0 -- "-$(cat "$VERIFY_DIR/dev-server.pid")" 2>/dev/null && echo "running" || echo "dead"`
 - Check console for errors
 - Check network requests for failures
 

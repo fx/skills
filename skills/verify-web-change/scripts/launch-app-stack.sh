@@ -12,8 +12,9 @@
 #   Detected port printed to stdout
 #
 # Exit codes:
-#   0 - Stack launched successfully
-#   1 - Failed to launch stack
+#   0 - Stack launched and the dev server answered 2xx/3xx
+#   1 - Failed to launch stack, or the dev server never became ready
+#       (its process group is stopped; the log stays in $VERIFY_DIR)
 
 set -e
 
@@ -245,6 +246,16 @@ install_dependencies() {
 
 # --- Server startup and readiness ---
 
+stop_dev_server() {
+    local pid="$1"
+    kill -TERM -- "-$pid" 2>/dev/null || true
+    for i in $(seq 1 10); do
+        kill -0 -- "-$pid" 2>/dev/null || return 0
+        sleep 0.5
+    done
+    kill -KILL -- "-$pid" 2>/dev/null || true
+}
+
 wait_for_server() {
     local port="$1"
     local pid="$2"
@@ -253,13 +264,14 @@ wait_for_server() {
     echo "[Server] Waiting for http://localhost:$port..."
 
     for i in $(seq 1 $max_attempts); do
-        if curl -s -o /dev/null -w '%{http_code}' "http://localhost:$port" 2>/dev/null | grep -qE '^[23]'; then
+        # -f: an HTTP error such as 500 is not ready
+        if curl -fsS -o /dev/null "http://localhost:$port" 2>/dev/null; then
             echo "[Server] Ready! (attempt $i)"
             return 0
         fi
 
-        # Check if the process died
-        if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+        # Check if the dev server's process group died
+        if [[ -n "$pid" ]] && ! kill -0 -- "-$pid" 2>/dev/null; then
             echo "[Server] ❌ Process exited unexpectedly. Last output:"
             tail -20 "$VERIFY_DIR/dev-server.log" 2>/dev/null || true
             return 1
@@ -269,10 +281,12 @@ wait_for_server() {
         sleep 2
     done
 
-    echo "[Server] ⚠️  Server may not be ready after ${max_attempts} attempts."
-    echo "[Server] Last output:"
-    tail -10 "$VERIFY_DIR/dev-server.log" 2>/dev/null || true
-    return 0  # Proceed anyway — Playwright navigate may trigger lazy startup
+    echo "[Server] ❌ Not ready after ${max_attempts} attempts:"
+    curl -fsS -o /dev/null "http://localhost:$port" 2>&1 || true
+    echo "[Server] Last output (log kept at $VERIFY_DIR/dev-server.log):"
+    tail -20 "$VERIFY_DIR/dev-server.log" 2>/dev/null || true
+    stop_dev_server "$pid"
+    return 1
 }
 
 # --- Main execution ---
