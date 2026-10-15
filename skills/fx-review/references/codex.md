@@ -60,8 +60,12 @@ prompt, in this order:
 
 ```bash
 # Write the brief to a file, then hand the FILE to the script. Never invoke
-# `codex review` directly — see "Running it" below.
-cat > /tmp/scope-prompt.md <<'PROMPT'
+# `codex review` directly — see "Running it" below. <branch> is the current
+# branch with every `/` replaced by `-`: one prompt file per branch, next to the
+# review log, because `team` runs this review on several branches at once and a
+# fixed path would be shared by all of them.
+mkdir -p [AGENT_DIR]/team/waits && \
+cat > [AGENT_DIR]/team/waits/codex-prompt-<branch>.md <<'PROMPT'
 SCOPE — READ CAREFULLY BEFORE REVIEWING.
 
 The user asked: "<verbatim request>"
@@ -162,10 +166,8 @@ Do not wait it out:
 **Confirm it from the log, per
 `[SKILLS_DIR]/dev/references/background-waits.md` § When a wait seems hung.** That
 section owns this check and is the only place it is written down — the two answer
-the same question and must not diverge again. A process check belongs nowhere in
-this diagnosis: one stood here, self-matched, and spun for 13 minutes after the
-reviewed process had already finished (`background-waits.md` § Never invent your
-own wait).
+the same question and must not diverge again. Never check by process pattern
+(`[SKILLS_DIR]/shell/SKILL.md` § Wait on the thing itself).
 
 ```bash
 # Find its last action — the newest rollout records every step.
@@ -184,7 +186,8 @@ invocation, and the `AGENTS.md` pointer check, so none of them can be
 half-remembered:
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
-bash [SKILLS_DIR]/fx-review/scripts/run-codex-review.sh /tmp/scope-prompt.md \
+bash [SKILLS_DIR]/fx-review/scripts/run-codex-review.sh \
+  [AGENT_DIR]/team/waits/codex-prompt-<branch>.md \
   > [AGENT_DIR]/team/waits/codex-review.log 2>&1
 ```
 
@@ -202,10 +205,11 @@ review (highest-risk first) to stdout. It never modifies your working tree.
 **⛔ Run it as a long wait** (`[SKILLS_DIR]/dev/references/host-adapters.md`
 § Long waits) — on Claude Code, `run_in_background: true` and let the completion
 notification wake you — **and never hand-roll the wait**:
-`[SKILLS_DIR]/dev/references/background-waits.md` holds the rule in full,
-including the self-matching `pgrep -f` loop that has deadlocked a run for 49
-minutes. Codex is a worse case than most: a review of a real branch takes many
-minutes and `codex` buffers, so the capture file stays empty until it finishes.
+`[SKILLS_DIR]/dev/references/background-waits.md` holds the rule in full, and
+never wait on a process pattern
+(`[SKILLS_DIR]/shell/SKILL.md` § Wait on the thing itself). Codex is a worse
+case than most: a review of a real branch takes many minutes and `codex`
+buffers, so the capture file stays empty until it finishes.
 
 ### Read the `STATUS=` line
 
@@ -265,7 +269,8 @@ The script applies these defaults itself. Override per run via env:
 
 ```bash
 CODEX_REVIEW_MODEL=gpt-5.6-terra CODEX_REVIEW_EFFORT=high \
-  bash [SKILLS_DIR]/fx-review/scripts/run-codex-review.sh /tmp/scope-prompt.md
+  bash [SKILLS_DIR]/fx-review/scripts/run-codex-review.sh \
+  [AGENT_DIR]/team/waits/codex-prompt-<branch>.md
 ```
 
 **Default to `gpt-5.6-terra` at `medium`** — roughly a tenth of the wall clock of

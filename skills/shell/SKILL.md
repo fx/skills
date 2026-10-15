@@ -40,7 +40,7 @@ pid=$!
 
 ## Wait on the thing itself
 
-**Never wait on a process pattern.** `until ! pgrep -f '<runner> eval --filter <x>'; do sleep 15; done` matched its own shell and ran 23.3 hours; `until ! ssh <host> 'pgrep -f <mover> >/dev/null'; do sleep 60; done` ran 4.2 hours, because the remote shell matched too.
+**Never wait on a process pattern.** `until ! pgrep -f '<runner> eval --filter <x>'; do sleep 15; done` matched its own shell and ran 23.3 hours; `until ! ssh <host> 'pgrep -f <mover> >/dev/null'; do sleep 60; done` ran 4.2 hours, because the remote shell matched too. A process check written into a stalled-review diagnosis self-matched and spun 13 minutes after the review it watched had finished.
 
 An external completion — a reviewer, CI, a long script that reports through a log — follows `[SKILLS_DIR]/dev/references/background-waits.md`. Inside one command, a poll that gates the next line must be bounded, must check that the producer is still alive, and must fail when the gate fails:
 
