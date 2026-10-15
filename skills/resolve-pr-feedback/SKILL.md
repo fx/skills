@@ -88,7 +88,7 @@ Skill tool: skill="resolve-pr-feedback",
 
 | Reviewer | Author logins — exact, GraphQL / REST | Reference |
 |---|---|---|
-| GitHub Copilot | `copilot-pull-request-reviewer` / `copilot-pull-request-reviewer[bot]` — **never** the bare `Copilot`, which matches nothing | `references/copilot.md` |
+| GitHub Copilot | `copilot-pull-request-reviewer` / `copilot-pull-request-reviewer[bot]` — **never** the bare `Copilot` on GraphQL threads or REST `/reviews`, where it matches nothing (the REST review-comments endpoint does report `Copilot`; categorise threads via GraphQL) | `references/copilot.md` |
 | CodeRabbit | `coderabbitai` / `coderabbitai[bot]` | `references/coderabbit.md` |
 | Codecov | `codecov` / `codecov[bot]`, and `codecov-commenter` | `references/codecov.md` |
 

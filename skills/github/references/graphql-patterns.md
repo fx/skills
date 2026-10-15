@@ -129,7 +129,7 @@ gh api graphql -f query='
 ### Count Unresolved Bot Review Threads
 
 ```bash
-# Filter by bot author (e.g., copilot-pull-request-reviewer, github-copilot[bot])
+# Filter by bot author (e.g., copilot-pull-request-reviewer; REST /reviews reports copilot-pull-request-reviewer[bot])
 gh api graphql -f query='
   query($owner: String!, $repo: String!, $pr: Int!) {
     repository(owner: $owner, name: $repo) {
@@ -154,16 +154,17 @@ gh api graphql -f query='
 ```
 
 **⛔ That count is only valid on a PR you already know fits in one page, and it is
-the wrong shape for a gate.** The `--jq` consumes the response `pageInfo` would
-have arrived in — which is what `--paginate` reads the next cursor from, and why
-`gh` forbids the two together — and the `length` is taken per page. Any count a
+the wrong shape for a gate.** It reads one page: it selects no `pageInfo` and
+does not `--paginate`. Adding `--paginate` does not fix it — `gh` then runs the
+`--jq` once per page and prints one `length` per page (verified, gh 2.102.0);
+`gh` refuses `--jq` only together with `--slurp`. Any count a
 decision rests on uses § Pagination Pattern instead: accumulate `nodes` across all
 pages first, then filter, then count.
 
 ### Get All Bot Review Comments
 
 ```bash
-# Filter by bot author (e.g., copilot-pull-request-reviewer, github-copilot[bot])
+# Filter by bot author (e.g., copilot-pull-request-reviewer; REST /reviews reports copilot-pull-request-reviewer[bot])
 gh api graphql -f query='
   query($owner: String!, $repo: String!, $pr: Int!) {
     repository(owner: $owner, name: $repo) {
@@ -192,9 +193,9 @@ gh api graphql -f query='
   --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.nodes[0].author.login == "copilot-pull-request-reviewer")'
 ```
 
-**"All" is the filter's intent, not what this call returns.** It shows one page,
-and its `--jq` consumes the response `pageInfo` would have arrived in — the field
-`--paginate` needs to reach page 2. To actually enumerate every bot comment,
+**"All" is the filter's intent, not what this call returns.** It shows one page:
+it selects no `pageInfo` and does not `--paginate`, and a `--paginate`d `--jq`
+would filter page by page. To actually enumerate every bot comment,
 accumulate with § Pagination Pattern and apply this `select` to `ALL_THREADS`.
 
 ## Batch Operations

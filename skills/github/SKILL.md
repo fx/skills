@@ -509,11 +509,12 @@ gh api graphql -f query='
 gh pr view 13
 
 # Get specific fields as JSON
-gh pr view 13 --json title,body,state,reviewThreads
-
-# Filter with jq
-gh pr view 13 --json reviewThreads --jq '.reviewThreads[] | select(.isResolved == false)'
+gh pr view 13 --json title,body,state
 ```
+
+`gh pr view --json` has no `reviewThreads` field (`Unknown JSON field`, gh 2.102.0).
+Read review threads through GraphQL with `references/graphql-patterns.md`
+§ Pagination Pattern.
 
 ## Copilot Review Management
 
@@ -521,7 +522,7 @@ GitHub Copilot can automatically review pull requests. This section covers how t
 
 ### Key Facts
 
-- **Copilot username**: `copilot-pull-request-reviewer` (GraphQL) or `copilot-pull-request-reviewer[bot]` (REST API)
+- **Copilot username**: `copilot-pull-request-reviewer` (GraphQL) or `copilot-pull-request-reviewer[bot]` (REST `/reviews`). The REST review-comments endpoint (`/pulls/N/comments`) reports `Copilot` instead; categorise threads through GraphQL
 - **Review state**: Copilot only leaves `COMMENTED` state reviews, never `APPROVED` or `CHANGES_REQUESTED`
 - **Reviews are per-commit**: each review carries a `commit_id`. A review of an earlier commit says nothing about the current head.
 - **Pushing does NOT re-trigger a review** unless the repo's ruleset enables "Review new pushes". Assume it does not.

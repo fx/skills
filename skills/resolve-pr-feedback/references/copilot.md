@@ -14,10 +14,13 @@ A Copilot thread's author is `copilot-pull-request-reviewer` in GraphQL and
 or substring test, which also claims any login that merely begins with it
 (`resolve-pr-feedback` § Supported Reviewers).
 
-**⛔ Never match the bare string `Copilot`.** It appears only in
-`requested_reviewers`, which is always empty, so matching on it categorises
-**zero** Copilot threads on every PR — real threads stay open while the run
-reports nothing to do and the merge gate stays unsatisfiable.
+**⛔ Never match the bare string `Copilot`** on GraphQL threads or REST
+`/reviews`. Neither reports it, so matching on it categorises **zero** Copilot
+threads on every PR — real threads stay open while the run reports nothing to do
+and the merge gate stays unsatisfiable. `Copilot` does appear in
+`requested_reviewers`, which is always empty, and as `user.login` on the REST
+review-comments endpoint (`/pulls/N/comments`); categorise threads through
+GraphQL, never from that endpoint.
 
 ## Configured
 
