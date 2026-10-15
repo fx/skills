@@ -831,7 +831,7 @@ Then branch on the trailing `STATUS=` line:
 | STATUS | Exit | What to do |
 |---|---|---|
 | `TERMINAL_PASS` | 0 | Every check completed, none failed → **proceed to Step 7.2** for the Codecov assessment; Step 8 once it returns nothing to fix |
-| `TERMINAL_FAIL` | 1 | Every check completed, at least one failed → **proceed to Step 7.2** |
+| `TERMINAL_FAIL` | 1 | Every check completed, at least one failed or was cancelled (`CHECKS_CANCELLED=`) → **proceed to Step 7.2** |
 | `PENDING` | 2 | Still running at budget expiry. Not a verdict. Re-run once to keep waiting; `PENDING` again on that re-run → report the wait as unfinished and STOP — a hand-back to the user, never Step 7.2. **Never** record it as "CI passed". |
 | `NOT_CONFIGURED` | 3 | No checks appeared within the discovery grace — this PR has no CI configured. **This is NOT a pass**: a merge gate requiring green CI is not satisfied by the absence of CI. **Proceed to Step 7.2** all the same: its CI reference runs § Conflict check — a conflicting PR shows exactly this status — and reports "no CI ran on head" otherwise, and its Codecov reference classifies a configured Codecov that therefore never reported. Then report it and confirm against branch protection. |
 | `ERROR` | 4 | Bad arguments, `gh` unauthenticated, or the checks API could not be read → report and STOP — a hand-back to the user, never Step 7.2. A failed read is not "no checks". |
