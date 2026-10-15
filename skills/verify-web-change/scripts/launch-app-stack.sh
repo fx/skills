@@ -211,14 +211,44 @@ start_compose_services() {
 
 # --- Environment files ---
 
-check_env_files() {
-    for tmpl in .env.example .env.template .env.sample; do
-        if [[ -f "$tmpl" ]] && [[ ! -f ".env" ]] && [[ ! -f ".env.local" ]]; then
-            echo "[Env] Found $tmpl but no .env or .env.local — copying to .env"
-            cp "$tmpl" .env
-            return
-        fi
+# Print the first component of a relative path that is a symlink, if any. `-f`, `-e`
+# and `cp` all follow a link silently, so a path is tested component by component
+# with `-L` before anything reads or writes through it.
+symlink_on_path() {
+    local acc="" c
+    local -a parts
+    IFS='/' read -ra parts <<< "$1"
+    for c in "${parts[@]}"; do
+        [[ -z "$c" || "$c" == . ]] && continue
+        acc=${acc:+$acc/}$c
+        if [[ -L "$acc" ]]; then printf '%s' "$acc"; return 0; fi
     done
+    return 1
+}
+
+# ⛔ NEVER COPY THROUGH A SYMLINK. A dangling `.env` link passes `! -f .env`, and
+# `cp` then writes the template wherever the link points — outside the repository
+# (BSD cp, or GNU cp under POSIXLY_CORRECT) — or, with GNU cp's default refusal,
+# fails and aborts this `set -e` launch. A linked template would copy a file from
+# outside the repository into `.env`. Either way: one line, no copy, and the launch
+# continues.
+check_env_files() {
+    local link
+    if link=$(symlink_on_path .env); then
+        echo "[Env] .env is a symlink ($link); not copying a template through it."
+    elif [[ ! -f ".env" ]] && [[ ! -f ".env.local" ]]; then
+        for tmpl in .env.example .env.template .env.sample; do
+            if link=$(symlink_on_path "$tmpl"); then
+                echo "[Env] $tmpl is a symlink ($link); not copying it to .env."
+                continue
+            fi
+            if [[ -f "$tmpl" ]]; then
+                echo "[Env] Found $tmpl but no .env or .env.local — copying to .env"
+                cp "$tmpl" .env
+                return
+            fi
+        done
+    fi
 
     if [[ -f ".env.local" ]] || [[ -f ".env" ]] || [[ -f ".env.development" ]]; then
         echo "[Env] Environment file found."
