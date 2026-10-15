@@ -256,10 +256,12 @@ review.**
   and `.coderabbit.yaml`, and burying one review rule in a large unrelated diff is
   not an acceptable change. Where `REVIEW.md` exists,
   `.github/copilot-instructions.md` is obsolete: never edit it there either.
-- **Keep `REVIEW.md`'s top section under 4000 characters.** Copilot reads roughly
-  the first 4000 when reviewing, and every reviewer takes the file verbatim, where
-  length dilutes the rules that matter. Put the most important rules in a
-  `## PR Review Checklist (CRITICAL)` section at the top.
+- **Keep `REVIEW.md` focused and put the critical section first.** Every reviewer
+  takes the file verbatim, where length dilutes the rules that matter, and GitHub's
+  current guidance for Copilot is to keep an instruction file under about 1,000
+  lines. Put the most important rules in a `## PR Review Checklist (CRITICAL)`
+  section at the top. The old "first ~4000 characters" limit is not in GitHub's
+  current English docs; do not trim rules to meet it.
 - **`REVIEW.md` is pasted verbatim**, and so is every review-rules file: `@` imports
   are not expanded and referenced files are not read. Write the rule out in full;
   never write `See docs/…`.

@@ -10,7 +10,7 @@ is pasted verbatim into reviewer prompts — write rules out in full, never
 reference another file.
 
 ## PR Review Checklist (CRITICAL)
-<!-- KEEP THIS SECTION UNDER 4000 CHARS - Copilot only reads the first ~4000 -->
+<!-- Keep this section focused and first: the highest-value rules lead the file. -->
 
 ### Security and Privacy
 
