@@ -381,9 +381,35 @@ fi
 #
 # Without the pointer, the rules still reach Codex for THIS run: REVIEW.md is
 # PREPENDED to the scope prompt, so the prompt still ends with the BLOCKING block,
-# which fx-review requires to be its last part. Nothing on disk changes. Only an
-# unreadable or empty REVIEW.md falls back to reviewing on defaults.
-BRIDGE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+# which fx-review requires to be its last part. Nothing on disk changes. A
+# REVIEW.md that is unreadable, empty, not a regular file, or reached through a
+# symlink falls back to reviewing on defaults.
+#
+# ⛔ NEVER READ IT THROUGH A SYMLINK. The prompt leaves this machine: a REVIEW.md
+# that is a link — or sits under a linked directory — would paste a file from
+# outside the repository into it. `-f` and `cat` follow a link at any component
+# silently, so every component below the root is tested with `-L` first; the same
+# rule fx-setup's check-docs-layout.sh `safe()` applies to instruction files.
+BRIDGE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
+
+# Print why <root>/<rel> must not be read and return 1, or return 0 when it is a
+# regular file that no component below <root> reaches through a symlink.
+unsafe_repo_file() {
+    local acc="$1" rel="$2" c
+    local -a parts
+    IFS='/' read -ra parts <<< "$rel"
+    for c in "${parts[@]}"; do
+        [[ -z "$c" || "$c" == . ]] && continue
+        acc="$acc/$c"
+        if [[ -L "$acc" ]]; then
+            if [[ "$acc" == "$1/$rel" ]]; then echo "$rel is a symlink"
+            else echo "$rel lies under the symlink ${acc#"$1"/}"; fi
+            return 0
+        fi
+    done
+    if [[ ! -f "$acc" ]]; then echo "$rel is not a regular file"; return 0; fi
+    return 1
+}
 if [[ ! -e "$BRIDGE_ROOT/REVIEW.md" && ! -L "$BRIDGE_ROOT/REVIEW.md" ]]; then
     echo "REVIEW.md: absent — nothing to bridge; Codex reviews on AGENTS.md and the scope prompt."
 elif grep -q "## Code Review Rules" "$BRIDGE_ROOT/AGENTS.md" 2>/dev/null; then
@@ -391,7 +417,10 @@ elif grep -q "## Code Review Rules" "$BRIDGE_ROOT/AGENTS.md" 2>/dev/null; then
 else
     echo "WARNING: REVIEW.md exists but AGENTS.md has no '## Code Review Rules' section."
     review_rules=""
-    if [[ -r "$BRIDGE_ROOT/REVIEW.md" ]]; then
+    skip_reason="REVIEW.md could not be read or is empty"
+    if why=$(unsafe_repo_file "$BRIDGE_ROOT" REVIEW.md); then
+        skip_reason="REVIEW.md not read (${why}; never read through a link)"
+    elif [[ -r "$BRIDGE_ROOT/REVIEW.md" ]]; then
         review_rules=$(cat "$BRIDGE_ROOT/REVIEW.md" 2>/dev/null) || review_rules=""
     fi
     if [[ -n "${review_rules//[[:space:]]/}" ]]; then
@@ -404,7 +433,7 @@ else
         echo "         The pointer is fx-upgrade's M1.4, applied when the user asks for it —"
         echo "         not from this review."
     else
-        echo "         REVIEW.md could not be read or is empty, so Codex reviews on defaults."
+        echo "         ${skip_reason} — not prepended; Codex reviews on defaults."
         echo "         If Codex flags something REVIEW.md explicitly permits, this is why:"
         echo "         say so rather than silently applying the finding."
     fi

@@ -30,12 +30,17 @@ is a `## Code Review Rules` section in `AGENTS.md` pointing at `REVIEW.md`, whic
 `REVIEW.md` → there is nothing to bridge, and it prints one informational line
 with no remediation; `REVIEW.md` without the pointer → a warning naming
 `fx-upgrade`'s M1.4, and the script prepends `REVIEW.md` to the scope prompt for
-that run (`REVIEW.md: prepended to the scope prompt …`; an unreadable or empty
-file falls back to defaults) — report the missing pointer with the
-instruction-layer block from `fx-setup` → `references/adoption.md` § Report
-(never run `fx-setup` or `fx-upgrade` from here; `fx-review` Step 6 explains why);
-pointer present → its `present` line and nothing more. Prepending keeps the
-BLOCKING block the prompt's last part, and nothing on disk changes.
+that run (`REVIEW.md: prepended to the scope prompt …`) — report the missing
+pointer with the instruction-layer block from `fx-setup` →
+`references/adoption.md` § Report (never run `fx-setup` or `fx-upgrade` from
+here; `fx-review` Step 6 explains why); pointer present → its `present` line and
+nothing more. Prepending keeps the BLOCKING block the prompt's last part, and
+nothing on disk changes.
+
+The prepend falls back to reviewing on defaults when `REVIEW.md` is unreadable or
+empty, and also when it is a symlink, sits under one, or is not a regular file:
+the prompt leaves the machine, so a link must never carry a file from outside the
+repository into it.
 
 If Codex flags something `REVIEW.md` explicitly permits, the pointer is not
 landing — say so rather than silently applying the finding.
