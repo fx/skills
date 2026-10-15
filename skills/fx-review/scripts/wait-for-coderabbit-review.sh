@@ -10,9 +10,10 @@
 #
 # ⛔ RUN THIS IN THE BACKGROUND (`run_in_background: true`), redirecting stdout and
 #    stderr to a log file. The Bash tool caps a FOREGROUND `timeout` at 600 000 ms,
-#    which is BELOW this script's budget — a foreground call is guaranteed to be
-#    killed mid-poll, printing no STATUS and no exit code, which is precisely what
-#    made callers re-run it blindly. Backgrounded processes are not subject to that
+#    which is BELOW this script's budget — a foreground call returns before the
+#    script finishes, with no STATUS line: Claude Code 2.1.296 moves it to the
+#    background at the cap; older versions killed it mid-poll (exit 143).
+#    The kill is what made callers re-run it blindly. Backgrounded processes are not subject to that
 #    cap.
 #    Headless sessions are the one exception — nothing can wake the caller there,
 #    so it runs this in the FOREGROUND with TIMEOUT_SECONDS below that cap and

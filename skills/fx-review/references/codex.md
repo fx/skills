@@ -61,8 +61,8 @@ prompt, in this order:
 ```bash
 # Write the brief to a file, then hand the FILE to the script. Never invoke
 # `codex review` directly — see "Running it" below. <branch> is the current
-# branch with every `/` replaced by `-`: one prompt file per branch, next to the
-# review log, because `team` runs this review on several branches at once and a
+# branch with every `/` replaced by `-`: one prompt file and one review log per
+# branch, because `team` runs this review on several branches at once and a
 # fixed path would be shared by all of them.
 mkdir -p [AGENT_DIR]/team/waits && \
 cat > [AGENT_DIR]/team/waits/codex-prompt-<branch>.md <<'PROMPT'
@@ -188,7 +188,7 @@ half-remembered:
 mkdir -p [AGENT_DIR]/team/waits && \
 bash [SKILLS_DIR]/fx-review/scripts/run-codex-review.sh \
   [AGENT_DIR]/team/waits/codex-prompt-<branch>.md \
-  > [AGENT_DIR]/team/waits/codex-review.log 2>&1
+  > [AGENT_DIR]/team/waits/codex-review-<branch>.log 2>&1
 ```
 
 Write the scope prompt (built as below) to a file and pass its path, or pass `-`
