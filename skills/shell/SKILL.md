@@ -34,6 +34,7 @@ pid=$!
 ```
 
 - **Never `( … &)`, `nohup`, `setsid` or `disown` without keeping the PID** — `( … &)` loses `$!` inside the subshell.
+- **A launch the host already backgrounds gets no `&`, `nohup` or `disown` of its own.** `&` hands back the wrapper's status in milliseconds — observed read as a finished review over a truncated log; `disown` drops the job, so `wait` returns 0 at once even for a live or failed job (reproduced); `nohup` does nothing once output is redirected. The wait rules around it are `[SKILLS_DIR]/dev/references/background-waits.md`'s.
 - **A launcher that forks** (`npm run dev`, an `sh -c` wrapper) leaves the server as a child of the PID you kept; killing only that PID orphans the server. Start it in its own process group and stop the group (`references/process-control.md`).
 - **Stop what you started before you report done.** Dev servers have been left running for up to 32 hours.
 

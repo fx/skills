@@ -476,7 +476,7 @@ Dev Server Logs: [relevant lines from /tmp/dev-server.log]
 
 ### Step 8: Cleanup
 
-Stop processes using tracked PIDs — do NOT use greedy pkill patterns:
+Stop processes by their tracked PIDs, per the `shell` skill § Stop a process by PID or through what owns it, never by pattern:
 
 ```bash
 # Kill dev server by PID
