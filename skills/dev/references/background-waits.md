@@ -66,9 +66,7 @@ until ! pgrep -f 'codex review -c' >/dev/null 2>&1; do sleep 15; done
 
 `pgrep -f` matches against **full command lines**, and the watching shell's own command line contains the literal `codex review -c`. The pattern matches the watcher, `pgrep` always succeeds, the `until` condition is never true, and the loop spins long after the real process exited and wrote its output. Nothing errors and nothing is logged; the wait simply never ends.
 
-The trap is general: **any** `pgrep -f`, `ps | grep`, or `pkill -f` whose pattern appears in its own invocation self-matches.
-
-**Do not reach for a "safer" process check — there isn't one.** `pgrep -x <name>` drops the self-match but cannot tell your run from any other process of the same name. `pgrep -f <pattern> | grep -v $$` is worse: it filters PID *text* by substring (so `$$` of `123` also drops `1234`), and it removes only the current shell, leaving any parent or wrapper whose command line contains the pattern to keep the check true. Either one can recreate the very wait this section exists to prevent.
+The trap is general. **Do not reach for a "safer" process check — there isn't one**; the `shell` skill's `references/process-control.md` § Why a pattern matches its own shell holds the mechanics and why each variant fails.
 
 **The output file is the signal** — a finished run is a log that has stopped growing, with a `STATUS`/summary at its tail. Read it when the wait resolves.
 
