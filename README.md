@@ -60,13 +60,13 @@ The same treatment for the host's *own* per-repo directory, where the workflow s
 
 Skills install flat: `skills/<name>/` becomes `<agent>/skills/<name>/`, and the directory name is what you invoke. There is no namespace, so a name matching a host agent's built-in silently shadows it.
 
-Names here are therefore **bare by default, `fx-`-prefixed where a collision is real or likely.** Three currently are:
+Names here are therefore **bare by default, `fx-`-prefixed only where a host agent reserves the bare name.** Three currently carry the prefix:
 
 | Skill | Why |
 |---|---|
 | `fx-review` | Claude Code reserves `review` |
 | `fx-upgrade` | Claude Code reserves `upgrade` |
-| `fx-setup` | Not reserved, but `setup` is generic enough that another catalog will claim it |
+| `fx-setup` | Not reserved — prefixed under an earlier rule; kept to avoid breaking references |
 
 Everything else keeps its plain name. `AGENTS.md` has the avoid-list and the check.
 
