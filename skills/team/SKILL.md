@@ -116,6 +116,8 @@ Before spawning anything, write down the **Scope Brief**. It is what every teamm
 
 **Every implementer prompt, every verify prompt, and every reviewer invocation MUST include this brief verbatim.** A reviewer that does not know what was asked for reports the work the team deliberately did not do, and the coordinator pays for it in filtering time on every PR.
 
+**Run the docs-layout check once for the whole run, now** — `dev` Step 2.5's `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh` — and record its output with the brief; every change's Step 2.5 reuses it rather than re-running it (`fx-setup` → `references/adoption.md` § Running the check).
+
 ### The sprawl STOP rule for autonomous runs
 
 <!--
@@ -224,7 +226,7 @@ Remember each `(worktree path, branch, node_modules symlink)` triple you created
 
 **You loaded `dev` before doing anything else** (First action, above). It is the single source of truth for the development workflow — do not duplicate its instructions here. If you have not loaded it, stop and load it now; nothing below works without it.
 
-For each task (or group of parallel tasks), walk through `dev`'s SDLC steps yourself, Steps 0–8.3, then merge in place of Step 8.4. For each step, decide:
+For each task (or group of parallel tasks), walk through `dev`'s SDLC steps yourself, Steps 0–8.2, then merge in place of Step 8.4. For each step, decide:
 
 1. **Can I handle this step directly?** (e.g., invoking a skill, running a `gh` command, pushing the candidate head from a worktree) → Do it yourself.
 2. **Does this step require writing/modifying code?** → Spawn a focused agent with a single-purpose prompt for just that step. Implementation and fixes go to an implementer, spawned with the template in **Restated here because they did not survive by reference**.
@@ -288,17 +290,17 @@ Two constraints worth knowing rather than rediscovering:
 
 **Implementation steps** (planning, coding, testing) → Spawn focused agents. For any implementer that will run **concurrently** with another, give it an isolated worktree via STEP 2.5 and start its prompt with the worktree preamble — do NOT rely on `isolation: "worktree"` (it's a no-op for teammates; see the prohibition above). Give each agent ONLY its specific job — the change doc path, spec path, plan, and acceptance criteria. Do NOT tell it to follow the full SDLC. Always pass the handle (see above).
 
-**Tracking updates ride in the implementation commit** (`[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head). Every implementer prompt MUST tell it to check off, in the same commit series as the code, the tracking items its own PR completes (`docs/tasks.md`, the change doc's task list). The Status-flip split below is the same rule applied to the one field that must not flip early.
+**Tracking updates ride in the implementation commit** (`[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head). Every implementer prompt MUST tell it to check off, in the same commit series as the code, the tracking items its own PR completes (the tracking doc the approved scope names — in an fx-adopted repo, `docs/tasks.md` or the change doc's task list). The Status-flip split below is the same rule applied to the one field that must not flip early. **Every implementer and fix prompt — the Status-flip ones below included — also carries this line verbatim**, a MIRROR of `fx-setup` → `references/adoption.md` § Who gates on what's write rule kept in step with `dev` Step 4's copy, because the delegate cannot follow a link: "WRITE TARGETS: before writing or creating any tracking, docs or review-rules file, check its path from the repository root down — relative, no `..` component, no component a symlink (ancestors included) — and if any check fails, write nothing to it and report the path."
 
 **A tracking-only commit later in the lifecycle is a defect, not an alternative.** It is not impossible — the recovery path below exists for exactly that — but it costs what this ordering was written to avoid: the push moves the head, so it re-enters at step 7 of § The candidate head and re-spends the hosted-review and CI cycles it invalidated. Treat one as an implementer prompt that was missing this instruction, and fix the prompt for the next PR.
 
-When you spawn the implementer for the FINAL piece of a change, your prompt MUST include: "This is the final implementing PR for <change>. In the same commit, flip `**Status:** draft` → `**Status:** complete` in `docs/changes/<NNNN>-*.md` AND flip `status: draft` → `status: complete` for that change's entry in `docs/index.yml`. Sync `docs/index.md` if present." For every NON-final implementer on the same change, your prompt MUST include: "Leave the change-doc `**Status:**` field and `docs/index.yml` entry untouched — the final PR flips them." This split prevents rebase-conflict storms across multi-PR changes and ensures the final PR carries the Status flip atomically.
+**In an fx-adopted repo** (`dev` Step 2.5 recorded `FX_DOCS=adopted`), when you spawn the implementer for the FINAL piece of a change, your prompt MUST include: "This is the final implementing PR for <change>. In the same commit, flip `**Status:** draft` → `**Status:** complete` in `docs/changes/<NNNN>-*.md` AND flip `status: draft` → `status: complete` for that change's entry in `docs/index.yml`. Sync `docs/index.md` if present." For every NON-final implementer on the same change, your prompt MUST include: "Leave the change-doc `**Status:**` field and `docs/index.yml` entry untouched — the final PR flips them." This split prevents rebase-conflict storms across multi-PR changes and ensures the final PR carries the Status flip atomically. For a native contract document, flip its own status field only if it has one and its convention sets it on implementation, under the same final-PR-only rule; otherwise there is nothing to flip.
 
 **⛔ Every spawn prompt that may open or edit a PR MUST carry the PR conventions block verbatim (BLOCKING).** Load `github` BEFORE you author your first spawn prompt, and paste its **"PR conventions block"** into the prompt of every agent that might run `gh pr create` or `gh pr edit` — a PR preparer, or any other agent you let touch PR metadata. Implementers never do: the Implementer role opens and edits no PR. A convention that lives only in a skill nobody loads does not survive delegation: a spawned agent inherits your prompt, not your skills.
 
-This is not hypothetical. In an observed run, three implementation agents that opened their own PRs all received the TITLE rule — because this skill restates it inline below and gates it at merge — and none received the BODY rule, which lives only in `github`. All three PRs shipped hard-wrapped bodies that render ragged on GitHub, while PRs prepared through `pr-preparer` in the same repo did not. Restating a rule here is what makes it propagate; anything you do not restate or gate, you will not get.
+This is not hypothetical. In an observed run, three implementation agents that opened their own PRs all received the TITLE rule — because this skill restates it inline below and gates it at merge — and none received the BODY rule, which lives only in `github`. All three PRs shipped hard-wrapped bodies that render ragged on GitHub, while PRs whose preparer pasted the `github` PR conventions block, in the same repo, did not. Restating a rule here is what makes it propagate; anything you do not restate or gate, you will not get.
 
-**PR creation** → `dev` Step 5: either do it yourself via `gh pr create`, or spawn a focused PR preparer agent — never an implementer, whose role opens no PR. Only after `dev` Step 4.5 has converged on the branch and Step 4.7 has pushed its candidate head. Load `github` skill first, and pass its PR conventions block into the prompt whenever you delegate. **⛔ Whoever creates the PR — you or an agent you spawned — the `--title` MUST be a conventional-commit subject — `type(scope): description` — matching the canonical regex `^(feat|fix|docs|refactor|chore|test|perf|build|ci|style|revert)(\(.+\))?!?: .+` (see the github skill's "Use Conventional Formats"). Do NOT write a prose title; running `gh pr create` directly does NOT exempt you from the conventional-commit rule. Verify the title against the regex before AND after creation.** (Prose titles the coordinator wrote directly — bypassing pr-preparer — are exactly how non-conventional titles have slipped onto `main`.)
+**PR creation** → `dev` Step 5: either do it yourself via `gh pr create`, or spawn a focused PR preparer agent — never an implementer, whose role opens no PR. Only after `dev` Step 4.5 has converged on the branch and Step 4.7 has pushed its candidate head. Load `github` skill first, and pass its PR conventions block into the prompt whenever you delegate. **⛔ Whoever creates the PR — you or an agent you spawned — the `--title` MUST be a conventional-commit subject — `type(scope): description` — matching the canonical regex `^(feat|fix|docs|refactor|chore|test|perf|build|ci|style|revert)(\(.+\))?!?: .+` (see the github skill's "Use Conventional Formats"). Do NOT write a prose title; running `gh pr create` directly does NOT exempt you from the conventional-commit rule. Verify the title against the regex before AND after creation.** (Prose titles written without the PR conventions block in hand are exactly how non-conventional titles have slipped onto `main`.)
 
 **Review and CI steps** (Copilot review, CodeRabbit review, CI monitoring, feedback resolution) → **Own these as the coordinator: you read the output, you classify, you decide.** They are lightweight skill/command invocations, and the judgment in them is never delegated. On a host whose long waits require a waiter child (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits — Codex), that child does one mechanical thing, running the script and reporting its `STATUS=` line, and it does not classify anything; ownership stays here. **Pass the STEP 0 Scope Brief into every reviewer invocation that accepts one, and apply it when triaging every reviewer that does not** (Copilot and the CodeRabbit GitHub App accept nothing). A finding covered by the brief's out-of-scope list is recorded as deferred with the covering exclusion — never silently fixed, never silently dropped, and never a reason to widen a teammate's PR. Use each reviewer's waiter or read-only inspection first, classify and deduplicate findings under `dev` Step 2.5, then invoke feedback resolvers only for the classified disposition. Never let a resolver implement unclassified feedback or modify task trackers for deferred feedback.
 
@@ -394,10 +396,11 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 | # | Gate | How to verify | Blocking? |
 |---|------|--------------|-----------|
 | 1 | **Required CI checks green** | `gh pr checks <NUMBER>` — every required non-CodeRabbit check must pass | YES |
+| 1b | **Codecov clean (if configured)** | `dev` Step 7.2's `codecov` result for the head: `not configured`, or 0 missing lines in the Codecov comment with `codecov/*` statuses passing — a green `codecov/patch` alone does not pass, and `configured, no report on head` is unmet and goes to the user | YES |
 | 2 | **Copilot review RECEIVED and feedback RESOLVED** | Invoke `copilot-review` skill — confirm 0 unresolved Copilot threads | YES |
 | 2b | **CodeRabbit reviewed or correctly degraded** | Invoke `coderabbit-review`: prefer a passing check with received feedback resolved; if CodeRabbit rate-limits, report once, resolve what it already delivered (blocking findings fixed, every posted thread settled), and record `skipped (rate-limited)` without blocking | NO when rate-limited |
 | 3 | **Implementation matches spec/task** | Read the diff and verify against requirements | YES |
-| 4 | **Spec task marked complete** | Check via project-management skill | YES |
+| 4 | **Spec task marked complete** | Per `dev` Step 8.2 — the `[DOC_PATH]` diff check; N/A when `[DOC_PATH]` is `none` | YES |
 | 5 | **PR description is clear** | Read PR body | YES |
 | 5b | **PR title is clean AND conventional** | Title (a) is a conventional-commit subject — run the canonical check from the `github` skill's "Use Conventional Formats" (a plain prose title with no `type:` prefix FAILS) — AND (b) has NO stray `#<number>` (only a real PR/issue ref) and NO wave/phase/step/change-doc number. Fix with `gh pr edit <N> --title "type(scope): …"` before merge — squash bakes the title into `main` | YES |
 | 5c | **PR body is NOT hard-wrapped** | Run the canonical **"Mechanical body check"** from the `github` skill — it exempts lists, tables and code blocks, judges only prose, and exits 1 printing `HARD-WRAPPED` when prose clusters in the 60-100 column band. Do NOT substitute a `sort -rn \| head` on line lengths: the longest lines are usually exempt ones, so it passes a body whose prose is entirely wrapped. Fix with `gh pr edit <N> --body-file <file>` and re-run before merging | YES |
@@ -429,15 +432,18 @@ Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/coderabbit-review/scr
 # LATER — once the reviewers above have converged on this head:
 Bash: mkdir -p [AGENT_DIR]/team/waits && bash [SKILLS_DIR]/dev/scripts/wait-for-ci-checks.sh <PR_NUMBER> \
         > [AGENT_DIR]/team/waits/ci-<PR_NUMBER>.log 2>&1
+# On its terminal verdict — TERMINAL_PASS and NOT_CONFIGURED too; PENDING twice and
+# ERROR are hand-backs to the user — `dev` Step 7.2: `resolve-pr-feedback`
+# with `sources: ci,codecov`. It is the only Codecov pass in the lifecycle.
 
 # On each wake — a notification, or the wait_agent that returns: read the log,
 # branch on its STATUS= line, classify its findings in the ledger, then combine
 # every channel's outstanding blocking findings into ONE set, hand that whole set
 # to a SINGLE fix teammate, and push once (§ Batch findings) — one teammate for
-# all channels, never one per channel. Only AFTER that push do you invoke the resolvers, with their
-# blocking threads annotated `already fixed in <sha>` (scope-contract.md
-# § Resolver dispositions) — a resolver handed an UN-fixed blocking disposition
-# takes its own edit-and-push path instead, once per reviewer.
+# all channels, never one per channel. Only AFTER that push do you invoke
+# `resolve-pr-feedback` for each reviewer's source, with its blocking threads
+# annotated `already fixed in <sha>` (scope-contract.md § Resolver dispositions)
+# — handed an UN-fixed blocking disposition, it returns it to you unfixed.
 ```
 
 **On every wake**, record the result against the SHA it observed and apply § Evidence is SHA-scoped — including stopping any CI waiter whose SHA the head has moved past, which also returns its slot to the wave.
@@ -450,7 +456,7 @@ Waiters exist for Copilot and CodeRabbit only, and those are the only two this w
 
 Apply `dev` Steps 2.5 and 6.3 as the canonical reviewer policy: maintain the coordinator-owned finding ledger, fix every **blocking** finding and only those (`[SKILLS_DIR]/dev/references/scope-contract.md` § Blocking — the class name does not decide it; a reviewer-originated Material or Substantive entry blocks whatever its class), and rerun only reviewer state invalidated by the latest delta. Do not restart every reviewer after each push or seek zero suggestions. Settle all required threads within the bounded remediation rounds. **If CodeRabbit reports a rate/quota limit or cooldown at any point, stop its loop immediately, report once, record `skipped (rate-limited)`, and continue without waiting or escalating — after fixing the blocking findings it already delivered and settling every thread it already posted.** The degradation waives only the passes that never ran (`coderabbit-review`, rate-limit rule), never work already on the PR. Copilot must still satisfy its mandatory review gate.
 
-If CodeRabbit is not configured (its waiter reports `STATUS=NOT_CONFIGURED`, exit 3), report once and proceed — that status is terminal, so never retry or wait it out. Do not silently skip ordinary failures; the optional exception is specifically for CodeRabbit throttling.
+If CodeRabbit is not configured (its waiter reports `STATUS=NOT_CONFIGURED`, exit 3), report once and proceed — that status is terminal, so never retry or wait it out — after settling any CodeRabbit thread already on the PR (`coderabbit-review`'s `NOT_CONFIGURED` row). Do not silently skip ordinary failures; the optional exception is specifically for CodeRabbit throttling.
 
 ### Browser Verification Gate (Gate 6)
 
@@ -490,9 +496,11 @@ duvet# The size, triviality, or follow-up status of a pull request MUST NOT be t
 
 ## PRE-MERGE: Change-Doc Status Flip (BLOCKING)
 
+**Scope:** this section applies when the change document is an fx change doc (`dev` Step 2.5 recorded `FX_DOCS=adopted`). A native contract document follows STEP 3's native-document rule; with no contract document, this section does not apply.
+
 **The FINAL PR for a change document MUST mark the change `complete` IN that PR — NOT in a follow-up.** A change doc still showing `**Status:** draft` after its last implementing PR merges is a bug; the docs lie about state and the index is out of sync with reality on `main`.
 
-There are two places to flip:
+There are two places to flip, each a write target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule (the implementer's `WRITE TARGETS` line):
 
 1. **Change doc body** — `docs/changes/<NNNN>-<slug>.md` — flip the front-matter line `**Status:** draft` → `**Status:** complete`.
 2. **Index** — `docs/index.yml` — flip `status: draft` → `status: complete` on that change's entry. Sync `docs/index.md` if the project keeps both.
@@ -506,7 +514,7 @@ There are two places to flip:
 If the flip is missing when you reach the gates anyway:
 
 1. **Do NOT merge.**
-2. **Spawn a focused fix agent** to flip both files. Never commit it yourself — Coordinator Rules below: the coordinator writes no code and creates no commits. Commit message: `docs(changes): mark <NNNN> complete`.
+2. **Spawn a focused fix agent** to flip both files, its prompt carrying the `WRITE TARGETS` line verbatim. Never commit it yourself — Coordinator Rules below: the coordinator writes no code and creates no commits. Commit message: `docs(changes): mark <NNNN> complete`.
 3. Record the resulting SHA as the new candidate head and **re-enter at step 7 of `[SKILLS_DIR]/dev/references/head-discipline.md` § The candidate head**, exactly as any other post-candidate push does: re-cover the delta with the hosted reviewers first — Copilot does not re-review a push on its own — then the CI wait, then the gates. Going straight to CI merges a commit no required reviewer has read.
 4. Then merge.
 
@@ -526,8 +534,8 @@ If a single PR is only a partial implementation of its change doc (more PRs to c
 
 When all tasks are complete and all PRs merged:
 
-1. Verify all spec tasks are marked done (load `project-management` to check)
-2. **Verify every implemented change is `status: complete`** on `main` — check both `docs/changes/<NNNN>-*.md` front-matter AND `docs/index.yml`. If any are still `draft`, you missed the pre-merge gate; open a corrective PR right now (the goal is the gate catches it pre-merge, but if it slipped, fix it before declaring done).
+1. Verify all spec tasks are marked done — `dev` Step 8.2's check against each PR's `[DOC_PATH]`; skip where it was `none`
+2. **In an fx-adopted repo,** **verify every implemented change is `status: complete`** on `main` — check both `docs/changes/<NNNN>-*.md` front-matter AND `docs/index.yml`. If any are still `draft`, you missed the pre-merge gate; open a corrective PR right now (the goal is the gate catches it pre-merge, but if it slipped, fix it before declaring done).
 3. Send shutdown requests to all active teammates (refer to each by `name`); each teammate approves and exits gracefully
 4. **Tear down every worktree created in STEP 2.5.** For each one, in order: remove the `node_modules` symlink first (so `git worktree remove` doesn't traverse into the shared deps), then `git worktree remove --force <path>`, then `git worktree prune`. Delete the branch with `git branch -D <branch>` only if it's unmerged/abandoned (a merged PR's branch is already gone from origin). Confirm `git worktree list` shows only the main repo and `git status` is clean before continuing.
 
@@ -563,10 +571,10 @@ When all tasks are complete and all PRs merged:
 - **NEVER mark a teammate's PR as ready** until you've inspected it
 - **ALWAYS own Copilot review and CI monitoring** — reading the result and classifying it are coordinator responsibilities, never a sub-agent's. Launch their waiters concurrently in your host's shape (§ Long waits); where that shape is a waiter child, it reports `STATUS=` and nothing more.
 - **ALWAYS pass a deliberate tier to every spawn** — see the size table in STEP 3. Implementers are `large`; never downgrade them. On Codex that also requires `fork_turns: "none"`, or the override is rejected and the teammate silently inherits your model.
-- **ALWAYS use `project-management`** to verify task tracking
+- **ALWAYS verify task tracking per `dev` Step 8.2**, never by loading `project-management` — an implementation run checks the tracking its own PRs wrote; it does not manage the backlog
 - **ALWAYS run the full merge gate checklist** even for "trivial" or "follow-up" PRs
 - **NEVER merge without browser verification** — spawn a verify agent if needed. CI alone does NOT catch runtime errors.
-- **NEVER merge the FINAL PR of a change doc with `Status: draft` still in the diff.** The flip to `complete` rides in that PR, in both `docs/changes/<NNNN>-*.md` and `docs/index.yml`. If the implementer forgot, send a fix agent to their branch, then re-enter hosted review and CI on the new head before merging (§ The candidate head). Do NOT defer to a follow-up PR. See PRE-MERGE: Change-Doc Status Flip above.
+- **In an fx-adopted repo,** **NEVER merge the FINAL PR of a change doc with `Status: draft` still in the diff.** The flip to `complete` rides in that PR, in both `docs/changes/<NNNN>-*.md` and `docs/index.yml`. If the implementer forgot, send a fix agent to their branch, then re-enter hosted review and CI on the new head before merging (§ The candidate head). Do NOT defer to a follow-up PR. See PRE-MERGE: Change-Doc Status Flip above.
 
 ## Handling Agent Issues
 

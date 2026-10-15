@@ -10,8 +10,8 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > every skill referenced below is installed as a sibling there.
 
 **The one procedure every reviewer in this catalog follows.** The platform skills —
-`codex-review`, `coderabbit-review`, `copilot-review`, `resolve-pr-feedback`,
-`copilot-feedback-resolver`, `rabbit-feedback-resolver` — are adapters. They
+`codex-review`, `coderabbit-review`, `copilot-review`, and `resolve-pr-feedback`
+with its per-source references — are adapters. They
 describe how to drive one particular tool: its command, its
 flags and quirks, the shape of its output, the threads or checks it exposes.
 Everything else — what to review, what to report, what to fix, when to stop —
@@ -172,8 +172,8 @@ as ONE finding naming the class and list every other site — § Reporting a cla
 outdated/incorrect handler: reply with the evidence, resolve, and where a
 deliberate convention was misread, record it (Step 6). A coordinator hands it over
 as an explicitly undisposed item *with the reason*, never as a disposition value,
-because an authoritative one would close that route off and lose the `REVIEW.md`
-entry with it.
+because an authoritative one would close that route off and lose the Step 6
+review-rules entry with it.
 
 **Never edit for an immaterial finding.** Every push requires another reviewer
 pass before the loop can converge, so actioning one manufactures the next round's
@@ -184,37 +184,63 @@ input — it is the churn the materiality bar exists to stop. The gate is zero
 resolver's own categorisation (§ Resolver dispositions): the coordinator holds the
 brief and the ledger, and a resolver classifying from comment text alone does not.
 
-## Step 6: Record incorrect findings in `REVIEW.md`
+## Step 6: Record incorrect findings in the review-rules file
 
 When a reviewer flags a pattern that is a deliberate project convention, write the
-rule into **`REVIEW.md` at the repo root**. One entry stops Codex, Copilot and
-CodeRabbit — the whole roster — from raising it again; they all resolve to that
-file.
+rule where every reviewer reads it. That entry is **required work, not an edit made
+for an immaterial finding**: it is the only thing that stops the false positive
+recurring, and its commit is expected.
 
-That entry is **required work, not an edit made for an immaterial finding**: it is
-the only thing that stops the false positive recurring, and its commit is expected.
+**Where it goes — first match wins. Never create a review-rules file from a
+review.**
 
-- **Never** create or edit `.github/copilot-instructions.md`. It is obsolete.
-- If `REVIEW.md` does not exist, create just that file, with a `# PR Review`
-  heading and the rule under it. **Do not run `fx-setup` or `fx-upgrade`
-  from a review** — they scaffold `docs/`, `AGENTS.md` and `.coderabbit.yaml`, and
-  burying one review rule in a large unrelated diff is not an acceptable change.
-  Mention that `/fx-setup` completes the layout later.
-- **Keep the top section under 4000 characters.** Copilot reads roughly the first
-  4000 when reviewing, and every reviewer takes the file verbatim, where length
-  dilutes the rules that matter. Put the most important rules in a
+1. **`REVIEW.md` at the repo root, when it is a regular file.** One entry stops
+   Codex, Copilot and CodeRabbit — the whole roster — from raising it again; they
+   all resolve to that file.
+2. **Otherwise, the first `NATIVE_REVIEW_RULES` entry** from `fx-setup`'s check
+   (`bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh`, or the output the
+   coordinator already recorded): a review section in `AGENTS.md` — Codex, Copilot
+   and CodeRabbit all read `AGENTS.md` (`fx-setup` →
+   `references/instruction-files.md` § Who reads what) — then
+   `.github/copilot-instructions.md`, which only Copilot reads. **Append only:** add
+   the rule, written in full, at the end of that section, and change nothing else.
+3. **Otherwise, write nothing.** Reply on the thread with the evidence as usual, and
+   put a `Proposed review rule (not written — no review-rules file in this repo)`
+   block with the exact rule text in the report, followed by the instruction-layer
+   block from `fx-setup` → `references/adoption.md` § Report.
+
+- **No target is written through a symlink at any depth** — writing follows the
+  link to its target, possibly outside the repository. That covers a
+  symlinked `REVIEW.md` or `AGENTS.md`, and for `.github/copilot-instructions.md`
+  the `.github` directory as well as the file (`fx-setup` →
+  `references/adoption.md` § Who gates on what). Treat a failing target as case 3
+  and name the symlink in the report.
+- **Never create `REVIEW.md` or `.github/copilot-instructions.md`, and never run
+  `fx-setup` or `fx-upgrade` from a review** — they scaffold `docs/`, `AGENTS.md`
+  and `.coderabbit.yaml`, and burying one review rule in a large unrelated diff is
+  not an acceptable change. Where `REVIEW.md` exists,
+  `.github/copilot-instructions.md` is obsolete: never edit it there either.
+- **Keep `REVIEW.md`'s top section under 4000 characters.** Copilot reads roughly
+  the first 4000 when reviewing, and every reviewer takes the file verbatim, where
+  length dilutes the rules that matter. Put the most important rules in a
   `## PR Review Checklist (CRITICAL)` section at the top.
-- `REVIEW.md` is pasted verbatim: `@` imports are not expanded and referenced
-  files are not read. Write the rule out in full; never write `See docs/…`.
+- **`REVIEW.md` is pasted verbatim**, and so is every review-rules file: `@` imports
+  are not expanded and referenced files are not read. Write the rule out in full;
+  never write `See docs/…`.
 
 ### Parallel resolvers must not write it concurrently
 
 Re-reading before writing is not locking: two sub-agents can read the same
 revision and the second write silently discards the first's rule. When resolvers
 run in parallel, have each **return** its proposed rules instead of editing, then
-apply them all in one serialized edit and verify with `git diff -- REVIEW.md` that
-every proposed rule appears as an added line. Counting the whole file always fails
-— an established `REVIEW.md` already holds unrelated rules.
+apply them all in one serialized edit to the target the list above resolved —
+which has already passed the symlink rule above — and
+verify with `git diff -- <that path>` — `REVIEW.md`, `AGENTS.md` or
+`.github/copilot-instructions.md` — that every proposed rule appears as an added
+line. Diffing `REVIEW.md` after a fallback write shows nothing and reads as every
+rule missing, or, where an unrelated `REVIEW.md` edit is staged, as the wrong rules
+present. Counting the whole file always fails — an established review-rules file
+already holds unrelated rules.
 
 ## Step 7: Re-run until it converges
 
@@ -413,6 +439,10 @@ Only what is true of that tool and nothing else:
 
 **A platform skill MUST NOT restate Steps 1–8.** If it needs one, it names the
 step. If it genuinely needs different behaviour, change it here, for everyone.
+
+`resolve-pr-feedback`'s per-source `references/<source>.md` files are platform
+adapters in exactly this sense: each holds one source's mechanics, and none
+restates Steps 1–8.
 
 ## Shared rules that bite in every platform
 

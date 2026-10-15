@@ -1,6 +1,6 @@
 ---
 name: resolve-pr-feedback
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Coordinates explicitly requested automated PR-feedback resolution for the reviewers it has adapters for — Copilot, CodeRabbit and Codecov; any other configured reviewer is settled by hand by the caller."
+description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Settles one round of automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions for the sources requested or present, then reports and returns; it never waits or re-requests a review, and any other configured reviewer is settled by hand by the caller."
 ---
 
 # Resolve PR Feedback
@@ -10,10 +10,13 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > every skill referenced below is installed as a sibling there.
 
 **⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
-canonical review procedure. This skill is the **coordinator adapter**: it finds
-every unresolved finding on a PR **from the reviewers in § Supported Reviewers**,
-triages it, and dispatches the right resolver with the brief and a disposition per
-thread. Where the two appear to disagree, `fx-review` wins.
+canonical review procedure. This skill is the **PR-feedback adapter, for one
+round**: it detects which feedback sources are on the PR, loads
+`references/<source>.md` for each one requested or present, triages every
+finding, fixes once or returns the blocking set, settles every thread, reports
+each source's state on the head, and returns. `fx-review` owns the procedure;
+each reference holds only its source's mechanics (`fx-review` § What a platform
+skill adds). Where they disagree, `fx-review` wins.
 
 **"Every" is a claim the queries below have to earn, and one page does not earn
 it.** `reviewThreads(first: 100)` returns *at most* the first 100 threads, not the
@@ -26,106 +29,93 @@ thread enumeration in this skill MUST be paginated to exhaustion** — run it un
 carries the mechanism and the checks that make it fail closed). A truncated read is
 not a smaller finding list; it is an unknown one.
 
-**That table is the whole of this skill's coverage.** An automated reviewer with
-no row in it is never categorised, never dispatched, and never counted in any
-verdict below. Its threads still gate the merge, and the caller settles them by
-hand (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into
-reviews).
+**§ Supported Reviewers is the whole of this skill's reviewer coverage.** An
+automated reviewer with no row in it is never categorised, never settled, and
+never counted in any verdict below. Its threads still gate the merge, and the
+caller settles them by hand (`[SKILLS_DIR]/dev/references/scope-contract.md`
+§ Injecting the brief into reviews).
 
-You are the coordinator here, so three of its steps are specifically yours:
+## One round
 
-- **Step 1** — establish the Scope Brief before dispatching anything. From the
-  caller, or reconstructed from the conversation and PR description.
-- **Steps 2–3** — you hold the brief and the ledger, so **your** triage is the
-  authoritative one; a resolver classifying from comment text alone does not have
-  what you have. Verify each premise before assigning anything.
-- **Step 6** — when resolvers run in parallel, the `REVIEW.md` writes must be
-  serialized through you.
+**Detect, triage, fix once, settle, report — then return. Never a wait, a nudge
+or a re-request.** This skill runs no waiter (Copilot's, CodeRabbit's or CI's),
+never nudges Copilot, never re-requests a review, and never loops back to detect
+again. Every wait,
+re-request and convergence loop is the caller's — `dev` Steps 6.3 and 7,
+`copilot-review` Steps 1–2 and 5, `coderabbit-review` Steps 1 and 3 — which
+already runs them under its own head discipline. A loop in here duplicated the
+caller's: it re-requested reviews the caller was about to request and re-invoked
+the adapter that had called it. The report (§ Step 5) is the hand-off — per
+source, its state on the head and the next wait or re-request the caller owns.
+
+## Invocation Boundary
+
+Use this skill only when the user names it, or an active explicitly invoked
+workflow calls it by name: `copilot-review` Step 3 (`sources: copilot`),
+`coderabbit-review` Step 2 (`sources: coderabbit`), `dev` Step 6.3 (each
+reviewer's own source) and Step 7.2 (`sources: ci,codecov`, the lifecycle's only
+Codecov pass). A mention of PR comments,
+review threads, coverage or failing checks does not load it.
+
+## Arguments
+
+```
+Skill tool: skill="resolve-pr-feedback",
+            args="<PR_NUMBER> — <Scope Brief verbatim> — sources: <copilot|coderabbit|codecov|ci, comma-separated; omitted = all> — dispositions: <id> blocking (already fixed in <sha>) | immaterial | deferred (<exclusion>) — false premise: <id> (<what does not hold>)"
+```
+
+- **The Scope Brief is mandatory.** Run standalone without one, reconstruct it
+  from the conversation and the PR description, and say that you did
+  (`fx-review` Step 1).
+- **`sources:` given → those sources; omitted → every source is detected.** Either
+  way the skill runs Steps 1–5 once and returns. `copilot-review` and
+  `coderabbit-review` name their own source; `dev` Step 7.2 names `ci,codecov`.
+- **Dispositions are authoritative** (`[SKILLS_DIR]/dev/references/scope-contract.md`
+  § Resolver dispositions). The caller set them with the Scope Brief and the
+  ledger in hand; a classification from comment text alone does not override
+  them.
+- **False-premise threads are listed separately, not as a disposition.** A thread
+  the caller verified and rejected goes in `— false premise: <id> (<what does not
+  hold>)`. That keeps the outdated/incorrect handling reachable — reply, resolve,
+  and the `fx-review` Step 6 entry where a convention was misread — which an
+  authoritative disposition would close off.
+- **No bare invocation.** A call with only a PR number is incomplete, not a
+  shorthand: the skill then re-derives triage it cannot see and treats findings
+  the caller classified immaterial or deferred as work.
 
 ## Supported Reviewers
 
-| Reviewer | Author Pattern | Resolver Skill |
-|----------|---------------|----------------|
-| GitHub Copilot | `copilot-pull-request-reviewer` (GraphQL thread authors) / `copilot-pull-request-reviewer[bot]` (REST) — **never** the bare `Copilot`, which matches nothing | `copilot-feedback-resolver` |
-| CodeRabbit | `coderabbitai[bot]` | `rabbit-feedback-resolver` |
-| Codecov | `codecov[bot]` / `codecov-commenter` | `resolve-codecov-feedback` — for coverage gaps (§ 3b), its only channel. A review thread from Codecov is settled by hand instead (§ 3): that resolver has no thread-settlement path. |
+| Reviewer | Author logins — exact, GraphQL / REST | Reference |
+|---|---|---|
+| GitHub Copilot | `copilot-pull-request-reviewer` / `copilot-pull-request-reviewer[bot]` — **never** the bare `Copilot`, which matches nothing | `references/copilot.md` |
+| CodeRabbit | `coderabbitai` / `coderabbitai[bot]` | `references/coderabbit.md` |
+| Codecov | `codecov` / `codecov[bot]`, and `codecov-commenter` | `references/codecov.md` |
+
+**Match these logins exactly, never by prefix or substring.** GraphQL drops the
+`[bot]` suffix that REST keeps, so each list carries both forms, and every filter
+in this skill and its references is a set-membership test over it — jq
+`IN("<login>", "<login>[bot]")` — never `startswith`, `contains` or `test`. A
+looser match categorises a human, or another bot, whose login merely begins with
+or contains one of these as owned, and the skill then replies to and resolves a
+thread `github` § PR Comments Prohibition forbids it to touch.
 
 These three are the roster — there is no fallback row. A reviewer absent from the
-table has no author pattern here and no resolver to dispatch to, so this skill
-cannot settle it; do not treat the list as illustrative and do not infer a generic
-path for a fourth bot.
+table has no login list here and no reference to load, so this skill cannot
+settle it; do not treat the list as illustrative and do not infer a generic path
+for a fourth bot.
 
-## WHEN TO USE THIS SKILL
+### CI source
 
-- User says "resolve PR feedback" / "check PR comments" / "address review comments"
-- User wants to handle the automated review feedback from the § Supported Reviewers roster on a PR
-- After PR creation, to ensure the reviewers in § Supported Reviewers are addressed — any other configured reviewer's threads also gate the merge, but the caller settles those by hand
-- As part of the SDLC workflow before finalizing a PR
+CI is not a reviewer and posts no threads. `references/ci.md` covers failing
+checks on the head. It does not widen the roster: a bot that posts threads is
+either in the table above or uncategorised.
 
-## Parallel resolvers MUST NOT write `REVIEW.md` concurrently
+## Step 1: Detect, then load
 
-`fx-review` Step 6 states the rule; this is the coordinator's half of it.
-Re-reading before writing is **not** locking — two sub-agents can read the same
-revision and the second write silently discards the first's rule.
+Read `HEAD_SHA` once, at the start; every read below is keyed to it, so a push
+mid-run cannot mix two heads' evidence.
 
-When dispatching resolvers in parallel (Step 4):
-
-1. Instruct each sub-agent to **collect** its proposed `REVIEW.md` rules and
-   return them in its final report **instead of editing the file**. Everything
-   else — code fixes, thread replies, thread resolution — proceeds in parallel;
-   those touch disjoint resources.
-2. After **all** parallel resolvers return, apply the collected rules in a single
-   serialized edit, then commit and push.
-3. Verify by diffing, not by counting the whole file — an established `REVIEW.md`
-   already contains unrelated rules, so a total-count check always fails:
-
-   ```bash
-   git diff -- REVIEW.md
-   ```
-
-   Every proposed rule must appear as an added line, and pre-existing rules must
-   be untouched.
-
-When resolvers run **sequentially** (one reviewer only, or Mode B), each edits
-`REVIEW.md` directly as its own skill describes — no aggregation needed.
-
-## Prerequisites
-
-**CRITICAL: Load the `github` skill FIRST** before running any GitHub API operations.
-
-## Core Workflow
-
-### 1. Determine PR Number
-
-If not provided, get from current branch:
-
-```bash
-gh pr view --json number -q '.number'
-```
-
-### 2. Query All Unresolved Review Threads
-
-**IMPORTANT — inside a GraphQL query body:** `-f query='...'` is single-quoted, so
-the shell never expands anything in it, and `$` is GraphQL's own variable sigil. So
-whether a `$name` works there turns on one thing only — does the query signature
-declare it:
-
-- **Undeclared is a bug.** `$name` with no matching declaration is an undefined
-  GraphQL variable, not a value: the shell will not substitute it and the server
-  rejects the document. Anything no declared variable carries is substituted inline
-  instead — that is what the `OWNER` / `REPO` / `PR_NUMBER` placeholders are for.
-- **Declared is correct and fully supported.** A `-f`/`-F` flag may bind it
-  (`-f owner="$OWNER"`), or `gh` may bind it itself: `--paginate` supplies
-  `$endCursor`, so that one is declared with deliberately **no** flag of its own —
-  it looks like an omission and is not. Read as a blanket ban on `$`, this rule
-  would leave the pagination this step mandates no way to advance.
-
-**Plain `gh api` / `gh pr view` snippets are the opposite:** no query body, so `$`
-is the shell's again, and they use real shell variables (`PR_NUMBER`, `REPO_NWO`,
-`HEAD_SHA`) assigned at the snippet's top so it is copy-pasteable as-is. Never mix
-the two styles inside one snippet — a bare `PR_NUMBER` next to a real `${HEAD_SHA}`
-reads as though it were defined, and silently builds a request against a repo path
-containing the literal text.
+**(a) Threads.** Fetch every review thread, paginated:
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
@@ -155,203 +145,198 @@ query($endCursor: String) {
 }'
 ```
 
+**`$` inside a GraphQL body turns on one thing: does the query signature declare
+it.** An undeclared `$name` is an undefined GraphQL variable — the single-quoted
+body is never shell-expanded, so the server rejects it; substitute such values
+inline (that is what `OWNER` / `REPO` / `PR_NUMBER` are for). A declared one is
+correct: `--paginate` binds `$endCursor` itself, so it deliberately has no `-f`
+flag. Plain `gh api` / `gh pr view` snippets are the opposite — `$` is the
+shell's again, so they assign real shell variables (`PR_NUMBER`, `REPO_NWO`,
+`HEAD_SHA`) at the top. Never mix the two styles in one snippet.
+
 **`--paginate --slurp` is what makes that the thread list rather than one page.**
-`gh` walks the cursor and returns an array of pages; flatten `nodes` across them and
-categorise the accumulated set — the executable version, with the fail-closed checks
-it requires, is `[SKILLS_DIR]/github/references/graphql-patterns.md`
-§ Pagination Pattern. Reading only the first page on a PR with more than 100 threads
-drops the rest without any error — the response is well-formed and simply shorter —
-so the skill would report a triaged, settled PR while unread findings sit on page 2.
+Flatten `nodes` across the slurped pages and categorise the accumulated set under
+the fail-closed checks in `[SKILLS_DIR]/github/references/graphql-patterns.md`
+§ Pagination Pattern. Reading only the first page drops the rest without any
+error — the response is well-formed and simply shorter. **Fetch `path`, `line` and
+`body`, not just the author:** a disposition cannot be derived from an ID and a
+login.
 
-**Fetch `path`, `line`, and `body`, not just the author.** Step 4 requires a
-disposition per thread, and a disposition cannot be derived from an ID and a
-login: the filters need to see what the thread actually says and where. A query
-that returns only `id`/`isResolved`/`author` forces the dispatch step to hand out
-dispositions it has not reasoned about, or to omit them — which is the bare
-invocation Step 4 forbids.
+Categorise each unresolved thread by its first comment's author, matched exactly
+against § Supported Reviewers: `IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")` → copilot,
+`IN("coderabbitai", "coderabbitai[bot]")` → coderabbit,
+`IN("codecov", "codecov[bot]", "codecov-commenter")` → codecov.
+Anything else is one of two kinds, and neither is yours to settle: a human thread,
+which `github` § PR Comments Prohibition forbids you to touch, or a thread from an
+automated reviewer with no § Supported Reviewers row. **Report the second kind
+rather than dropping it** — list the reviewer and its open threads as
+uncategorised, so the caller knows a merge gate is left for it to settle by hand.
+Silently omitting them is what makes a clean report here read as a clean PR.
 
-### 3. Identify Unresolved Feedback by Source
-
-Parse the response and categorize unresolved threads by author:
-
-- **Copilot threads**: author login is `copilot-pull-request-reviewer` (GraphQL). Match with `startswith("copilot-pull-request-reviewer")` so the REST `copilot-pull-request-reviewer[bot]` form matches too.
-  - **⛔ It is NOT the bare string `Copilot`.** That value appears only in `requested_reviewers`, which is always empty and which this skill never reads. Matching on `Copilot` categorizes **zero** Copilot threads on every PR — so the resolver is never invoked, real threads are silently left unresolved, and this skill reports "nothing to do" while the merge gate is unsatisfiable.
-- **CodeRabbit threads**: author login contains `coderabbitai`
-- **Codecov threads**: author login starts with `codecov` — `codecov[bot]` or `codecov-commenter`. Match with `startswith("codecov")`, the same filter Step 5's convergence query uses. **Settle these by hand, yourself** — triage against the brief, reply with the disposition, resolve via `resolveReviewThread` (`github`). Codecov has a § Supported Reviewers row, so a thread of its is *not* one of the uncategorised ones you hand back to the caller (§ Error Handling).
-  - **⛔ Do NOT dispatch a Codecov review *thread* to `resolve-codecov-feedback`.** That resolver reads coverage statuses and PR comments and adds coverage; it has no thread-settlement path at all, so a thread handed to it comes back unresolved while Step 5's gate keeps selecting it — the same stall, one step later. Step 4's Codecov dispatch is for coverage gaps (§ 3b) only.
-  - **This bullet is the belt, not the primary Codecov path.** § 3b is Codecov's real channel — PR comments and commit statuses, not review threads — and it is why Codecov has a § Supported Reviewers row and a resolver at all; so this bullet usually matches nothing. Keep it anyway: Step 5's gate counts every unresolved `startswith("codecov")` thread, so a Codecov thread left uncategorised here holds the convergence loop open forever. Hand settlement resolves the thread, so the gate clears.
-
-Threads matching none of the three patterns above fall into two kinds, and
-neither is yours to resolve: human threads, which `github` forbids you from
-touching, and threads from an automated reviewer with no § Supported Reviewers
-row. **Report the second kind rather than dropping it** — list the reviewer and
-its open threads in your summary as uncategorised, so the caller knows there is
-a merge gate left for it to settle by hand. Silently omitting them is what makes
-a clean report here read as a clean PR.
-
-**Threads are the review.** Copilot also puts some observations in a `<details><summary>Suppressed comments</summary>` block in the **review body**, where they create no thread at all — those are **ignored by default** (`copilot-review` **D4**): Copilot itself declined to raise them as threads, they are overwhelmingly wording and comment-phrasing nits, and acting on one costs a full re-review cycle. Do not open the block routinely; act only on something absolutely dire that has already caught your eye.
-
-What you do still need from the review body is its **verdict headline**: *Approval recommended* and *Needs a closer look* both pass when no threads are open, while *Changes recommended* means work through its threads. Read the bodies of the Copilot reviews **of the current head commit** — scoping by `commit_id` is required, or after a push you read the PREVIOUS commit's body and record this check as satisfied for code that review never covered:
+**(b) Reviews, checks, statuses and comments:**
 
 ```bash
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
-gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq "[.[] | select(.user.login | startswith(\"copilot-pull-request-reviewer\")) | select(.commit_id == \"${HEAD_SHA}\") | .body] | join(\"\n\n----- (next review of this commit) -----\n\n\")"
+# Unfiltered reads — the table below selects each source by author login or check
+# name, and keeps only what is about HEAD_SHA (a review's commit_id, a comment's SHA).
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews"           # copilot, coderabbit reviews
+gh api --paginate --slurp "/repos/${REPO_NWO}/commits/${HEAD_SHA}/check-runs"       # CodeRabbit check, ci
+gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/status"                              # codecov/*, CodeRabbit, ci (combined status)
+gh api --paginate --slurp "/repos/${REPO_NWO}/issues/${PR_NUMBER}/comments"         # codecov, coderabbit comments
+gh pr view "$PR_NUMBER" --json mergeable,mergeStateStatus                           # ci: base-branch conflict
 ```
 
-Empty output means **no Copilot review covers the current head** — that is an unreviewed head, not a clean one. Note this reads *every* review of that commit, not `| last`: two reviews of one commit are routine, so `last` may show a different review than the one being judged.
+**Presence is defined here, once, and every other section uses this definition.**
+A source is present on exactly two kinds of signal:
 
-`copilot-review`'s waiter does this for you and prints the bodies; prefer it
-over this snippet. Its `SUPPRESSED_COMMENTS=1|0|unknown` line is informational and
-gates nothing (its **D4**) — do not re-run it to turn `unknown` into a number. If
-you run the snippet above by hand, confirm the command succeeded before drawing a
-conclusion from silence: empty output from a failed fetch looks exactly like empty
-output from a review with an empty body.
+- **Threads — PR-wide.** An unresolved thread (a) categorised to the source. A
+  thread is settled whatever head it was raised on, so it makes the source
+  present for Steps 2–4 regardless of `HEAD_SHA`.
+- **Head evidence — head-scoped.** A signal *about `HEAD_SHA`*, per the table
+  below. It decides the source's **state on head** in the report (each reference's
+  § State on head), which is a claim about this head and nothing else.
 
-If an absolutely-dire suppressed item is acted on, it cannot be resolved (no thread exists), so record the outcome in the commit message or PR body instead.
+| Source | Head evidence — on `HEAD_SHA` only |
+|---|---|
+| copilot | A review by a Copilot login (§ Supported Reviewers) whose `commit_id` equals `HEAD_SHA` |
+| coderabbit | A check run or status named `CodeRabbit` on `HEAD_SHA`, in any state; a review by a CodeRabbit login whose `commit_id` equals `HEAD_SHA`; a comment by a CodeRabbit login that names `HEAD_SHA` |
+| codecov | A status context starting `codecov/` on `HEAD_SHA`; a comment by a Codecov login that names `HEAD_SHA` — `references/codecov.md` § Collect's stale-comment rule decides that, not the comment's presence |
+| ci | A check run on `HEAD_SHA` concluded `failure`, `cancelled`, `timed_out` or `action_required`, or a status is `failure` / `error` — **excluding `codecov/*` and the `CodeRabbit` check**, which their own references own; or the head has no checks at all and `mergeable` is `CONFLICTING` |
 
-### 3b. Check for Codecov Coverage Feedback
+**A review or comment about an older commit is not presence.** A source whose
+only signals are head evidence for another commit — a review with another
+`commit_id`, a comment naming another SHA — and which has no unresolved thread is
+**stale**: report it as `stale: last seen on <sha>`, load nothing for it, and do
+not read it as absent (it reported on this PR) or as settled (it has not reported
+on this head). Counting historical evidence as presence reports a source as having
+spoken about this head when it has not, and the caller then skips the wait or
+re-request that head still needs.
 
-Codecov's channel is PR comments and commit statuses, NOT review threads — this
-is Codecov's normal path, and the only one Step 4's Codecov dispatch serves. The
-uncommon case where Codecov does open a review thread is § 3's Codecov bullet,
-and that thread is settled by hand there rather than dispatched from here. Query
-separately:
+**Every review, comment and thread signal counts only under its source's own
+login** — § Supported Reviewers for a REST `user.login`, (a)'s categorisation for a
+thread. The fetches in (b) are unfiltered; an unfiltered count marks Copilot
+present on a human's review and loads a reference for a source that never
+reported.
 
-```bash
-PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
-REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
-HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+**Head evidence counts without threads.** A pending or failed `CodeRabbit` check on
+`HEAD_SHA` with no thread is CodeRabbit present and unsettled; detecting by
+threads alone reports it absent, and the caller reads a review that never
+finished as settled.
 
-# Check for Codecov commit statuses
-gh api "/repos/${REPO_NWO}/commits/${HEAD_SHA}/statuses" \
-  --jq '[.[] | select(.context | startswith("codecov/"))] | {count: length, statuses: [.[] | {context, state, description}]}'
+**A failing check excluded from `ci` is its owner's, and is reported against that
+owner even when the owner is not in `sources:`** — a failing `CodeRabbit` check
+under `sources: ci,codecov` is reported as CodeRabbit's, not dropped. Excluding it
+from CI without naming it leaves a failed run with no failure anyone owns, which
+the caller then reads as flaky or infrastructure.
 
-# Check for Codecov PR comments
-gh api "/repos/${REPO_NWO}/issues/${PR_NUMBER}/comments" \
-  --jq '[.[] | select(.user.login == "codecov[bot]" or .user.login == "codecov-commenter")] | length'
-```
+**Which references load — the one rule:**
 
-Codecov feedback exists if:
-- Any `codecov/*` commit status has state `failure` or `error`
-- OR Codecov PR comment indicates patch coverage below threshold
+1. **A source the caller named in `sources:` always loads its reference**, whatever
+   detection found. Detection alone never reports a requested source absent: with
+   no head evidence, the reference's own **§ Configured** check decides between
+   `not configured` — report it; the source is absent and gates nothing — and
+   `configured, no report on head <sha>`, which is never clean: the report hands
+   it back as a wait the caller owns (§ Step 5). A requested source dropped on
+   detection is a configured gate skipped in silence — a Codecov that has not
+   reported yet the moment `dev` Step 7.2 looks.
+2. **A source the caller did not name** — every source, on an unscoped run —
+   loads its reference only when present; a stale one loads nothing.
 
-### 4. Invoke Appropriate Resolver Skills
+Report every source as one of: `present` (naming which kind — `threads`, `head`,
+or both); `clean on head <sha>` (requested, configured, reported, nothing to do);
+`configured, no report on head <sha>` (with `last seen on <sha>` where it reported
+earlier); `not configured`; `stale: last seen on <sha>` (unrequested only);
+`absent` (unrequested only); or `not requested`. **Only `present` with nothing
+left, `clean`, and `not configured` are settled states**: absent, stale and
+"no report on head" each mean the source has not spoken about this head.
 
-**Triage BEFORE dispatching, and pass the result.** A resolver invoked with a bare
-skill name has neither the Scope Brief nor your per-finding dispositions, so it
-re-derives both — and a correct-but-immaterial thread comes back as an edit,
-which is the push that reopens the loop. Every invocation below MUST carry, as
-its argument:
-1. The **Scope Brief**, verbatim (`[SKILLS_DIR]/dev/references/scope-contract.md` § The Scope Brief).
-2. A **disposition for every thread that carries a finding** — `blocking`,
-   `immaterial`, or `deferred`, as defined in
-   `[SKILLS_DIR]/dev/references/scope-contract.md` § Resolver dispositions.
-   Yours is authoritative: it is set with the Scope Brief and the ledger in hand,
-   which the resolver does not have. **Verify the premise before disposing of
-   it** — a thread describing code that no longer exists, or misreading a
-   deliberate convention, is a false positive rather than a finding. List it as
-   undisposed with the reason, and let the resolver's outdated/incorrect handler
-   take it; forcing a disposition onto one overrides that handler and loses the
-   `REVIEW.md` entry that stops the finding recurring.
+## Step 2: Triage
 
-**If Copilot threads exist:**
-```
-Skill tool: skill="copilot-feedback-resolver",
-            args="<Scope Brief verbatim> — dispositions: <thread id> blocking, <thread id> immaterial, <thread id> deferred (<exclusion>) — false premise (resolver's own handler): <thread id> (<what does not hold>)"
-```
+**Triage before acting.** Every finding-bearing item in scope needs the Scope
+Brief and a disposition — `blocking`, `immaterial` or `deferred`
+(`[SKILLS_DIR]/dev/references/scope-contract.md` § Resolver dispositions). The
+caller's is authoritative; assign your own, per `fx-review` Steps 2–3, only to
+what the caller left undisposed. **Verify the premise before disposing of
+anything**: a finding describing code that no longer exists, or misreading a
+deliberate convention, is a false positive, not a finding — it takes the
+false-premise path (Step 4), never a disposition.
 
-**If CodeRabbit threads exist:**
-```
-Skill tool: skill="rabbit-feedback-resolver",
-            args="<Scope Brief verbatim> — dispositions: <thread id> blocking, <thread id> immaterial, <thread id> deferred (<exclusion>) — false premise (resolver's own handler): <thread id> (<what does not hold>)"
-```
+**A thread with no disposition and no stated reason is untriaged, not rejected:
+run the filters over it, premise check included.** Reading a bare omission as a
+rejection closes a real blocker with a reply and no fix.
 
-**If Codecov coverage gaps are detected (§ 3b):**
-```
-Skill tool: skill="resolve-codecov-feedback",
-            args="<Scope Brief verbatim> — uncovered lines in scope: <paths>; deliberately uncovered: <paths and why>"
-```
+CI failures and coverage gaps are findings too. Each becomes a ledger entry,
+classified and judged blocking by the same rules
+(`[SKILLS_DIR]/dev/references/scope-contract.md` § Blocking). The per-source
+indicators — Copilot's `[nitpick]`, CodeRabbit's severity labels, the CI
+categories, the Codecov threshold — live in the loaded references.
 
-**No bare invocation.** A `Skill tool:` line with no `args` is an incomplete call
-here, not a shorthand — the resolver then re-derives triage it cannot see and
-edits for findings you classified immaterial or deferred.
+## Step 3: Fix once
 
-**List false positives separately, not as a disposition.** Append
-`— false premise (resolver's own handler): <thread id> (<what does not hold>)`
-for any thread you verified and rejected. That leaves the resolver's
-outdated/incorrect path — reply, resolve, and update `REVIEW.md` where a
-convention was misread — reachable, which an authoritative disposition would
-close off.
+**Coordinator-owned** — a lifecycle coordinator (`dev`, `team`) is running this
+PR, directly or through the adapter that called you. **Make no edit, no commit
+and no push.**
 
-**If multiple exist:** run the Copilot and CodeRabbit resolvers **in parallel** by spawning each as a sub-agent in the same message (see `dev` Step 6.3 for the exact pattern) — but only where at most one of them carries `blocking` dispositions. Codecov is sequential after them since coverage fixes typically require code from the other resolvers to be in place first.
+- Blocking thread dispositions arrive `already fixed in <sha>`: verify the fix is
+  on the branch and cite it (`[SKILLS_DIR]/dev/references/scope-contract.md`
+  § Resolver dispositions).
+- For ci and codecov, **return** the diagnosed blocking set in the loaded
+  reference's hand-off format; the caller folds it into its one batched fix
+  (`dev` Step 6.2) and one push.
+- A `blocking` disposition that arrives un-fixed goes back to the caller unfixed,
+  with that note.
+- A review-rule entry `fx-review` Step 6 requires goes back as exact rule text for
+  that batched fix, unless the caller says it already landed.
 
-**Where two or more channels carry blocking findings, fix them once, together, before dispatching any resolver** (`[SKILLS_DIR]/dev/references/head-discipline.md` § Batch findings). Two resolvers editing the same branch in parallel also race on the working tree, which is the local reason the rule is not optional here. Hand the whole blocking set to one fix agent, push once, then invoke each resolver with its blocking threads annotated `already fixed in <sha>` (`[SKILLS_DIR]/dev/references/scope-contract.md` § Resolver dispositions), leaving each to do only what it alone can do.
+**Standalone** — no lifecycle coordinator: the user invoked this skill, or
+`copilot-review` / `coderabbit-review`, directly. Spawn **one** implementer — a
+sub-agent that loads `dev` in its Implementer role — with the Scope Brief, the
+whole blocking set across every source, review-rule entries included, and the
+`WRITE TARGETS` line of `dev` Step 4's implementer prompt verbatim (a MIRROR of
+`fx-setup` → `references/adoption.md` § Who gates on what's write rule, which a
+spawned agent cannot follow by link). It pushes
+once, at the end (`[SKILLS_DIR]/dev/references/head-discipline.md` § Batch
+findings). Then run Step 4 with those threads annotated `already fixed in <sha>`.
+That push leaves a head no reviewer has seen, and this skill does not wait for
+one: § Step 5 names each re-request it needs.
 
-### 5. Verify Categorised Reviewers Resolved AND Loop Until Convergence
+**When unsure which applies, coordinator-owned wins.** Returning costs a round
+trip; a second fix path races the coordinator's on the same branch and buys a
+review and CI cycle per push.
 
-After invoking resolver skills, re-query to confirm every thread from a § Supported Reviewers reviewer is resolved AND that none of them has posted new feedback in response to the fixes that were pushed.
+## Step 4: Settle the threads
 
-**Cycle, don't single-shot.** CodeRabbit re-runs after every push and may post new threads on the new commits. Copilot does **not** — it must be asked again. Either way, a single-pass resolver leaves a stale "settled" state behind. Loop:
+For every unresolved thread in scope, reply with its disposition and resolve it
+with `github`'s reply and resolve mutations (`github` § Resolve Copilot Review
+Threads; `[SKILLS_DIR]/github/references/graphql-patterns.md` § Review Thread
+Management), following `fx-review` Step 5. Codecov threads take the same path.
 
-1. **If the current head SHA has no Copilot review yet — because a fix was pushed, or because none has covered this head at all — nudge Copilot for it** via `copilot-review` (its Step 1). **Copilot does NOT re-review pushed commits on its own.** Where the last cycle only replied and resolved, the head has not moved and a review of it already exists: skip straight to step 3. Nudging and waiting there buys a full cycle to re-read code nobody changed, which is the same churn as editing for an immaterial finding. Skipping this makes the rest of the loop meaningless: you will poll, see nothing, and "converge" on code no reviewer has read. Issue the nudge and discard its response — it is fire-and-forget, never evidence, and having issued it is never a substitute for step 6's received-review check.
-2. Wait for all reviewer checks to reach terminal state (use the dedicated waiters: `copilot-review` for Copilot, `coderabbit-review` for CodeRabbit). **Do not hand-roll a `gh api` / GraphQL polling loop in their place** — a hand-rolled loop only observes, never requests, and will happily accept a review of a superseded commit.
-3. Re-run **Step 2's full query** — `id`, `path`, `line` and comment bodies — and re-triage every unresolved thread, including the ones the last cycle's push created. The breakdown query below counts threads by reviewer; it cannot feed step 4, which refuses a resolver invocation without a disposition per thread, and a disposition cannot be assigned to a name and a number. Every iteration repeats the fetch and the triage, not just the first.
-4. If the breakdown array is non-empty, re-invoke the relevant resolver(s) with the dispositions from step 3.
-5. **If fixes were pushed**, restart at step 1 — the push created unreviewed commits. If this cycle produced no push, do not restart: go to step 6 and judge convergence on the review already delivered for this head.
-6. Stop when the loop has **converged** per `fx-review` Step 7 — no blocking
-   finding left unresolved, ledger-wide — **and** two PR-level conditions hold
-   that the ledger test alone does not cover:
-   - the state holds on a head SHA that was **actually reviewed** (verify: the
-     newest Copilot review's `commit_id` equals `headRefOid`);
-   - **every thread on that head from a reviewer this skill categorised is resolved** — say which reviewers that covered, since a bot with no adapter is outside this query and is the caller's to settle.
+- **False premise** — reply with the evidence and resolve, plus the `fx-review`
+  Step 6 entry where a deliberate convention was misread.
+- **Deferred** — return the follow-up to the caller, never a tracker commit on
+  this PR (`fx-review` Step 5).
+- **Review-rule entries** (`fx-review` Step 6) are landed by the caller's batched
+  fix when coordinator-owned, or by the standalone implementer.
 
-   A suppressed-comments block is **not** a third condition and never extends this
-   loop (`copilot-review` **D4**), and neither does a *Needs a closer look*
-   verdict with no open threads.
+Re-query and confirm `isResolved` for every thread you settled. Code changed but a
+thread left open is unfinished work.
 
-   Immaterial findings resolved by reply satisfy all of this: they produce no
-   push, so they are not "new feedback" owing another cycle. The bound and the
-   escalation triggers are `fx-review` Step 7 and are not restated here.
+**A finding with no thread** — a CodeRabbit review-body item (`references/coderabbit.md`)
+— has nothing to reply to or resolve: record its disposition, and for a fixed one
+the commit, under "Findings with no thread" in the report.
 
-**⛔ Zero new threads is not convergence unless a Copilot review has been RECEIVED for the current head SHA.** "Received for the current head" is the *only* condition — do **not** phrase it as "was requested", and do not try to verify that a request happened: `requested_reviewers` is empirically always empty, so whether a review was requested is not a determinable fact (see `copilot-review` **D1**/**D3**). Issue the nudge because it sometimes helps, then judge convergence solely on the delivered review. Absence of feedback is not evidence of quality.
-
-Verify before declaring the loop converged:
-
-```bash
-PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
-REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
-
-HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
-REVIEWED=$(gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq '[.[] | select(.user.login | startswith("copilot-pull-request-reviewer")) | .commit_id] | last // empty')
-[[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
-  && echo "covered: $HEAD_SHA" \
-  || echo "NOT covered — head=$HEAD_SHA reviewed=${REVIEWED:-none}"
-```
-
-The `// empty` is load-bearing: without it, a PR with no Copilot reviews prints the literal string `null`, which then gets compared against a SHA under a "these MUST match" instruction — an unreviewed head presented as a concrete-looking value instead of an obvious absence.
-
-Re-query remaining unresolved threads **from the § Supported Reviewers roster
-only** — the filter below selects those three by login, not every automated
-reviewer. The query returns a per-reviewer breakdown array, not a single number.
-This skill resolves the automated feedback it has adapters for, and `github`
-forbids touching human review threads at all, so an unfiltered query makes one
-open human comment permanently unsatisfiable and loops this skill against work it
-must not do:
-
-**Say what this verdict covers when you report it.** The roster is whatever the
-query below selects by author login — the § Supported Reviewers table's three,
-Copilot, CodeRabbit and Codecov — so a clean result here means *those* reviewers
-are settled. It is not evidence about a further automated reviewer a repo has
-configured, whose threads this skill never categorised and never resolved. Those
-still gate the merge, and the caller settles them by hand
-(`[SKILLS_DIR]/dev/references/scope-contract.md`
-§ Injecting the brief into reviews). Reporting a bare "0 unresolved" hands the
-caller a merge gate it has not actually verified.
+**Re-count after settling, and say what the count covers.** The roster is
+whatever the query below selects by author login — the § Supported Reviewers
+table's three —
+so a clean result means *those* reviewers are settled. It is not evidence about a
+further automated reviewer a repo has configured, whose threads this skill never
+categorised. Those still gate the merge, and the caller settles them by hand
+(`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into
+reviews). Reporting a bare "0 unresolved" hands the caller a merge gate it has not
+actually verified.
 
 ```bash
 # Replace OWNER, REPO, PR_NUMBER with actual values (GraphQL body — no shell expansion here)
@@ -390,42 +375,75 @@ set:
 jq '[.[] | select(.isResolved == false) | .comments.nodes[0].author.login]
     | group_by(.) | map({reviewer: .[0], unresolved: length})
     | map(select(.reviewer
-          | startswith("copilot-pull-request-reviewer")
-            or contains("coderabbitai")
-            or startswith("codecov")))' <<< "$ALL_THREADS"
+          | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]",
+               "coderabbitai", "coderabbitai[bot]",
+               "codecov", "codecov[bot]", "codecov-commenter")))' <<< "$ALL_THREADS"
 ```
 
 Run that once, never per page: a per-page `group_by` splits one reviewer's threads
 across pages and reports each slice as that reviewer's total, and an empty array
 from a single page is exactly what a truncated read looks like.
 
-That reports a per-reviewer breakdown, so "unresolved threads remain" comes with the
-reviewer name attached. An empty array over the **fully paginated** set means **the
-reviewers this skill categorised by login** have no open feedback — not that the PR
-has none. Human threads it excluded are deliberately not your concern; an
-uncategorised bot's threads are the caller's, per the caveat above.
+The filter is the § Supported Reviewers table — human threads, which `github`
+forbids you to touch, are excluded so one open human comment cannot make the gate
+permanently unsatisfiable. An empty array over the **fully paginated** set means
+the reviewers this skill categorised have no open feedback — not that the PR has
+none. If threads remain, report which reviewers still have open feedback.
 
-If unresolved threads remain, report which reviewers still have open feedback.
+## Step 5: Report and return
+
+Classify each source by its reference's **§ State on head** and report it — its
+dispositions, what this round pushed, and the **next action the caller owns** —
+then return. Do not wait, nudge or re-request anything to improve a state: the
+state as it stands is the answer, and the caller's loop acts on it.
+
+| Condition on the head | Next action in the report | The caller step that acts |
+|---|---|---|
+| This round pushed `<sha>` | "re-request / re-wait on `<sha>`" for every source with head evidence: Copilot nudge and wait, CodeRabbit wait, CI wait | `dev` 6.3 per-reviewer step 4 and Step 7; `copilot-review` Step 5; `coderabbit-review` Step 3 |
+| Copilot absent, stale or `configured, no report on head` | "request and wait for Copilot on `<sha>`" — Copilot review is mandatory | `copilot-review` Steps 1–2; `dev` 6.3 |
+| CodeRabbit check pending, or `configured, no report on head` | "wait on CodeRabbit for `<sha>`" | `coderabbit-review` Step 1; `dev` 6.3 |
+| CI `configured, no report on head` (checks pending) | "wait on CI for `<sha>`" | `dev` 7.1 |
+| Codecov `configured, no report on head` | after a `TERMINAL_*` CI verdict: "re-run the CI wait once for `<sha>`, then re-invoke with `codecov`"; on a head with no CI (`NOT_CONFIGURED`): the "did not report on head" hand-back at once | `dev` 7.2 |
+| A reference's hand-back | "hand-back: `<reason>`" — the user's decision | the caller, then the user |
+
+**Standalone** — the user invoked this skill — end with that list addressed to
+the user: what to re-request or re-wait, and on which SHA. No loop follows.
+
+**Zero open threads is not a clean Copilot state unless a Copilot review covers
+the head** (`references/copilot.md` § State on head) — report it as not reviewed
+on this head, with its next action.
 
 ## Output Format
 
 ```
-## PR #123 Feedback Summary
+## PR #123 Feedback Summary — head <sha>
 
 ### Detection
-- Copilot: 2 unresolved threads found
-- CodeRabbit: 3 unresolved threads found
-- Codecov: patch coverage 65% (below threshold)
-- Uncategorised automated reviewers: <name>: <n> unresolved — no adapter here (or "none seen")
+- copilot: present (head review; 2 unresolved threads) | clean on head <sha> | configured, no report on head <sha> | stale: last seen on <sha> | absent | not requested
+- coderabbit: present (head check <state>; 3 unresolved threads) | clean on head <sha> | configured, no report on head <sha> | not configured | stale | absent | not requested
+- codecov: present (head: patch 65%, threshold 80% from codecov.yml) | configured, no report on head <sha> (last seen on <sha>) | not configured | stale | absent | not requested
+- ci: present (2 failed checks) | clean on head <sha> | configured, no report on head <sha> (checks pending) | not configured | absent | not requested
+- Failing checks owned by another source: <check> → <source> (<present | not requested>) | none
+- Uncategorised automated reviewers: <name>: <n> unresolved — no reference here (or "none seen")
+
+### Loaded references
+- references/copilot.md, references/ci.md
 
 ### Resolution
-- Invoked copilot-feedback-resolver
-- Invoked rabbit-feedback-resolver
-- Invoked resolve-codecov-feedback
+- Threads settled: <n> (<count per disposition>)
+- Findings with no thread: <source>: <item> — <disposition> | none
+- Returned to the caller for its batched fix: <blocking set | none>
+- Reported, not fixed: <flaky / infrastructure / untestable | none>
+- Pushed: <sha> | nothing pushed (coordinator-owned, or no blocking finding)
+- Handed back: <source>: <the reference's hand-back reason> | none
+- Proposed review rules: <rule text | none>
+
+### Next — owned by the caller (§ Step 5); this skill did none of it
+- <source>: re-request / re-wait on <sha> — <caller step> | none
 
 ### Final Status
-- All Copilot, CodeRabbit and Codecov threads resolved (no other reviewer categorised)
-- Coverage improved to 85%
+- Settled sources: <list> (no other reviewer categorised)
+- Not reviewed on this head: <source>: stale, last seen on <sha> | handed back — <reason> | none
 - Left for the caller: <uncategorised reviewer>: <n> threads still gating the merge (settle by hand)
 ```
 
@@ -436,16 +454,30 @@ would read as full coverage.
 
 ## Success Criteria
 
-1. All unresolved threads **from the reviewers this skill categorises** identified — matched on the `copilot-pull-request-reviewer` login, **not** the bare `Copilot`. Name that roster — the § Supported Reviewers table's three — when reporting the verdict; a reviewer with no adapter is outside it and is settled by the caller. Suppressed comments are **not** part of this: they open no thread and are ignored by default (`copilot-review` **D4**)
-2. Appropriate resolver skill(s) invoked (Copilot + CodeRabbit in parallel where applicable)
-3. The wait-and-resolve loop has CONVERGED — a Copilot review has been **RECEIVED for the current head SHA**, left **no blocking finding unresolved** (including any carried from an earlier pass), and every thread on that head from a reviewer this skill categorised is resolved. Immaterial findings resolved by reply do not block this. Do not add "and was requested", which is not a determinable fact (**D1**). A quiet poll on an unreviewed head is not convergence
-4. CodeRabbit's check is in a terminal passing state (or absent if not configured)
-5. Final verification confirms every categorised reviewer's threads resolved, and says which reviewers that covered
-6. Summary output provided
+1. Every source detected under Step 1's two-kind presence definition and reported
+   in one of its states; every requested source's reference loaded and its
+   § Configured check run, and an unrequested source's only when present (plus
+   Copilot's on an unscoped run). No requested source reported absent.
+2. Every in-scope thread from a categorised reviewer triaged, replied to and
+   resolved — every author matched exactly against § Supported Reviewers' logins,
+   Copilot never on the bare `Copilot`. Suppressed comments open no thread and are not part of this
+   (`copilot-review` **D4**).
+3. Coordinator-owned: nothing edited, committed or pushed here; the blocking set
+   returned. Standalone: one implementer, one push.
+4. One round: no waiter run, no nudge, no re-request, no second detection pass;
+   the report names every next action with its SHA and the caller step that owns
+   it.
+5. The report names which reviewers the verdict covers.
 
 ## Error Handling
 
-- If no PR found: Ask user for PR number
-- If resolver skill fails: Report which reviewer's feedback remains unresolved
-- If API errors: Retry with proper auth context
-- If a thread comes from an automated reviewer with no § Supported Reviewers row: this is not an error to work around and not a reason to improvise a resolver. Report the reviewer and its open threads as uncategorised and hand them back to the caller, which settles them by hand (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into reviews). Never report the PR as settled on their behalf
+- If no PR found: ask the user for the PR number.
+- If a fix or settle step fails: report which source's feedback remains open.
+- If API errors: retry once with proper auth context. A read that still fails is a
+  hand-back naming the read — never a zero, an empty list or another cycle.
+- If a thread comes from an automated reviewer with no § Supported Reviewers row:
+  this is not an error to work around and not a reason to improvise a reference.
+  Report the reviewer and its open threads as uncategorised and hand them back to
+  the caller, which settles them by hand
+  (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into
+  reviews). Never report the PR as settled on their behalf.

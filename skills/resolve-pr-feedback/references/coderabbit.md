@@ -1,0 +1,150 @@
+# CodeRabbit
+
+`resolve-pr-feedback` loads this file whenever `coderabbit` is in its `sources:`,
+and on an unscoped run when its Step 1 detection finds CodeRabbit present. It
+holds CodeRabbit's mechanics only. The procedure — Scope Brief, triage, dispositions, review-rule entries — is
+`fx-review` Steps 1–8, and none of it is restated here; Step 7's convergence
+loop is the caller's, never `resolve-pr-feedback`'s (its § One round).
+
+## Identify
+
+A CodeRabbit author's login is exactly `coderabbitai` in GraphQL or
+`coderabbitai[bot]` in REST — match it with `IN("coderabbitai", "coderabbitai[bot]")`,
+never a substring test (`resolve-pr-feedback` § Supported Reviewers).
+Its PR check is named `CodeRabbit`.
+
+## Configured
+
+Run this when CodeRabbit has no head evidence and no open thread. CodeRabbit is
+**configured** when `.coderabbit.yaml` exists at the root, or CodeRabbit left any
+signal on this PR — a `CodeRabbit` check or status on any of its commits, or a
+review or comment by a CodeRabbit login.
+
+- **None** → `not configured`, the same verdict `coderabbit-review`'s waiter
+  reports as `NOT_CONFIGURED`. Absent; gates nothing.
+- **Any** → `configured, no report on head <sha>`: next action "wait on
+  CodeRabbit for `<sha>`" — `coderabbit-review`'s waiter, which this skill never
+  runs.
+
+## Comment anatomy
+
+CodeRabbit comments follow a structured markdown format:
+
+```
+_🧹 Nitpick_ | _🔵 Trivial_    <- severity indicator (optional)
+
+[Main feedback text]
+
+<details>
+<summary>💡 Optional suggestion</summary>
+[Expanded suggestion content]
+</details>
+
+<details>
+<summary>📝 Committable suggestion</summary>
+[Code block with suggested changes]
+</details>
+
+<details>
+<summary>🤖 Prompt for AI Agents</summary>
+[Explicit instructions for AI to follow]
+</details>
+```
+
+Severity labels — `_🧹 Nitpick_`, `_🔵 Trivial_`, `🟠 Major`, `🟡 Minor` — are
+CodeRabbit's own, and inputs to triage, never verdicts. A project-rule, security,
+privacy or correctness defect carrying `Nitpick` still blocks.
+
+An AI prompt or a committable suggestion says nothing about materiality: a
+formatted comment can still rank immaterial, and then it is replied to with no
+edit like any other.
+
+## AI-prompt handler (blocking only)
+
+1. Extract the prompt (§ Parsing helper).
+2. **Verify the premise.** If it fails and the `blocking` disposition is the
+   coordinator's, return the thread with the evidence for reclassification and
+   leave it open. If you assigned the disposition yourself, treat the thread as a
+   false premise — outdated or incorrect, with the `fx-review` Step 6 entry where
+   a deliberate convention was misread.
+3. Pass the extracted instructions **verbatim** to whoever fixes — the caller's
+   batched fix or the standalone implementer (`resolve-pr-feedback` Step 3).
+
+## Committable-suggestion handler (blocking only)
+
+A committable suggestion attached to an immaterial observation is still
+immaterial; applying it produces the push that reopens the loop.
+
+**Verify a committable suggestion against the tree before applying it** — one
+applied as written has been observed to introduce the very bug it reported. If
+the premise fails, take the AI-prompt handler's route. A verified suggestion goes
+to the fix (`resolve-pr-feedback` Step 3), never applied on sight.
+
+## Parsing helper
+
+```bash
+# Content between "🤖 Prompt for AI Agents" and its closing </details>
+echo "$COMMENT_BODY" | sed -n '/🤖 Prompt for AI Agents/,/<\/details>/p' | sed '1d;$d' | sed 's/^```$//'
+```
+
+If parsing fails, read the comment and work from its main text.
+
+## Configuration check — read-only
+
+Run once per run. **Never write `.coderabbit.yaml` or `REVIEW.md` from here** — a
+configuration change mid-PR is an unrelated behavioural change inside a review
+fix. Gate on the one file (`fx-setup` → `references/adoption.md` § Who gates on
+what), from the repository root:
+
+```bash
+ROOT=$(git rev-parse --show-toplevel)
+if [ -f "$ROOT/REVIEW.md" ] && [ ! -L "$ROOT/REVIEW.md" ]; then
+  if [ -L "$ROOT/.coderabbit.yaml" ]; then echo ".coderabbit.yaml is a symlink — not read"
+  elif [ -f "$ROOT/.coderabbit.yaml" ]; then cat "$ROOT/.coderabbit.yaml"
+  else echo "no .coderabbit.yaml"; fi
+else
+  echo "REVIEW.md absent — config check skipped"
+fi
+```
+
+| State | Report |
+|---|---|
+| `REVIEW.md` absent | Nothing — skip the check entirely; CodeRabbit reads `AGENTS.md` by default |
+| `.coderabbit.yaml` absent, or `filePatterns` lacks `**/REVIEW.md` (case-sensitive) | "CodeRabbit cannot see REVIEW.md", with the instruction-layer block from `fx-setup` → `references/adoption.md` § Report. The fix is `fx-upgrade`'s M1.5 |
+| `knowledge_base.code_guidelines.enabled: false` | Report it as deliberate — CodeRabbit reviews without the project's conventions — and never flip it |
+| `.coderabbit.yaml` is a symlink | Report it; do not read through it |
+| Enabled, with `**/REVIEW.md` in `filePatterns` | Nothing |
+
+`enabled: true` alone is not enough: CodeRabbit's default patterns cover
+`**/AGENTS.md` and `**/CLAUDE.md` but never root `REVIEW.md`. The canonical
+configuration is `fx-setup` → `references/instruction-files.md` § CodeRabbit
+needs explicit configuration — do not copy it here.
+
+## State on head
+
+The waiter, rate-limit detection and `NOT_CONFIGURED` are `coderabbit-review`'s,
+and so is every wait: CodeRabbit re-reviews every push by itself, so there is
+nothing to request — only a wait, which is the caller's. Report CodeRabbit as
+exactly one, for `resolve-pr-feedback` Step 5:
+
+- **`clean on head <sha>`** — the most recent `CodeRabbit` check on the head is
+  terminal with `success` (or `skipped` / `neutral` where the repo configures
+  that), and zero unresolved CodeRabbit threads remain (`coderabbit-review`
+  Step 3, conditions 1–2; the ledger condition is `fx-review` Step 7).
+- **Threads settled, re-review due** — this round pushed `<sha>`: next action
+  "wait on CodeRabbit for `<sha>`" (`coderabbit-review` Step 3; `dev` 6.3).
+- **Check pending on the head** — next action "wait on CodeRabbit for `<sha>`".
+- **`configured, no report on head <sha>`** (§ Configured) — the same next action.
+- **`not configured`** — open CodeRabbit threads are still settled this round;
+  the check half no longer applies.
+- **Rate-limited** — every thread it already posted is settled and its blocking
+  findings are in the fix; record `skipped (rate-limited)`, met as degraded
+  (`coderabbit-review` § CodeRabbit is optional when rate-limited).
+- **Check failed with zero unresolved CodeRabbit threads** — `coderabbit-review`
+  Step 1c's reads, done here once: a rate limit is the degraded state above;
+  actionable review-body items are findings, triaged in `resolve-pr-feedback`
+  Step 2 and fixed through its Step 3, dispositions recorded in the report since
+  no thread exists to settle; nothing actionable, or nothing blocking, is a
+  hand-back with Step 1c's wording.
+- **Hand-back** — also when threads stay unreadable after one retry; never read
+  that as zero.

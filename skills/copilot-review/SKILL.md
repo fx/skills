@@ -141,7 +141,7 @@ it. Copilot's `[nitpick]` prefix is an input to that judgment, never a verdict.
 **Every push re-opens the gate.** Copilot must then re-review the new head
 (Step 5), so editing for an immaterial finding costs a full wait cycle *and*
 produces a fresh commit for it to comment on. Push fixes for blocking findings;
-reply-and-resolve the rest without a commit. The one exception is the `REVIEW.md`
+reply-and-resolve the rest without a commit. The one exception is the review-rules
 entry for a misread convention (`fx-review` Step 6) — required work, and its
 commit is expected.
 
@@ -171,7 +171,7 @@ Do not budget for Copilot being quick. Observed delivery ranges from **85 s to
 
 ## Arguments
 
-This skill expects a PR number **and the Scope Brief**: `skill='copilot-review', args='<PR_NUMBER> — <Scope Brief verbatim>'`. Copilot cannot be handed the brief itself, but this skill triages its output and dispatches a resolver, and both need it (`fx-review` Step 1). A bare PR number makes the whole chain re-derive the exclusions from the PR description.
+This skill expects a PR number **and the Scope Brief**: `skill='copilot-review', args='<PR_NUMBER> — <Scope Brief verbatim>'`. Copilot cannot be handed the brief itself, but this skill triages its output and settles it through `resolve-pr-feedback`, and both need it (`fx-review` Step 1). A bare PR number makes the whole chain re-derive the exclusions from the PR description.
 
 ## Workflow
 
@@ -224,10 +224,10 @@ on STATUS, not on prose.
 | STATUS | Exit | What to do |
 |---|---|---|
 | `TERMINAL_PASS` | 0 | A review covers the current head and no Copilot thread is open → **Step 2b**, then Step 4 to confirm. |
-| `TERMINAL_FAIL` | 1 | A review covers the current head and threads remain open (or the count could not be read) → **Step 2b**, then Step 3. Settled — do not re-run for a better answer. |
-| `PENDING` | 2 | No review of the current head arrived within 900 s. **Not a failure and not a clean result.** Re-running is safe. If it still has not arrived, STOP and report: "Copilot review has not arrived for PR #N head `<sha>`. Cannot merge without it." **Never** record this as "no findings". |
+| `TERMINAL_FAIL` | 1 | A review covers the current head and threads remain open (or the count could not be read) → **Step 2b**, then Step 3. Settled — do not re-run for a better answer. Where the count could not be read, Step 3's paginated read is the check; if it fails too, after one retry, hand back "Copilot threads unreadable on head `<sha>`" — never a zero, never another wait. |
+| `PENDING` | 2 | No review of the current head arrived within 900 s. **Not a failure and not a clean result.** Re-running is safe. If it still has not arrived, STOP and report — a hand-back to the user, never Step 3: "Copilot review has not arrived for PR #N head `<sha>`. Cannot merge without it." **Never** record this as "no findings". |
 | `NOT_CONFIGURED` | 3 | **Never returned by this script.** Whether Copilot is "configured" has no answerable form — `requested_reviewers` does not work at all (**D1/D3**). Do not branch on it, and do not reinstate any "request again, then re-run" recovery keyed to it. |
-| `ERROR` | 4 | Bad arguments, `gh` too old, PR head unresolvable → report to the user. The wait never started. |
+| `ERROR` | 4 | Bad arguments, `gh` too old, PR head unresolvable → report to the user — a hand-back, never Step 3. The wait never started. |
 
 On a settled review the script also prints machine-readable lines; read them rather
 than branching on STATUS alone:
@@ -246,7 +246,10 @@ headline** and check whether Copilot opened any review threads:
   is passed. Go to Step 4 and confirm the thread count is zero. There is nothing
   to fix and nothing to reply to.
 - **Changes recommended**, or any headline accompanied by threads → go to Step 3
-  and handle the threads normally.
+  and handle the threads normally. **Changes recommended with zero threads** has
+  nothing to work through — the threads are the findings — so Step 3 settles
+  nothing and Step 4 passes it on conditions 1–2; do not re-run for a thread that
+  was never opened.
 
 **Do not open the suppressed-comments block as a matter of routine** (**D4**).
 `SUPPRESSED_COMMENTS=1` is context, not an instruction; it holds nothing open. Act
@@ -258,11 +261,15 @@ If you do need the bodies directly — scoped to the reviewed head so you do not
 read a stale review's body, and across **every** review of that commit:
 
 ```bash
+PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
-HEAD_SHA=$(gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid')
+HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+set -o pipefail   # a failed gh read must fail the pipeline, never print an empty "none found"
 
-gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
-  --jq "[.[] | select(.user.login | startswith(\"copilot-pull-request-reviewer\")) | select(.commit_id == \"${HEAD_SHA}\") | .body] | join(\"\n\n----- (next review of this commit) -----\n\n\")"
+# Every page: --jq would run per page, and the head's review may not be on the first
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+  | jq -r --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | select(.commit_id == $head) | .body] | join("\n\n----- (next review of this commit) -----\n\n")' \
+  || echo "READ FAILED: reviews — not evidence"
 ```
 
 **Do not narrow that to `| last`.** Two Copilot reviews of a single commit are
@@ -272,34 +279,36 @@ reading. Take all bodies for the commit.
 
 ### Step 3: Resolve Feedback
 
-After the review is received, invoke the resolve-pr-feedback skill to process the automated review threads it categorises (Copilot, CodeRabbit, Codecov):
+After the review is received, invoke `resolve-pr-feedback` scoped to Copilot:
 
 ```
 Skill tool: skill="resolve-pr-feedback",
-            args="<PR_NUMBER> — <Scope Brief verbatim> — dispositions already assigned: <suppressed item or thread id> blocking | immaterial | deferred (<exclusion>) — false premise (resolver's own handler): <item or thread id> (<what does not hold>)"
+            args="<PR_NUMBER> — <Scope Brief verbatim> — sources: copilot — dispositions: <suppressed item or thread id> blocking (already fixed in <sha>) | immaterial | deferred (<exclusion>) — false premise: <item or thread id> (<what does not hold>)"
 ```
 
 **Never invoke it with only the PR number.** The Scope Brief must travel into
 every downstream review call (`[SKILLS_DIR]/dev/references/scope-contract.md`
-§ Injecting the brief into reviews), and a resolver handed a bare number
-re-derives triage from the PR description — losing the exact exclusions and
+§ Injecting the brief into reviews), and `resolve-pr-feedback` handed a bare
+number re-derives triage from the PR description — losing the exact exclusions and
 known-and-accepted decisions, and editing for threads you classified immaterial
 or deferred.
 
 Pass dispositions only for what you have actually triaged — usually nothing at
 this point, since this skill never fetches the thread list, and suppressed items
-are ignored by default (**D4**). The `dispositions already assigned:` clause is
+are ignored by default (**D4**). The `dispositions:` clause is
 there for the rare case where an absolutely-dire suppressed item was acted on.
 `resolve-pr-feedback` fetches the threads and triages the rest (its
-Steps 2 → 4). **Do not invent a disposition for a thread you have not read**; an
+Steps 1–2). **Do not invent a disposition for a thread you have not read**; an
 absent one is filled in downstream, a wrong one is authoritative and overrides
-the resolver's own reading.
+its own reading.
 
-This skill will:
-1. Find all unresolved Copilot threads
-2. Categorize each (nitpick, valid, incorrect, outdated, deferred)
-3. Fix **blocking** findings; reply-and-resolve every other thread without editing
-4. Report a summary table of actions taken
+Scoped to `sources: copilot`, it loads its Copilot reference, fetches every
+unresolved Copilot thread on the head, triages each one you did not dispose of,
+and replies to and resolves every Copilot thread. Under a coordinator it returns
+the blocking set unfixed for the coordinator's one batched fix; run standalone,
+it fixes the blocking set once and pushes once. **It settles only Copilot's
+threads, runs one round, and never nudges, waits or re-requests** (its § One round) — Steps 4–5 below are the loop, and the re-request its report names after a push is this skill's Step 5. CodeRabbit's
+threads are `coderabbit-review`'s.
 
 ### Step 4: Confirm Resolution
 
@@ -307,7 +316,7 @@ After resolve-pr-feedback completes, verify zero unresolved **Copilot** threads
 remain. The filter on the Copilot login is required, not cosmetic: this gate is
 scoped to Copilot, and `github` forbids touching human review threads at all
 — so counting every unresolved thread makes one open human comment permanently
-unsatisfiable and loops `resolve-pr-feedback` forever:
+unsatisfiable, and this step would re-invoke `resolve-pr-feedback` forever:
 
 ```bash
 OWNER="${REPO_NWO%%/*}"
@@ -359,7 +368,7 @@ The gate is passed when **both** hold:
 
 A zero thread count on its own is not enough — condition (1) is what makes it mean
 anything, because zero threads on a superseded commit says nothing about the code
-being merged. If the count is > 0, re-invoke resolve-pr-feedback. The verdict
+being merged. If the count is > 0, re-invoke `resolve-pr-feedback` with `sources: copilot`. The verdict
 headline does not add a third condition: **Needs a closer look** with zero threads
 passes exactly as **Approval recommended** with zero threads does.
 
@@ -385,12 +394,19 @@ that Copilot had already declined to raise as threads.
 
 ```bash
 # The gate is only passed when the newest Copilot review covers the current head.
-HEAD_SHA=$(gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid')
-REVIEWED=$(gh api "/repos/${REPO_NWO}/pulls/<PR_NUMBER>/reviews" \
-  --jq '[.[] | select(.user.login | startswith("copilot-pull-request-reviewer")) | .commit_id] | last // empty')
-[[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
-  && echo "covered: $HEAD_SHA" \
-  || echo "NOT covered — head=$HEAD_SHA reviewed=${REVIEWED:-none}"
+PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
+REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
+HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+set -o pipefail   # a failed gh read must fail the pipeline, never print an empty "none found"
+# Every page, then `last`: --jq would take the last review of each page.
+if REVIEWED=$(gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+    | jq -r '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | .commit_id] | last // empty'); then
+  [[ -n "$REVIEWED" && "$REVIEWED" == "$HEAD_SHA" ]] \
+    && echo "covered: $HEAD_SHA" \
+    || echo "NOT covered — head=$HEAD_SHA reviewed=${REVIEWED:-none}"
+else
+  echo "UNKNOWN — the reviews read failed; not evidence either way"   # never read as NOT covered
+fi
 ```
 
 ## Success Criteria

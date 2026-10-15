@@ -63,7 +63,7 @@ Standards that bind the Implementer, in addition to **Test Policy** and **Scope 
 
 ## CRITICAL RULES
 
-**Delegate the substantive roles this lifecycle owns — requirements analysis, planning, and implementation — each to its own sub-agent that loads the matching skill. Implementation's skill is this one: the implementation sub-agent loads `dev` and acts in its Implementer role. Do not delegate a mechanical operation the coordinator can perform directly.**
+**Delegate the substantive roles this lifecycle owns — requirements analysis (which also produces the implementation outline) and implementation — each to its own sub-agent that loads the matching skill. Implementation's skill is this one: the implementation sub-agent loads `dev` and acts in its Implementer role. Do not delegate a mechanical operation the coordinator can perform directly.**
 
 ### How to Launch Sub-Agents with Skills
 
@@ -96,8 +96,8 @@ Choose by the **shape of the task**, not by how important it feels. Every Agent 
 
 | Size | Use for |
 |---|---|
-| **large** | Implementation (Step 4). Planning (Step 3). Requirements analysis (Step 2). Fix agents on an **undiagnosed** failure. Anything requiring design judgment. |
-| **medium** | PR preparation. Browser/test-plan verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
+| **large** | Implementation (Step 4). Requirements analysis (Step 2). Fix agents on an **undiagnosed** failure. Anything requiring design judgment. |
+| **medium** | Browser/test-plan verification. Fix agents handed an **exact, specified** patch. Mechanical work with a clear spec. |
 | **small** | Pure inspection or summarisation with no judgment call. |
 
 **Request the tier, not a model name.** "Spawn a large-model sub-agent" resolves to whatever the host currently offers at that tier, so this table does not go stale every time a model ships — and a hardcoded name silently becomes wrong rather than failing loudly. Where the host requires an explicit model, map the tier to its general-purpose **coding** models and nothing else; a model specialised for another domain is the wrong choice at every tier regardless of its size. In Claude Code that means the three coding tiers only — **never select `fable`.**
@@ -125,7 +125,7 @@ duvet# During an explicitly invoked `dev` lifecycle, the coordinator MUST delega
 - ❌ NEVER create implementation commits yourself
 - ❌ NEVER skip tests (`test.skip`, `it.skip`, `describe.skip` are FORBIDDEN)
 - ❌ NEVER select a skill as an agent type — the delegate loads it from its prompt (in Claude Code: not via `subagent_type`)
-- ✅ ALWAYS delegate requirements analysis, planning, and implementation roles — implementation to a sub-agent that loads `dev` in its Implementer role
+- ✅ ALWAYS delegate requirements analysis and implementation roles — implementation to a sub-agent that loads `dev` in its Implementer role
 - ❌ NEVER delegate review to a reviewing sub-agent — review is Codex, Copilot, and CodeRabbit, each driven by its own skill from the coordinator session
 - ✅ ALWAYS instruct delegated role agents to load their named skills via the Skill tool
 - ✅ ALWAYS perform straightforward status checks, branch synchronization, PR metadata updates, and an explicitly approved merge directly when delegation adds no independent judgment
@@ -241,8 +241,9 @@ Agent tool:
            - Use WebFetch for referenced URLs
            - Use AskUserQuestion for ambiguities
            - Analyze codebase for patterns
+           - Produce the Implementation Outline your skill defines; with an approved change document, map it onto that document's task list
 
-           Output: Complete requirements with acceptance criteria"
+           Output: Complete requirements with acceptance criteria and the Implementation Outline"
   description: "Analyze requirements"
 ```
 
@@ -277,12 +278,12 @@ Derive **size signal** from the user's own language: "just", "real quick",
 not filler — honour it.
 
 **The Scope Brief MUST be included verbatim in every downstream sub-agent prompt
-and every reviewer invocation in Steps 3, 4, 4.5, 4.6, 6, and 8** — verifiers
+and every reviewer invocation in Steps 4, 4.5, 4.6, 6, and 8** — verifiers
 included, not only reviewers. A reviewer without
 it reports the work you deliberately did not do, and every such finding costs a
 full review cycle to filter by hand.
 
-**Then freeze the implementation contract.** If the task is sourced from, names, or discovers a relevant `docs/changes/*.md` file, read it and the spec sections it links. Confirm implementation approval from the conversation or the change's recorded workflow state; if approval is unclear, STOP and ask the user. Record the contract path and approval evidence in the working brief. The change document, its linked specs, and all mandatory project rules form the implementation contract: the plan and implementer prompt MUST map work to that contract and MUST NOT infer adjacent product or architecture work.
+**Then freeze the implementation contract.** If the task is sourced from, names, or discovers a relevant `docs/changes/*.md` file, read it and the spec sections it links. Confirm implementation approval from the conversation or the change's recorded workflow state; if approval is unclear, STOP and ask the user. Record the contract path and approval evidence in the working brief. The change document, its linked specs, and all mandatory project rules form the implementation contract: the implementation outline and implementer prompt MUST map work to that contract and MUST NOT infer adjacent product or architecture work. **Run the docs-layout check once, here** — `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh` — and record its output in the working brief with the contract path; Steps 4, 5, 8.2 and 8.4 read it from there (`fx-setup` → `references/adoption.md` § Running the check). Where it reports `FX_DOCS=not-adopted`, the contract document is the native design or decision document the request or issue names, and its approval evidence is that convention's own signal (an ADR marked `Accepted`, an RFC merged or labelled approved) or the user's word. No document named: the Scope Brief alone is the contract.
 
 The coordinator owns one in-memory finding ledger for the run; reviewer sub-agents return findings to the coordinator and MUST NOT mutate the ledger concurrently. Give every finding a stable fingerprint (`category + file + line/range + normalized claim`) and record its source, first-seen revision, classification, materiality tier, disposition, and verification evidence. Classification and materiality are independent fields — see Step 4.5 for how the tier is assigned. The tier is `n/a` for a contract blocker: filter 2 stops before the bar, so a rule violation is never ranked, and inventing a tier for one is the mistake that lets it be argued down. Classify each finding exactly once as:
 
@@ -294,43 +295,9 @@ Fix the first two classes, and any entry that is blocking by tier — a reviewer
 
 ---
 
-### STEP 3: Planning
+### STEP 3: (retired)
 
-**MANDATORY: Launch a sub-agent that loads the planner skill.**
-
-```
-Agent tool:
-  prompt: "Load the planner skill (Skill tool: skill='planner'), then:
-
-           [PASTE THE STEP 2.5 SCOPE BRIEF VERBATIM HERE]
-
-           Create implementation plan for:
-
-           [REQUIREMENTS FROM STEP 2]
-
-           - Keep the plan inside the Scope Brief; if the work cannot be done
-             within it, stop and report that rather than planning around it
-           - Break into atomic steps
-           - Identify files to modify
-           - Determine test requirements
-           - Flag if multiple PRs needed
-           - Treat the approved change document as the implementation contract
-           - Do not include non-blocking follow-up/out-of-scope work, or expand product/architecture, without an approved amendment
-
-           Output: Numbered implementation steps"
-  description: "Plan implementation"
-```
-
-For GitHub issues, also update issue:
-```
-Agent tool:
-  prompt: "Load the issue-updater skill (Skill tool: skill='issue-updater'), then:
-
-           Update issue #[NUMBER] with plan. Add label: in-progress"
-  description: "Update issue"
-```
-
-**⛔ DO NOT PROCEED until plan exists**
+Planning is not a separate step. Step 2's implementation outline — or, when one exists, the approved change document's task list — is the plan Step 4 implements. The number stays so the step numbers other skills cite do not move.
 
 ---
 
@@ -346,7 +313,7 @@ Agent tool:
 
            Implement this plan:
 
-           [PLAN FROM STEP 3]
+           [THE STEP 2 IMPLEMENTATION OUTLINE — OR, WITH AN APPROVED CHANGE DOCUMENT, ITS TASK LIST AS THAT OUTLINE MAPS IT]
 
            Requirements:
            - Stay inside the Scope Brief; if implementation cannot be completed
@@ -357,19 +324,32 @@ Agent tool:
            - Treat the approved change document as the implementation contract
            - Do not implement non-blocking findings, or expand product/architecture, without an approved amendment (an entry blocking by tier is fixed whatever its class)
            - TASK TRACKING RIDES WITH THE IMPLEMENTATION: if [DOC_PATH or 'none']
-             tracks this work, mark the items this change actually completes
-             (- [x] Task name), and if this change completes the whole document
-             flip its Status to complete and sync docs/index.yml and docs/index.md.
-             Same commit series as the code — never a separate later commit.
+             tracks this work, mark the items this change actually completes, in
+             that document's own format (- [x] Task name in a change doc or task
+             list), and if this change completes the whole document flip its
+             Status to complete — plus, only when Step 2.5 recorded
+             FX_DOCS=adopted, sync docs/index.yml and docs/index.md. In a native
+             document, mark completion only in a field it already has, in its own
+             vocabulary. Same commit series as the code — never a separate later
+             commit.
+           - WRITE TARGETS: before writing or creating any tracking, docs or
+             review-rules file, check its path from the repository root down —
+             relative, no `..` component, no component a symlink (ancestors
+             included) — and if any check fails, write nothing to it and report
+             the path.
            - Do NOT create PR"
   description: "Implement changes"
 ```
 
-Identify `[DOC_PATH]` before spawning — the change document or task list named in the request, or:
+> **The `WRITE TARGETS` line is a MIRROR** of `fx-setup` → `references/adoption.md` § Who gates on what's write rule — it crosses into a spawned agent, which cannot follow the link. Keep it a faithful restatement, and update it here, in Step 6.2's prompt and in `team`'s copy in the same commit that changes the canonical rule.
+
+Identify `[DOC_PATH]` before spawning: the change document or task list the request names, or — **only when Step 2.5 recorded `FX_DOCS=adopted`** — the result of:
 
 ```bash
 grep -rl "keyword from task" docs/changes/ docs/tasks.md 2>/dev/null || true
 ```
+
+**Not adopted:** `[DOC_PATH]` is the tracker the request or issue names, else `none`. Do not grep native files for keyword matches — checking off a roadmap line by guess is a guess, not best effort. Issue-tracked work closes through `Closes #N` in the PR body (Step 5).
 
 **Tracking updates belong here, not at finalization** — they ride with the implementation at step 1 of `references/head-discipline.md` § The candidate head, where step 5 later confirms none is outstanding. Nothing about them needs the PR to exist.
 
@@ -445,7 +425,7 @@ This step is MANDATORY for every change, not only web/UI ones. Backend changes, 
 
 #### 4.6.1 Construct and classify the test plan
 
-Write the test plan now — it becomes the `## Test plan` section of the PR body in Step 5. Derive it from the Step 3 plan and the branch diff (`git diff main --stat`): each item is one verification target.
+Write the test plan now — it becomes the `## Test plan` section of the PR body in Step 5. Derive it from the Step 2 implementation outline and the branch diff (`git diff main --stat`): each item is one verification target.
 
 **Classify each item:**
 
@@ -566,61 +546,26 @@ Record the candidate head in the ledger. From here on `references/head-disciplin
 
 ### STEP 5: Pull Request Creation
 
-**MANDATORY: Prepare the PR directly from the coordinator, optionally loading `pr-preparer` in the coordinator session. Do not spawn a sub-agent solely to push a branch or create/edit PR metadata. ALL PRs MUST be created READY FOR REVIEW — never as drafts.**
+**MANDATORY: Create the PR yourself, in the coordinator session, with `gh pr create`.** Load `github` first (Skill tool: `skill="github"`): its **PR conventions block** is the rule set for the title and the body, and its **Mechanical body check** runs before and after creation. Do not spawn a sub-agent to push a branch or create/edit PR metadata. **ALL PRs MUST be created READY FOR REVIEW — never as drafts.**
 
 **⛔ NEVER use the `--draft` flag. NEVER create draft PRs.** Draft PRs have repeatedly been used as an excuse to skip downstream steps (reviewer waits, CI monitoring, CodeRabbit/Copilot resolution). The SDLC ALWAYS executes the full review/CI cycle from PR creation onward — opening as draft defeats this. If the work isn't ready for review, don't open the PR yet.
 
-**Before creating the PR, identify related spec and change documents:**
+**Take the related contract and spec paths from the working brief** — Step 2.5 recorded them, whatever convention they follow — and link them in the body.
+
+**Before `gh pr create`, confirm every item** — this is the checklist the old preparer prompt carried:
+- **The head.** The branch is already pushed at its candidate head (Step 4.7). Commit or amend nothing; the PR is created on that exact SHA.
+- **The title** follows the PR conventions block: a conventional-commit subject whose type comes from the dominant change; lowercase after the colon, imperative, no trailing period; no `#<number>` unless N is a real PR or issue on this repo that the PR references, and never a `(#N)` suffix; no wave, phase, step, or change-doc number, slug or path — even when the PR finalizes a change doc, reference the doc by path in the body only (`github` § The `#<number>` PR-Title Rule). A title taken from the task, an issue or the branch name is reformed, never passed through.
+- **The body** follows the block: why; `Closes #N` for the issue this run started from, if any; the contract and spec paths Step 2.5 recorded, as repo-relative paths; breaking changes and non-obvious decisions; and the Step 4.6 **Test plan with its recorded results** — verified items `- [x]`, failures the user accepted `- [ ] … — FAILED: <reason> (accepted by user)`, manual-only items `- [ ] … — requires manual testing`. An unaccepted failure never reaches here; Step 4.6.4 escalates it instead.
+- **No draft language** — no "draft", "WIP" or "for review" anywhere in the title or body.
+
+Write the body to a file, run the Mechanical body check against that file, then create the PR:
 
 ```bash
-# Find related change documents (check if task was sourced from a change doc)
-ls docs/changes/ 2>/dev/null
-# Find related specs
-ls docs/specs/ 2>/dev/null
-cat docs/index.yml 2>/dev/null
+BODY_FILE=$(mktemp)    # write the body here — one line per prose paragraph
+gh pr create --title "<type(scope): description>" --body-file "$BODY_FILE"   # NO --draft
 ```
 
-If the work was driven by a specific change document or spec, note the paths for inclusion in the PR description.
-
-```
-Skill tool: skill="pr-preparer", args="
-           Create PR (ready for review, NOT draft) for current branch.
-           Task: [ORIGINAL TASK]
-           Summary: [WHAT WAS IMPLEMENTED]
-
-           Spec/Change context (include in PR body if applicable):
-           - Spec: [SPEC_PATH or 'none']
-           - Change: [CHANGE_DOC_PATH or 'none']
-
-           CRITICAL: Do NOT pass --draft. The PR must be opened ready for review so
-           CI, Copilot, and CodeRabbit run from the start.
-           - The branch is already pushed at its candidate head [SHA] (Step 4.7).
-             Do NOT commit or amend anything — create the PR on that exact SHA.
-           - Create PR with: gh pr create  (NO --draft flag)
-           - Body MUST carry the Step 4.6 Test plan with its recorded results:
-             verified items already '- [x]', failed items the user accepted
-             '- [ ] … — FAILED: reason (accepted by user)', manual-only items
-             '- [ ] … — requires manual testing'. An unaccepted failure must not
-             reach here at all — Step 4.6.4 escalates it instead.
-             [PASTE THE STEP 4.6 TEST PLAN WITH RESULTS]
-           - Include links to related spec/change docs in the PR body
-             (use relative paths from repo root, e.g. docs/specs/auth/ or docs/changes/0003-add-oauth.md)
-           - Do NOT put spec/change references in the PR title — not as a number,
-             slug, or path, even when the PR finalizes a change doc. Describe the
-             work itself in the title; reference the doc by path in the body only.
-           - ⛔ NEVER put '#<number>' in the PR title ('#4', '(#4)', '#123')
-             unless N is a REAL existing PR/issue on the target repo that this PR
-             references. On squash-merge the title becomes the commit subject,
-             where '#N' auto-links to PR/issue #N. NEVER use '#N' for an
-             implementation wave, phase, step, or change-doc number, and NEVER
-             pre-add a '(#N)' suffix (GitHub appends the real PR number at squash
-             merge). No waves/phases/steps in the title at all — those go in the
-             body. See the github skill's '#<number> PR-Title Rule'.
-           - Reference related issues
-           - Do NOT include any 'this is a draft' / 'draft for review' language
-             anywhere in the title or body
-           - Return PR number and URL"
-```
+After creating: re-check the title against every TITLE rule, run the Mechanical body check against the live body, fix with `gh pr edit`, and confirm `gh pr view <N> --json headRefOid` equals the candidate head.
 
 **Capture the PR number for remaining steps.**
 
@@ -704,7 +649,7 @@ Waiting on a manual answer never blocks **Steps 6 and 7** — post the request, 
 2. **If 6.1 produced a blocking finding, fix it now** — one **6.2** pass, one push, and that SHA becomes the candidate head. Do this **before** launching anything in 6.3: a hosted review started on a head you already know must change is a full reviewer cycle spent on a diff that will not survive. Nothing is waiting yet, so this fix costs nothing but the push it was always going to need.
 3. **6.3's waiter launch**, on a head with no known blocking finding — and where 2 pushed, **6.1's material-change test** applies to that push first, because the launch is a hosted waiter starting on a moved head like any other. The hosted reviewers are the long pole, so from here on nothing waits on them that could have gone first.
 4. **On each reviewer wake** — read that log and classify its threads (6.3, per-reviewer steps 1–2). **If the table now holds any blocking entry**, re-enter **6.2 once** for everything currently on it across every channel, and push once. If it holds none, there is nothing to fix and nothing to push — go straight to 5.
-5. **Dispatch the resolvers on every wake, push or no push.** A wake that produced only `immaterial` and `deferred` findings still has threads to settle, and leaving them for a later push that may never come is what stalls the 6.3 convergence gate. The only ordering constraint is that a `blocking` entry is fixed in 4 before its thread is dispatched, so it arrives annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions) rather than sending the resolver down its own pushing path.
+5. **Settle threads on every wake, push or no push** — invoke `resolve-pr-feedback` scoped to the woken reviewer's source (`sources: copilot` or `sources: coderabbit`). A wake that produced only `immaterial` and `deferred` findings still has threads to settle, and leaving them for a later push that may never come is what stalls the 6.3 convergence gate. The only ordering constraint is that a `blocking` entry is fixed in 4 before its thread is dispatched, so it arrives annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions) rather than coming back to you unfixed.
 6. **If 4 pushed, that created a new head, so re-cover it** — apply **6.1's material-change test** to that push, then 6.3, per-reviewer step 4, applying `references/head-discipline.md` § Evidence is SHA-scoped — before repeating from 4 on the next wake. A wake that pushed nothing invalidates no evidence and needs no relaunch.
 
 If a wake arrives while nothing else is outstanding and its channel is the only one with findings, 6.2 still runs once for that channel — a batch of one is not a violation. What is forbidden is fixing channel A, pushing, and then fixing channel B (`references/head-discipline.md` § Batch findings).
@@ -758,13 +703,18 @@ Agent tool:
            Do not implement ledger entries that are not blocking. Judge that by
            the blocking flag, not the tier: a required-by-contract entry also
            carries tier n/a, and it MUST be fixed.
+           WRITE TARGETS: before writing or creating any tracking, docs or
+           review-rules file, check its path from the repository root down —
+           relative, no `..` component, no component a symlink (ancestors
+           included) — and if any check fails, write nothing to it and report
+           the path.
            Push once, at the end."
   description: "Fix review issues"
 ```
 
-**Do not hold the batch open for a channel that has not reported** (`references/head-discipline.md` § Batch findings) — late findings are the next batch, against the new head. After the push, record the new SHA as the candidate head and apply § Evidence is SHA-scoped to every wait still bound to the previous one.
+The `WRITE TARGETS` line is Step 4's MIRROR — a review-rule entry or a tracking fix in the batch writes through it. **Do not hold the batch open for a channel that has not reported** (`references/head-discipline.md` § Batch findings) — late findings are the next batch, against the new head. After the push, record the new SHA as the candidate head and apply § Evidence is SHA-scoped to every wait still bound to the previous one.
 
-Then invoke each reviewer's resolver to settle its threads, passing its blocking entries annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions). Letting two resolvers fix in parallel instead races them on the same branch and buys two CI cycles for one round of feedback.
+Then invoke `resolve-pr-feedback` scoped to each reviewer's source to settle its threads, passing its blocking entries annotated `already fixed in <sha>` (`references/scope-contract.md` § Resolver dispositions). It settles one round and returns — never waiting, nudging or re-requesting (its § One round); the re-covers its report names are yours, in 6.3 per-reviewer step 4. Under a coordinator it never fixes or pushes itself (its Step 3); a second fix path would race this one on the same branch and buy two CI cycles for one round of feedback.
 
 #### 6.3 Automated Reviewer Wait (Copilot + CodeRabbit)
 
@@ -804,12 +754,12 @@ bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh [PR_NU
 
 1. Read the log and branch on its `STATUS=` line (each reviewer skill documents its own table; the five states are shared):
    - `TERMINAL_PASS` / `TERMINAL_FAIL` — settled. Do **not** re-run for a better answer.
-   - `PENDING` — not a verdict and not a failure. Re-running is safe if you still need it. **Never** record it as "no findings" or "CI passed".
-   - `NOT_CONFIGURED` — that reviewer does not apply to this repo. Terminal: report once, proceed without it, never retry.
-   - `ERROR` — the wait never started. Report it.
-2. Read its unresolved threads and classify them in the shared ledger **before** invoking any resolver. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
-3. **Fix before you dispatch.** Take every blocking entry this wake produced, together with every other channel's outstanding blocking entries, through **one** Step 6.2 pass, and push once. Then invoke each reviewer's resolver, passing a disposition for every thread that carries a finding — `blocking` annotated `already fixed in <sha>`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions). A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. Handing a resolver an un-fixed `blocking` disposition puts it on its own fixing path, which pushes per reviewer — the churn this ordering exists to prevent.
-4. **After the Step 6.2 push** — that push, not a resolver's, is what moves the head under this ordering — record the new SHA as the candidate head and re-cover it:
+   - `PENDING` — not a verdict and not a failure. Re-run once if you still need it; `PENDING` again is a hand-back to the user. **Never** record it as "no findings" or "CI passed".
+   - `NOT_CONFIGURED` — that reviewer does not apply to this repo. Terminal: report once, proceed without it, never retry. A CodeRabbit thread already on the PR still goes through step 2 and `resolve-pr-feedback` (`coderabbit-review`'s `NOT_CONFIGURED` row).
+   - `ERROR` — the wait never started. Report it — a hand-back to the user, never step 2.
+2. Read its unresolved threads and classify them in the shared ledger **before** invoking `resolve-pr-feedback`. A CodeRabbit `TERMINAL_FAIL` with no unresolved CodeRabbit thread goes through `coderabbit-review` Step 1c instead: its review-body findings enter the ledger like threads, and its hand-back is that reviewer's outcome for this head — reported, and an unmet 8.1 gate for the user, never a re-wait. Neither Copilot nor the CodeRabbit GitHub App accepts a scope prompt, so the brief cannot reach them — you apply it at triage. Record the SHA each result observed; a result with no SHA is not evidence (`references/head-discipline.md` § Evidence is SHA-scoped).
+3. **Fix before you dispatch.** Take every blocking entry this wake produced, together with every other channel's outstanding blocking entries, through **one** Step 6.2 pass, and push once. Then invoke `resolve-pr-feedback` scoped to that reviewer's source (`sources: copilot` or `sources: coderabbit`), passing a disposition for every thread that carries a finding — `blocking` annotated `already fixed in <sha>`, `immaterial`, or `deferred` (`references/scope-contract.md` § Resolver dispositions). A thread whose premise you verified and rejected is listed as undisposed with the reason, not forced into one of the three. An un-fixed `blocking` disposition only comes back to you unfixed: fixing is always Step 6.2's one batched pass.
+4. **After the Step 6.2 push** — that push — `resolve-pr-feedback` never pushes under a coordinator — is what moves the head under this ordering — record the new SHA as the candidate head and re-cover it:
    - **Apply 6.1's material-change test to the delta first — including its blocking-finding consequence, which fixes and pushes before any relaunch below.** Where it fires, its delta-scoped Codex re-entry runs *before* the relaunches, so a materially changed diff never reaches Copilot or CodeRabbit with no local pass behind it. Most pushes fall straight through.
    - **Relaunch the waiter of every reviewer whose evidence the delta invalidated**, and only those. Do not restart a reviewer the delta did not touch merely because `HEAD` changed. **Copilot does not re-review a push on its own** — its waiter must be relaunched, or the fix you just pushed ships unreviewed by it; CodeRabbit re-reviews by itself and its waiter is relaunched only to observe that.
    - On the next wake, inspect only feedback added or changed since that reviewer's previously reviewed SHA, and classify and deduplicate it in the shared ledger.
@@ -877,38 +827,43 @@ Then branch on the trailing `STATUS=` line:
 
 | STATUS | Exit | What to do |
 |---|---|---|
-| `TERMINAL_PASS` | 0 | Every check completed, none failed → **proceed to Step 8** |
+| `TERMINAL_PASS` | 0 | Every check completed, none failed → **proceed to Step 7.2** for the Codecov assessment; Step 8 once it returns nothing to fix |
 | `TERMINAL_FAIL` | 1 | Every check completed, at least one failed → **proceed to Step 7.2** |
-| `PENDING` | 2 | Still running at budget expiry. Not a verdict. Re-run to keep waiting, or report the wait as unfinished. **Never** record it as "CI passed". |
-| `NOT_CONFIGURED` | 3 | No checks appeared within the discovery grace — this PR has no CI configured. **This is NOT a pass**: a merge gate requiring green CI is not satisfied by the absence of CI. Report it and confirm against branch protection. |
-| `ERROR` | 4 | Bad arguments, `gh` unauthenticated, or the checks API could not be read → report. A failed read is not "no checks". |
+| `PENDING` | 2 | Still running at budget expiry. Not a verdict. Re-run once to keep waiting; `PENDING` again on that re-run → report the wait as unfinished and STOP — a hand-back to the user, never Step 7.2. **Never** record it as "CI passed". |
+| `NOT_CONFIGURED` | 3 | No checks appeared within the discovery grace — this PR has no CI configured. **This is NOT a pass**: a merge gate requiring green CI is not satisfied by the absence of CI. **Proceed to Step 7.2** all the same: its CI reference runs § Conflict check — a conflicting PR shows exactly this status — and reports "no CI ran on head" otherwise, and its Codecov reference classifies a configured Codecov that therefore never reported. Then report it and confirm against branch protection. |
+| `ERROR` | 4 | Bad arguments, `gh` unauthenticated, or the checks API could not be read → report and STOP — a hand-back to the user, never Step 7.2. A failed read is not "no checks". |
 
-#### 7.2 Handle CI Failures (LOOP — max 3 iterations)
+#### 7.2 Handle CI Failures and Coverage (LOOP — max 3 iterations)
 
-**If Step 7.1 reports `STATUS=TERMINAL_FAIL` (failures detected):**
-
-```
-Skill tool: skill="resolve-ci-failures"
-```
-
-Pass the failure details from the script output to the skill. The skill will:
-1. Analyze failure logs and identify root causes
-2. Delegate fixes to a sub-agent that loads `dev` in its Implementer role
-3. Push the fixes
-
-**Batch the CI failures with anything else outstanding before that push** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
-
-**After the skill completes and fixes are pushed, record the new SHA as `CANDIDATE_HEAD`, apply 6.1's material-change test to the delta, and re-enter Step 6.3 before Step 7.0.** Where that test fires, its delta-scoped Codex re-entry runs first, and 6.1's blocking-finding consequence governs whatever that re-entry reports; a CI fix that only corrected a line falls straight through it. A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first. Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
+**On every terminal verdict Step 7.1 reports for `CANDIDATE_HEAD` — `TERMINAL_PASS`, `TERMINAL_FAIL` and `NOT_CONFIGURED` alike** (`PENDING` twice and `ERROR` are hand-backs to the user and never come here):
 
 ```
-Step 7.1 (wait) → fail → Step 7.2 (batched fix, one push)
+Skill tool: skill="resolve-pr-feedback", args="[PR_NUMBER] — [STEP 2.5 SCOPE BRIEF VERBATIM] — sources: ci,codecov"
+```
+
+**A passing run comes here too, because this is the lifecycle's only Codecov pass.** Step 6.3's calls are scoped to `copilot` and `coderabbit`, and a passing `codecov/patch` can sit beside missing lines in the Codecov comment, which is what decides (`resolve-pr-feedback`'s `references/codecov.md` § Assess). It runs on CI's terminal verdict, never earlier, because Codecov reports only once CI has uploaded coverage.
+
+Both sources are requested, so both references load whatever detection finds (`resolve-pr-feedback` Step 1, which references load), and each reference's § Configured check settles a source with no report on this head: Codecov `not configured` is not a failure and gates nothing; Codecov `configured, no report on head <sha>` is never a pass. `resolve-pr-feedback` runs one round and waits for nothing (its § One round), so the one re-wait is yours: on the first such report after `TERMINAL_PASS` or `TERMINAL_FAIL`, re-run Step 7.1's wait once for `<sha>` and invoke this step again; reported a second time, it is Codecov's "did not report on head" hand-back, and Step 8.1's Codecov gate stays unmet and goes to the user. **After `NOT_CONFIGURED` there is no re-wait** — there is no CI for Codecov to wait on — so a configured Codecov is that hand-back at once. It then reads the failing checks' logs, assesses coverage, and **returns the diagnosed blocking set**: CI failures by category, coverage gaps as uncovered lines. It fixes and pushes nothing (its Step 3). Flaky and infrastructure failures come back reported, not fixed — they are the user's call, never a blind re-run. If the set is empty, there is nothing to fix: on `TERMINAL_PASS` proceed to Step 8. **On `TERMINAL_FAIL`, route every failing check by its owner before concluding anything** — the CI reference excludes the checks other sources own, so an empty set does not mean every failure was transient:
+
+- a failing **`CodeRabbit` check** is CodeRabbit's: return to Step 6.3's CodeRabbit path (`coderabbit-review`, its rate-limit degradation included), never a CI fix and never flaky;
+- a failing **`codecov/*` status** is Codecov's: act on the `codecov` result this call returned — a coverage gap is in the blocking set; a status failing with no patch gap is reported as Codecov's for the user's decision (`resolve-pr-feedback`'s `references/codecov.md` § Assess);
+- **On `NOT_CONFIGURED`**, nothing is fixable and nothing loops: the CI result is a base-branch conflict — the blocking finding § Error Handling → Git conflict stops on — or the "no CI ran on head" hand-back; the Codecov result is `not configured` (gates nothing) or the "did not report on head" hand-back. STOP and report both; Step 8.1's CI gate cannot pass on a head with no CI;
+- only a failure **no source owns**, categorised flaky or infrastructure by the CI reference, is the STOP: report it with the evidence. Coverage gets one fix iteration of the three below (`references/codecov.md` § Hand-off); gaps still open after it are reported to the user, not looped on.
+
+**Fix the returned set through Step 6.2** — one fix agent, one commit series, one push — **batched with anything else outstanding for this head** (`references/head-discipline.md` § Batch findings): a still-open reviewer thread or a still-failing verification item goes into the same commit series.
+
+**After that push, record the new SHA as `CANDIDATE_HEAD`, apply 6.1's material-change test to the delta, and re-enter Step 6.3 before Step 7.0.** Where that test fires, its delta-scoped Codex re-entry runs first, and 6.1's blocking-finding consequence governs whatever that re-entry reports; a CI fix that only corrected a line falls straight through it. A CI fix is a push like any other (`references/head-discipline.md` § The candidate head — every push after step 6 re-enters at step 7): the new head carries commits no reviewer has read, and Copilot does not re-review a push on its own, so its waiter is relaunched for the delta first. Only once 6.3 has converged on the new head does the CI wait restart against it — otherwise Step 8.1 finds a reviewed SHA that is not the head and needs a fix at exactly the point where nothing may push. This creates a loop:
+
+```
+Step 7.1 (wait) → terminal → Step 7.2 (diagnose: resolve-pr-feedback, sources: ci,codecov) → blocking set
+                       → Step 6.2 (batched fix, one push)
                        → 6.1 material-change test → Step 6.3 (re-cover the new head)
                        → Step 7.0 → Step 7.1 (wait) → ...
 ```
 
 **⚠️ Maximum 3 iterations.** Track the current iteration count. If checks still fail after 3 fix attempts, STOP and report the persistent failures to the user with full details.
 
-**⛔ DO NOT PROCEED until all checks pass or max iterations reached**
+**⛔ DO NOT PROCEED until all checks pass and Step 7.2 returns nothing to fix, or max iterations reached**
 
 ---
 
@@ -949,8 +904,11 @@ Skill tool: skill="coderabbit-review",  args="[NUMBER] — [STEP 2.5 SCOPE BRIEF
 gh pr view [NUMBER] --json reviewThreads \
   --jq '[.reviewThreads[] | select(.isResolved == false)] | length'
 
-# 4. Codecov — patch and project checks must pass
-gh pr checks [NUMBER]  # verify codecov/patch and codecov/project
+# 4. Codecov — Step 7.2's codecov result for MERGE_HEAD: `not configured`, or clean
+#    per resolve-pr-feedback's references/codecov.md — 0 missing lines in the comment
+#    AND codecov/* statuses passing. A green codecov/patch alone is not the gate, and
+#    `configured, no report on head` is UNMET: report it to the user, never merge.
+#    Reuse that result when it names MERGE_HEAD; it is evidence about one SHA.
 ```
 
 <!--
@@ -974,7 +932,7 @@ duvet# A pull request MUST NOT be merged while any review thread on it from a co
 - [ ] CodeRabbit is passing with all received threads resolved, not configured, or explicitly recorded as `skipped (rate-limited)`. CodeRabbit throttling is optional and never blocks merge.
 - [ ] Zero unresolved **blocking** ledger entries (`references/scope-contract.md` § Blocking) — `required-by-contract`, `regression-caused-by-change`, and any entry blocking by tier; the latest affected delta is verified within the stopping bounds
 - [ ] Every test plan item **settled** (Step 5.5): verified, user-confirmed as a manual pass, or explicitly accepted by the user — as a known failure, or as knowingly unverified. An unanswered `— requires manual testing` is pending, not settled, and blocks
-- [ ] Codecov coverage passing with 0 missing lines
+- [ ] Codecov `not configured` (its § Configured check), or Step 7.2 assessed it clean on `MERGE_HEAD` — 0 missing lines in the Codecov comment, not only passing `codecov/*` statuses. `configured, no report on head` is unmet and goes to the user
 - [ ] No unresolved review threads from any reviewer (Copilot, CodeRabbit, human, or any other configured automated reviewer); follow-up/out-of-scope threads are settled without expanding implementation
 
 <!--
@@ -994,29 +952,21 @@ will fail on a non-draft PR.
 **Task tracking is written in Step 4 and confirmed in Step 4.7. This step verifies it; it does not push.**
 
 ```bash
-git diff main --name-only | grep -E 'docs/(changes/|tasks\.md|index\.ya?ml|index\.md)' || true
+git diff main --name-only -- "[DOC_PATH]"
+# only when Step 2.5 recorded FX_DOCS=adopted:
+git diff main --name-only -- docs/index.yml docs/index.md
 ```
 
 Confirm in the diff:
-- Items this PR actually completes are checked off (`- [ ]` → `- [x]`); items it did not address are untouched
-- If this PR completes the whole change document, its Status is `complete`
-- `docs/index.yml` and `docs/index.md` agree with it
+- Items this PR actually completes are checked off (`- [ ]` → `- [x]`) in the document's own format; items it did not address are untouched
+- If this PR completes the whole change document, its status field — where it has one — says so
+- Adopted only: `docs/index.yml` and `docs/index.md` agree with it
 
 **A missing tracking update here is a Step 4 defect, and fixing it costs a full re-verification cycle.** Have an implementer sub-agent (`dev`, Implementer role) write and push it anyway — the docs must not lie on `main` — then treat the new SHA as a candidate head: re-run Step 7 and re-verify Step 8.1 against it (`references/head-discipline.md` § The candidate head). Do not merge on the gates you collected for the parent commit.
 
 **`(PR #N)` annotations are optional and never worth a commit.** The PR number is unknown when tracking is written in Step 4; add it only if some other batched push happens to be going out anyway. A tracking line without it is not a defect — the merge commit links the two.
 
-If no relevant tracking doc exists, skip this step.
-
-#### 8.3 Update Issue (if applicable)
-
-```
-Agent tool:
-  prompt: "Load the issue-updater skill (Skill tool: skill='issue-updater'), then:
-
-           Update issue #[NUMBER]: Link PR, set label ready-for-review"
-  description: "Update issue"
-```
+If `[DOC_PATH]` is `none`, skip this step.
 
 #### 8.4 Report to User
 
@@ -1028,6 +978,8 @@ Changes:
 
 Awaiting your approval to merge.
 ```
+
+If Step 2.5 recorded a layer as not adopted and a step was skipped or redirected because of it, append the matching block from `fx-setup` → `references/adoption.md` § Report — once, here, not at each step.
 
 <!--
 duvet= docs/specs/fx-dev-authority/index.md#dev-runs-require-user-approval-before-merge
@@ -1052,14 +1004,14 @@ After this handoff, a later user message such as "merge it" is a standalone mech
 1. STEP 0: Auth check
 2. STEP 1: Branch as `fix/issue-123-description`
 3. Fetch issue: `gh issue view [NUMBER] --json title,body,labels,comments`
-4. STEP 2-8: Standard (use issue-updater in Steps 3 and 8)
+4. STEPS 2-8: Standard. The PR body carries `Closes #N` (Step 5); nothing labels or comments on the issue.
 
 ### Quick Fix (fix:, error:, bug: prefix)
 
 1. STEP 0: Auth check
 2. STEP 1: Branch as `fix/short-error-desc`
-3. STEP 2: Focus on error analysis, root cause
-4. STEPS 3-8: Standard
+3. STEP 2: Focus on error analysis and root cause. The Step 4 implementer reproduces the bug with a failing test first and confirms it fails **for the reported reason**; if the bug cannot be reproduced, STOP and report — never guess at a fix. The minimal fix is the scope: a bug report authorizes fixing that bug, not refactoring the code around it.
+4. STEPS 4-8: Standard
 
 ### Multi-PR Tasks
 
@@ -1090,16 +1042,12 @@ All sub-agents are launched via the Agent tool. Each loads its skill via the Ski
 | Step | Skill to Load | Skill Name |
 |------|---------------|------------|
 | 2 | Requirements Analyzer | `requirements-analyzer` |
-| 3 | Planner | `planner` |
-| 3,8 | Issue Updater | `issue-updater` |
 | 4,4.6.4,6.2 | Implementer | `dev`, in its **Implementer** role (Step 4 also writes the task-tracking update; Step 6.2 is ONE batched fix pass, not one per finding) |
 | 4.5 | Pre-PR Self-Review | `codex-review` (local `codex`, the ONLY local reviewer) — initial pass complete, then one batched fix; blocking findings resolved, latest affected delta verified |
 | 4.6.2 | Browser Verification | `verify-web-change` (pre-PR, against the branch) |
-| 5 | PR Preparer | `pr-preparer` |
 | 6.3 | Copilot Review | `copilot-review` (waiter backgrounded, concurrent with coderabbit-review) |
 | 6.3 | CodeRabbit Review | `coderabbit-review` (PR-level only, waiter backgrounded, concurrent with copilot-review; classify/deduplicate feedback and verify only affected deltas within bounds) |
-| 6.3 | PR Feedback Resolver | `resolve-pr-feedback` (meta — called by reviewer skills) |
-| 7.2 | CI Failure Resolver | `resolve-ci-failures` |
+| 6.3, 7.2 | PR Feedback Resolver | `resolve-pr-feedback` (coordinator session; scoped by `sources:` — the reviewer skills call it for their own source, Step 7.2 for `ci,codecov`; one round — it returns each source's next wait or re-request for you to run) |
 
 **Pattern for every sub-agent call:**
 ```
@@ -1117,7 +1065,7 @@ An implementation spawn names the role as well: `Load the dev skill (Skill tool:
 Workflow complete when ALL true:
 - ✅ Feature branch created from main
 - ✅ Requirements documented
-- ✅ Plan created
+- ✅ Implementation outline produced (or the approved change document's task list adopted as the plan)
 - ✅ Code implemented by an Implementer sub-agent (`dev`, Implementer role) with atomic commits, task tracking included
 - ✅ Pre-PR Codex review completed (or permitted degradation documented), findings classified in the shared ledger, blocking findings resolved, and the latest affected delta verified within the stopping bounds
 - ✅ Browser and programmatic test-plan verification done BEFORE the PR was opened

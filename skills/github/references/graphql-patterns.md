@@ -427,9 +427,11 @@ a true zero distinguishable from a failed read.
 over the whole set:
 
 ```bash
-# One reviewer's unresolved threads, counted over every page
+# One reviewer's unresolved threads, counted over every page. Match the login
+# exactly — GraphQL drops "[bot]", so list both forms; a substring test also
+# claims any human or bot whose login merely contains it.
 jq '[.[] | select(.isResolved == false
-       and (.comments.nodes[0].author.login | tostring | contains("<login>")))]
+       and (.comments.nodes[0].author.login | IN("<login>", "<login>[bot]")))]
     | length' <<< "$ALL_THREADS"
 
 # Per-reviewer breakdown, grouped over every page

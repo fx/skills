@@ -1,8 +1,9 @@
 # Instruction Files Standard
 
 The canonical layout for AI instruction files in a project. Every skill in this catalog
-that reads or writes project conventions uses this layout — do not invent
-alternatives.
+that reads or writes project conventions uses this layout **in repos that have adopted
+it** (`references/adoption.md`; a repo that has not keeps its own convention) — do not
+invent alternatives.
 
 ## The two canonical files
 
@@ -66,9 +67,10 @@ most heavily.
 ## Where feedback resolvers write
 
 When an automated reviewer's feedback is **INCORRECT** (it conflicts with a
-deliberate project convention), the fix goes in **`REVIEW.md`** — always, for
-every reviewer. One file, so suppressing a false positive suppresses it for
-Codex, Copilot, and CodeRabbit at once.
+deliberate project convention), the fix goes in **`REVIEW.md`** where it exists,
+for every reviewer — one file, so suppressing a false positive suppresses it for
+Codex, Copilot, and CodeRabbit at once. Where it does not, `fx-review` Step 6
+owns the fallback; a review never creates `REVIEW.md`.
 
 `AGENTS.md` is for how the code is *written*. `REVIEW.md` is for how the code is
 *reviewed*. When a rule is "this pattern is intentional, don't flag it", it is a

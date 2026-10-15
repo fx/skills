@@ -75,7 +75,7 @@ Use this skill only when the user explicitly invokes or names it, or when an act
 - ✅ Reply to an EXISTING thread created by an **automated reviewer** using `addPullRequestReviewThreadReply`
 - ✅ Resolve an automated reviewer's thread using `resolveReviewThread`
 
-**The line is automated versus human, not Copilot versus everything else.** Copilot and CodeRabbit are the two with their own resolver skills, and the merge gates below require CodeRabbit's delivered threads to be resolved — so a Copilot-only reading of this rule contradicts them. Any other bot a repo has configured is settled the same way, by hand, since no skill adapts it (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into reviews).
+**The line is automated versus human, not Copilot versus everything else.** Copilot and CodeRabbit are the two `resolve-pr-feedback` has thread references for, and the merge gates below require CodeRabbit's delivered threads to be resolved — so a Copilot-only reading of this rule contradicts them. Any other bot a repo has configured is settled the same way, by hand, since no skill adapts it (`[SKILLS_DIR]/dev/references/scope-contract.md` § Injecting the brief into reviews).
 
 **Never respond to or interact with human reviewer comments.** Human threads are out of scope and must never be touched, replied to, or resolved — only automated feedback is addressed.
 
@@ -91,7 +91,7 @@ Use this skill only when the user explicitly invokes or names it, or when an act
 | Copilot comments RESOLVED | All **Copilot-authored** review threads resolved (0 unresolved). Filter on the Copilot login — human threads are out of scope and must never be touched | ⛔ YES |
 | CodeRabbit review attempted (if GitHub App configured) | Prefer a received review; explicit `skipped (rate-limited)` is acceptable | Optional when rate-limited |
 | CodeRabbit comments resolved (if received) | Resolve **every** thread CodeRabbit already posted, rate limit or not. Throttling waives the review passes that never ran, never a thread already on the PR | ⛔ YES for delivered threads |
-| Codecov passing | `codecov/patch` and `codecov/project` checks pass | ⛔ YES |
+| Codecov clean (if configured) | 0 missing lines in the Codecov comment for the head **and** `codecov/*` statuses pass — a passing `codecov/patch` alone is not enough, and a configured Codecov with no report on the head is unmet (`resolve-pr-feedback`'s `references/codecov.md` § Assess and § Configured; `dev` Step 7.2 assesses it) | ⛔ YES |
 
 > **CodeRabbit is PR-level only** — see `coderabbit-review`. There is no local CodeRabbit pass; the `cr` CLI is not used, and Codex is the only local pre-PR reviewer (`dev` Step 4.5). The PR-level review applies only when the GitHub App auto-reviews PRs; its waiter reports `STATUS=NOT_CONFIGURED` otherwise, which is terminal and expected for most repos. **CodeRabbit is optional when it reports a rate/quota limit or cooldown:** report once, resolve findings already received **and settle every thread it already posted**, record `skipped (rate-limited)`, and continue without waiting or retrying. The degradation waives the passes that never ran, never work already on the PR. Other merge gates remain mandatory.
 
@@ -102,8 +102,11 @@ review of a superseded commit as coverage for the code you are about to merge:
 PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explicitly: PR_NUMBER=123
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
-gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq "[.[] | select(.user.login | startswith(\"copilot-pull-request-reviewer\")) | select(.commit_id == \"${HEAD_SHA}\")] | length"
+set -o pipefail   # a failed read must not print a count
+# Every page, counted once: --jq would count per page
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+  | jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | select(.commit_id == $head)] | length' \
+  || echo "READ FAILED: reviews — not a count"
 ```
 
 A result of `0` means **the commit you are about to merge is UNREVIEWED**, whatever
@@ -205,6 +208,9 @@ A convention that lives only in this skill does not survive delegation: an agent
 - TITLE: a conventional-commit subject. The **mechanical floor** is `^(feat|fix|docs|refactor|chore|test|perf|build|ci|style|revert)(\(.+\))?!?: .+` — that regex checks the type prefix and nothing else, so passing it is necessary, not sufficient.
 - TITLE: three more rules the floor regex cannot express. Two are checkable against the title (`printf '%s' "<title>" | grep -Eq '^[a-z]+(\(.+\))?!?: [a-z]'` must match — lowercase after the colon; `printf '%s' "<title>" | grep -Eq '\.$'` must NOT match — no trailing period). The third, **imperative mood** ("add", not "adds" or "added"), has no mechanical check: read the title and confirm it by eye.
 - TITLE: no `#<number>` unless it references a real existing PR/issue, and no wave/phase/step/batch or change-doc number. Squash-merge bakes the title into the default branch, where `#N` auto-links permanently.
+- TITLE: pick `type` from the dominant change — `feat` for a new capability, `fix` for a bug fix, otherwise `docs`, `refactor`, `chore`, `test`, … When the PR bundles several kinds, use the highest-order one (`feat` > `fix` > everything else) and cover the rest in the body. A title handed to you — by a caller, a workflow brief, an issue or a branch name — is reformed to every TITLE rule here, never passed through as given.
+- BODY: say **why** the change was made. Then, as they apply: `Closes #N` for each issue it resolves; links to the spec and change documents that drove it, as repo-relative paths; breaking changes and migration steps; non-obvious decisions and trade-offs. End with a `## Test plan` of specific, observable checkbox items ("open /settings and see the Notifications tab"), never "works correctly".
+- BODY: nothing GitHub already shows or the diff already says — no list of changed files, no line, file or test counts, no commit list. Keep it short; a few sentences is often enough.
 - BODY: **never hard-wrapped.** GitHub reflows markdown to the reader's viewport, so write each paragraph as ONE long line and let it soft-wrap. Lists, tables and fenced code blocks keep their own line structure. This applies however the body is authored — heredoc, `--body-file`, or `gh api -F body=@file`.
 - COMMIT MESSAGE: the opposite — wrap the body at ~72 columns, because git renders it as plain text. The rule follows the renderer, not the content.
 - Verify the TITLE against every rule above **before AND after creating**. Verify the BODY with the command below at both points too, by swapping its pipe head: **before** creating, run `cat <body-file> | awk '…'` against the very file you are about to pass to `--body-file`; **after** creating, and after every `gh pr edit`, run it exactly as written against the live body. It judges only prose — fenced code, headings, blockquotes, tables, list items and their continuation lines are all skipped — and **exits 1 printing `HARD-WRAPPED`** when prose clusters in the 60-100 column band. Read its output; do not assume it passed. Fix with `gh pr edit <N> --body-file <file>` and re-run.
@@ -249,12 +255,12 @@ Do not substitute `awk '{print length}' | sort -rn | head -3`. The three longest
 
 **Use Conventional Formats:**
 - **Commit messages**: Follow conventional commit format (`feat:`, `fix:`, `refactor:`, `docs:`, etc.)
-- **PR titles**: MUST use conventional commit format — `type(scope): description` (e.g., `feat: add user authentication`, `fix(api): handle null token`). **BLOCKING**: on squash-merge the PR title becomes the commit subject, so a plain prose title (no `type:` prefix) permanently pollutes a conventional-commit history. **Canonical check** — every PR title, no matter who creates it (pr-preparer, the `/dev` workflow, or a `/team` coordinator running `gh pr create` directly), MUST match this regex; verify before creating AND before merging:
+- **PR titles**: MUST use conventional commit format — `type(scope): description` (e.g., `feat: add user authentication`, `fix(api): handle null token`). **BLOCKING**: on squash-merge the PR title becomes the commit subject, so a plain prose title (no `type:` prefix) permanently pollutes a conventional-commit history. **Canonical check** — every PR title, no matter who creates it (the `/dev` coordinator, a `/team` coordinator, or any agent either one spawned), MUST match this regex; verify before creating AND before merging:
   ```bash
   gh pr view <N> --json title -q .title | grep -Eq '^(feat|fix|docs|refactor|chore|test|perf|build|ci|style|revert)(\(.+\))?!?: .+' \
     && echo "OK: conventional" || echo "⛔ NOT conventional — gh pr edit <N> --title \"type(scope): …\""
   ```
-  A prose title like `Add anti-fabrication grounding rules` is FORBIDDEN — reform it (`feat(scope): add anti-fabrication grounding rules`). Creating the PR directly (not via pr-preparer) does NOT exempt you from this.
+  A prose title like `Add anti-fabrication grounding rules` is FORBIDDEN — reform it (`feat(scope): add anti-fabrication grounding rules`). Creating the PR yourself does NOT exempt you from this.
 - **Branch names**: Use conventional naming (e.g., `feat/user-auth`, `fix/login-bug`)
 - **Comments**: Use conventional comment markers where applicable
 
@@ -577,14 +583,18 @@ PR_NUMBER=$(gh pr view --json number --jq '.number')          # or set it explic
 REPO_NWO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
 HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
 
-# Reviews of the CURRENT head — this is coverage.
-gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq "[.[] | select(.user.login | startswith(\"copilot-pull-request-reviewer\")) | select(.commit_id == \"${HEAD_SHA}\") | {state, submitted_at}]"
+set -o pipefail   # a failed read must not print an empty list
+
+# Reviews of the CURRENT head — this is coverage. Every page: --jq would run per page.
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+  | jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | select(.commit_id == $head) | {state, submitted_at}]' \
+  || echo "READ FAILED: reviews — not evidence"
 
 # Every Copilot review with its commit — diagnostic, to see whether a review exists
 # but covers an older commit. NOT a pass signal.
-gh api "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
-  --jq '[.[] | select(.user.login | startswith("copilot-pull-request-reviewer")) | {commit_id, state, submitted_at}]'
+gh api --paginate --slurp "/repos/${REPO_NWO}/pulls/${PR_NUMBER}/reviews" \
+  | jq '[.[][] | select(.user.login | IN("copilot-pull-request-reviewer", "copilot-pull-request-reviewer[bot]")) | {commit_id, state, submitted_at}]' \
+  || echo "READ FAILED: reviews — not evidence"
 ```
 
 Or via GraphQL — include `commit { oid }`, otherwise the result is unscoped and
@@ -767,5 +777,5 @@ This ensures the same mistake is never repeated.
 
 ## Integration with Other Skills
 
-- **copilot-feedback-resolver**: For complete Copilot review thread workflows
-- **pr-***: For PR creation, review, and management workflows
+- **resolve-pr-feedback**: Settles one round of automated review threads (Copilot, CodeRabbit, Codecov) and diagnoses failing CI; its caller owns every wait and re-request
+- **dev** Step 5: PR creation, under the PR conventions block above

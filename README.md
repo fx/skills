@@ -1,6 +1,6 @@
 # skills
 
-An agent-skill catalog for the software development lifecycle: requirements → plan → implement → review → CI → merge, plus the review adapters, feedback resolvers, and documentation skills that lifecycle depends on.
+An agent-skill catalog for the software development lifecycle: requirements → plan → implement → review → CI → merge, plus the review adapters, the PR-feedback resolver, and documentation skills that lifecycle depends on.
 
 Installable into Claude Code, Codex, Cursor, OpenCode, and 70+ other agents via the [`skills`](https://github.com/vercel-labs/skills) CLI.
 
@@ -11,7 +11,7 @@ Installable into Claude Code, Codex, Cursor, OpenCode, and 70+ other agents via 
 npx skills add fx/skills --skill '*' -g
 
 # Just the lifecycle
-npx skills add fx/skills --skill dev --skill planner --skill fx-review
+npx skills add fx/skills --skill dev --skill requirements-analyzer --skill fx-review
 
 # List first
 npx skills add fx/skills --list
@@ -25,26 +25,16 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 |---|---|
 | `dev` | Runs the complete attended SDLC lifecycle through requirements, implementation, review, CI, and finalization, stopping at an unmerged PR; also defines the Implementer role its coordinators delegate implementation to. |
 | `team` | Wraps `dev`: runs its lifecycle for every change in the approved scope, unattended, and merges each PR itself once the merge gates pass. |
-| `fix` | Runs a test-first bug-fix lifecycle and then enters the explicitly requested SDLC workflow. |
-| `workflow-runner` | Runs an explicitly selected workflow through its own completion criteria without stopping between phases. |
-| `requirements-analyzer` | Analyzes supplied implementation requirements, repository context, and acceptance criteria. |
-| `planner` | Creates a detailed implementation plan from supplied requirements and scope. |
+| `requirements-analyzer` | Analyzes supplied implementation requirements, repository context, and acceptance criteria, and produces the implementation outline the lifecycle implements from. |
 | `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure that every reviewer skill in this catalog follows. |
 | `codex-review` | Runs a scoped one-shot Codex CLI branch review as an external review adapter. |
 | `copilot-review` | Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review. |
 | `coderabbit-review` | Handles CodeRabbit's PR-level review as an optional review adapter with Scope Brief triage and rate-limit degradation. |
-| `resolve-pr-feedback` | Coordinates explicitly requested automated PR-feedback resolution for the reviewers it has adapters for — Copilot, CodeRabbit and Codecov; any other configured reviewer is settled by hand by the caller. |
-| `copilot-feedback-resolver` | Processes and resolves existing GitHub Copilot review threads without creating PR-level comments. |
-| `rabbit-feedback-resolver` | Processes and resolves existing CodeRabbit review threads. |
-| `resolve-codecov-feedback` | Processes Codecov feedback and adds coverage required by an active workflow. |
-| `pr-preparer` | Prepares and opens a ready-for-review pull request from completed branch changes. |
-| `pr-check-monitor` | Monitors pull-request checks and coordinates explicitly requested CI remediation. |
-| `resolve-ci-failures` | Analyzes and fixes CI failures within an active explicitly requested PR workflow. |
+| `resolve-pr-feedback` | Settles one round of automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions for the sources requested or present, then reports and returns; it never waits or re-requests a review, and any other configured reviewer is settled by hand by the caller. |
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
-| `issue-updater` | Updates GitHub issues with planning, status, and implementation progress within an active workflow. |
-| `project-management` | Manages project tracking through `docs/tasks.md`, `docs/changes/`, or an explicitly selected external tracker. |
+| `project-management` | Manages project tracking through `docs/tasks.md` and `docs/changes/` where the fx docs layout is adopted, the repo's own tracker where it is not, or an explicitly selected external tracker. |
 | `spec-writer` | Writes and maintains living specs and proposed change documents within an explicitly requested documentation lifecycle. |
-| `fx-setup` | Creates the default docs and instruction-file layout as a prerequisite of an explicitly invoked documentation workflow. |
+| `fx-setup` | Creates the fx docs and instruction-file layout when you invoke it explicitly; any other load only reports whether the repository has adopted it. |
 | `fx-upgrade` | Migrates repository instruction files to the current conventions after explicit request and confirmation. |
 | `verify-web-change` | Verifies specified web changes using the real application and Playwright. |
 | `upstream-contrib` | Contributes a local change in a consumer repository upstream to the dependency it belongs in, then rewires the consumer onto it. |
@@ -53,7 +43,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 
 ## Explicit invocation
 
-**Every skill here is explicit-use only.** None auto-triggers on generic task semantics — "write some code", "review this", "fix the bug", "make a PR" do not load anything. A skill runs when you name it (`/dev`, "use the planner skill") or when a workflow you already invoked calls it by name.
+**Every skill here is explicit-use only.** None auto-triggers on generic task semantics — "write some code", "review this", "fix the bug", "make a PR" do not load anything. A skill runs when you name it (`/dev`, "use the spec-writer skill") or when a workflow you already invoked calls it by name.
 
 That is deliberate. These are opinionated multi-step lifecycles that create branches, open pull requests, and drive external reviewers. Loading one because a request merely resembled a stage of it is a worse failure than not loading it at all.
 

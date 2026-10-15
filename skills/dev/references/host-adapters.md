@@ -2,7 +2,7 @@
 
 **The workflow skills describe operations. This file maps each operation to the host you are running on.**
 
-Every orchestration skill in this catalog — `dev`, `team`, `workflow-runner`, `fix`, and the reviewer adapters — is written against the seven operations below. None of them is Claude-Code-specific as an *operation*; only the syntax is. Where a skill shows a concrete call, read it as an example of the operation, not as the only spelling of it.
+Every orchestration skill in this catalog — `dev`, `team`, and the reviewer adapters — is written against the seven operations below. None of them is Claude-Code-specific as an *operation*; only the syntax is. Where a skill shows a concrete call, read it as an example of the operation, not as the only spelling of it.
 
 **If your host is not listed here, map the operations yourself before running the skill, and add the mapping to this file.** An operation you cannot map is a real blocker — say so rather than improvising a substitute, because every one of these carries a guarantee the workflow depends on.
 

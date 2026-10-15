@@ -1,15 +1,36 @@
 ---
 name: fx-setup
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Creates the default docs and instruction-file layout as a prerequisite of an explicitly invoked documentation workflow."
+description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Creates the fx docs and instruction-file layout when the user explicitly invokes it; any other load only reports whether the repository has adopted it."
 ---
 
 # Setup
 
-This skill scaffolds the `docs/` folder structure required for spec-driven development and creates the standard AI instruction files (`AGENTS.md`, `REVIEW.md`, plus the `CLAUDE.md` pointer and `.coderabbit.yaml`) so that task tracking defers to the `/project-management` skill. It is called automatically by `/spec-writer` and `/project-management` as a prerequisite.
+> **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
+> the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
+> every skill referenced below is installed as a sibling there.
+
+This skill scaffolds the `docs/` folder structure required for spec-driven development and creates the standard AI instruction files (`AGENTS.md`, `REVIEW.md`, plus the `CLAUDE.md` pointer and `.coderabbit.yaml`) so that task tracking defers to the `/project-management` skill. **It writes only when the user explicitly invokes it** (§ Invocation mode); every other load is a read-only adoption check.
+
+## Invocation mode — decide before anything else
+
+**fx-setup writes only when the user explicitly asks for it.** Settle the mode first:
+
+- **Explicit mode** — the user's own message in this conversation asks for it (`/fx-setup`, "run fx-setup", "set up the fx docs layout"), or the user picked the "run `/fx-setup` now" option another skill offered. Run Steps 1–10 below, including the duvet offer.
+- **Check mode** — every other load: another skill's prerequisite, a workflow step, `args` containing `check`, or any case where the user did not ask. Check mode does exactly this and nothing else:
+  1. run `bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh`;
+  2. print the report block from `references/adoption.md` § Report for each layer that is not adopted, plus Step 5.5's legacy findings — its bash block only reads, so run it and report what it prints;
+  3. **write nothing and offer nothing** — no file, no duvet prompt, no `PROJECT.md` migration offer;
+  4. return.
+
+**When the mode is unclear, check mode wins.** A missed adoption costs the user one `/fx-setup`; a forced one lands an unasked-for diff in someone's PR.
+
+This narrows the catalog's explicit-use rule for this one skill: a workflow may still load fx-setup, but only the user can make it write. That holds on every host — a layout nobody asked for costs the same whichever agent produced it. No skill in this catalog loads fx-setup any more (they run the check script directly); check mode is the backstop for a stale installed copy, another catalog, or a host that loads skills by description.
 
 ## ⛔ fx-setup creates. It does not migrate.
 
-**fx-setup runs unattended on every `/spec-writer` and `/project-management` invocation.** It must never make a change the user would want to review first.
+**In explicit mode it still runs in repos whose owners asked for the layout, not for their existing files to be rearranged.** It must never make a change the user would want to review first.
+
+In explicit mode:
 
 | fx-setup MAY | fx-setup MUST NOT |
 |---|---|
@@ -25,13 +46,13 @@ When it finds anything needing those — a `CLAUDE.md` full of conventions, an o
 
 ## When to Use
 
-- **Automatically** — Invoked by `/spec-writer` and `/project-management` at the start of every invocation
-- **Manually** — When user says "setup docs", "initialize docs", "create docs structure", or "setup project"
-- **Fresh projects** — When starting a new project that will use spec-driven development
+- **Explicit mode** — the user asks for it by name (`/fx-setup`), or picks the "run `/fx-setup` now" option another skill offered.
+- **Check mode** — any other load: another skill, a workflow step, or `args` containing `check` (§ Invocation mode).
+- **Fresh projects** — when the user starts a project that will use spec-driven development and asks for the layout.
 
 ## Workflow
 
-### Step 1: Check Existing Structure
+### Step 1: Check Existing Structure (explicit mode)
 
 ```bash
 ls -la docs/ 2>/dev/null
@@ -126,7 +147,7 @@ Only if it doesn't exist. **Use these exact column names — table schema is str
 
 ### Step 5.5: Legacy-Layout Detection (DETECT ONLY — never migrate)
 
-**fx-setup creates defaults. It never moves, merges, overwrites, or deletes anything.** It runs automatically on every `/spec-writer` and `/project-management` invocation, so it must never make a change a user would want to review first. Migration is `fx-upgrade`'s job.
+**fx-setup creates defaults. It never moves, merges, overwrites, or deletes anything.** The user asked for the layout, not a migration, so it must never make a change a user would want to review first. In check mode this step's bash block is the only thing that runs besides the adoption check — it only reads. Migration is `fx-upgrade`'s job.
 
 ```bash
 # -e follows symlinks, so a DANGLING link reads as absent. Always pair it with -L.
@@ -257,7 +278,7 @@ The `/project-management` skill contains all the rules. AGENTS.md just says "loa
 
 Claude Code does **not** read `AGENTS.md`. A `CLAUDE.md` that imports it keeps the two in sync without duplicating content.
 
-**If `legacy_agents=1`, skip this entire step.** That flag is set when `CLAUDE.md` is a symlink, and *any* inspection here — including checking whether it contains `@AGENTS.md` — follows the link. For a `CLAUDE.md -> ~/.claude/CLAUDE.md` that means reading the user's private machine-wide instructions during an unattended run. Never inspect a path the preflight already condemned.
+**If `legacy_agents=1`, skip this entire step.** That flag is set when `CLAUDE.md` is a symlink, and *any* inspection here — including checking whether it contains `@AGENTS.md` — follows the link. For a `CLAUDE.md -> ~/.claude/CLAUDE.md` that means reading the user's private machine-wide instructions during a run. Never inspect a path the preflight already condemned.
 
 Otherwise `CLAUDE.md` is a plain in-repo file or absent:
 
@@ -322,7 +343,7 @@ Feedback resolvers add convention rules to `REVIEW.md` later — fx-setup only s
 
 #### 8.3 Point Codex at `REVIEW.md`
 
-**Skip this step if `legacy_agents=1` OR `REVIEW.md` does not exist** (which includes `legacy_review=1`, since that blocks Step 8 from creating it). The pointer's whole content is "read `REVIEW.md`" — writing it while that file is absent hands Codex a dangling instruction, and unattended fx-setup would leave it there until someone runs `/fx-upgrade`.
+**Skip this step if `legacy_agents=1` OR `REVIEW.md` does not exist** (which includes `legacy_review=1`, since that blocks Step 8 from creating it). The pointer's whole content is "read `REVIEW.md`" — writing it while that file is absent hands Codex a dangling instruction, and fx-setup would leave it there until someone runs `/fx-upgrade`.
 
 It writes `AGENTS.md`, and appending here when `AGENTS.md` does not yet exist would create a stub holding only review rules while the project's real conventions sit in `CLAUDE.md` — every non-Claude agent would then read that stub as the whole truth. Report it instead; `/fx-upgrade` adds this pointer as M1.4, after the content is moved.
 
@@ -348,7 +369,7 @@ This is the one review-related section allowed in `AGENTS.md`, and it is a point
 CodeRabbit's default `filePatterns` cover `**/AGENTS.md` and `**/CLAUDE.md` but **not** `**/REVIEW.md`. **This step is mandatory** — it is the only thing that gets the review conventions to CodeRabbit.
 
 - **No `.coderabbit.yaml`** → create it with the config below.
-- **Exists with `knowledge_base.code_guidelines.enabled: false`** → **do not change it.** Someone disabled this deliberately, and fx-setup runs unattended during unrelated spec and task work — silently opting the project back into CodeRabbit guidelines is exactly the kind of change that needs a human. Report it and defer to `/fx-upgrade`.
+- **Exists with `knowledge_base.code_guidelines.enabled: false`** → **do not change it.** Someone disabled this deliberately, and a setup run is not the place to reverse that — silently opting the project back into CodeRabbit guidelines is exactly the kind of change that needs a human. Report it and defer to `/fx-upgrade`.
 - **Exists with `enabled` true or absent** → add `"**/REVIEW.md"` to `filePatterns` if missing. Custom patterns append to the defaults; they do not replace them. This is additive, so it stays within fx-setup's contract.
 
 ```yaml
@@ -363,7 +384,7 @@ Patterns are case-sensitive: `review.md` does not match `**/REVIEW.md`.
 
 ---
 
-### Step 9.5: Offer Duvet Adoption (only if not already adopted)
+### Step 9.5: Offer Duvet Adoption (explicit mode only, once per run, only if not already adopted)
 
 ```bash
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -373,13 +394,13 @@ test -d "$repo_root/.duvet" && echo "duvet: adopted" || echo "duvet: not adopted
 The gate is the **repository root**, so resolve it explicitly — a bare `test -d .duvet` is cwd-relative and would offer adoption to a duvet repo whenever fx-setup runs from a subdirectory.
 
 - **`duvet: adopted`** → do nothing and say nothing. Never re-offer, never nag.
-- **`duvet: not adopted`** → offer adoption once per session, and on acceptance follow **`references/duvet-adoption.md`**. That file is the canonical procedure — read it before offering, and do not restate or reinvent any of its steps here.
+- **`duvet: not adopted`** → offer adoption once per run, and on acceptance follow **`references/duvet-adoption.md`**. That file is the canonical procedure — read it before offering, and do not restate or reinvent any of its steps here.
 
 One clarification against fx-setup's "never delete" rule: the procedure's revert paths remove `.duvet/` and undo the edits **adoption itself made in this same run**, with the user choosing that at a prompt. That is not fx-setup deleting the user's content — the blanket prohibition still holds for everything fx-setup did not just create.
 
 **This stays inside fx-setup's create-only contract**: nothing is written until the user has approved adoption at that prompt, and a decline changes nothing at all. The contract is satisfied by *approval before every write*, not by question count — on acceptance the procedure asks one or more further questions (install method, `[[source]]` patterns, and keep-or-revert when the repo has no GitHub Actions), because each is a decision fx-setup may not make on the user's behalf. What it must never do is write first and ask after.
 
-Because fx-setup runs automatically on every `/spec-writer` and `/project-management` invocation, the reference's offer rule applies at **session** scope here — once the user has declined, skip this step silently for the rest of the session. A decline persists no further than that: it writes nothing, so the offer returns in the next session. That is the documented trade, not a bug — see the reference's "The offer" and "Open questions".
+Step 9.5 runs only in explicit mode and at most once per run. A decline writes nothing, so it persists no further than that run — the next explicit `/fx-setup` or `/fx-upgrade` run offers again. That is the documented trade, not a bug — see the reference's "The offer" and "Open questions".
 
 Adoption creates `.duvet/`, which is what flips `spec-writer` into duvet mode, so a failure part-way through is not a silent no-op. Any failure is an ERROR: report it, name what was written, and do not report fx-setup as clean over it. The procedure file spells out the ordering that keeps that safe.
 
@@ -405,6 +426,8 @@ Instruction files:
   └── .coderabbit.yaml (points CodeRabbit at REVIEW.md)
 ```
 
+**List the repo's own conventions too.** If the check reported any `NATIVE_*` or `DOCS_SITE` value, end the report with `Existing conventions kept: <values>` — the user now has two conventions side by side and should know it.
+
 **If Step 9.5 adopted duvet, the report MUST include it**, using the report block from `references/duvet-adoption.md`:
 
 ```
@@ -414,17 +437,18 @@ Instruction files:
 
 If everything in `docs/` and the instruction files was already current **and Step 9.5 wrote nothing**, report briefly: "Docs structure and instruction files verified — no changes needed."
 
-**That short-circuit is forbidden whenever Step 9.5 adopted duvet.** An already-current repo is the common case — fx-setup runs on every `/spec-writer` and `/project-management` call, so `docs/` will usually need no changes — which is exactly when "no changes needed" would print verbatim over an adoption that just created `.duvet/config.toml`, `.duvet/snapshot.txt`, a `.gitignore` edit, a mise edit, and a CI workflow. Five new files reported as zero changes is the worst possible report: the user has no idea there is anything to review. Check what Step 9.5 did before choosing which report to emit.
+**That short-circuit is forbidden whenever Step 9.5 adopted duvet.** An already-current repo is a common case — a re-run on a set-up repo usually needs no changes — which is exactly when "no changes needed" would print verbatim over an adoption that just created `.duvet/config.toml`, `.duvet/snapshot.txt`, a `.gitignore` edit, a mise edit, and a CI workflow. Five new files reported as zero changes is the worst possible report: the user has no idea there is anything to review. Check what Step 9.5 did before choosing which report to emit.
 
 If Step 5.5 found a legacy layout, always end the report with the specific findings and `Run /fx-upgrade to migrate.` Never report success over a skipped file.
 
 ## Rules
 
+- **Writes only on explicit user invocation** — every other load is check mode, which writes nothing and offers nothing (§ Invocation mode)
 - **Never overwrite** existing files — only create what's missing
 - **Never migrate** — no moves, merges, deletions, or symlink resolution. Detect and defer to `/fx-upgrade`
 - **Never flip an existing config value** — an explicit `enabled: false` is someone's decision. Adding a missing key is creation; changing a set one is not
 - **Never delete convention content** — fx-setup deletes nothing, ever
-- **Duvet is offered, never assumed** — if `.duvet/` is absent, ask once per session (Step 9.5); if it exists, stay silent. Once adopted the offer never returns; a decline is not persisted, so it returns next session. The procedure lives only in `references/duvet-adoption.md`
+- **Duvet is offered, never assumed** — if `.duvet/` is absent, ask once per explicit run (Step 9.5); if it exists, stay silent. Once adopted the offer never returns; a decline is not persisted, so the next explicit run offers again. The procedure lives only in `references/duvet-adoption.md`
 - **Offer migration** if PROJECT.md exists
 - **Keep it minimal** — bare templates, not example content
 - **Idempotent** — safe to run multiple times; repeated runs MUST NOT duplicate content

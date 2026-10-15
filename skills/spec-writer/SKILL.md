@@ -9,7 +9,7 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
 > every skill referenced below is installed as a sibling there.
 
-This skill manages the complete specification lifecycle: creating living spec documents in `docs/specs/<name>/`, updating them to reflect current implementation, identifying gaps between spec and code, and proposing change documents in `docs/changes/` to close those gaps.
+This skill manages the complete specification lifecycle: creating living spec documents in `docs/specs/<name>/` — or, in a repo that has not adopted the fx docs layout, in the repo's own spec or design convention (`fx-setup` → `references/adoption.md`) — updating them to reflect current implementation, identifying gaps between spec and code, and proposing change documents in `docs/changes/` to close those gaps where that layout is adopted.
 
 ## Scope Discipline (MANDATORY)
 Record the **Scope Brief** before writing anything, and carry it into every review of the resulting documents. Full definition: `[SKILLS_DIR]/dev/references/scope-contract.md`.
@@ -39,7 +39,7 @@ duvet# The `spec-writer` skill MUST NOT create or modify any file outside the `d
 - Do NOT create or run database migrations
 - Do NOT modify tests, configs, or any non-documentation file
 - Do NOT install packages or run build commands
-- The ONLY files this skill creates or modifies are in `docs/` (specs, changes, indexes)
+- The ONLY files this skill creates or modifies are in `docs/` (specs, changes, indexes), and each passes `fx-setup` → `references/adoption.md` § Who gates on what's write rule before it is written
 
 If the user asks to "write a spec AND implement it", write the spec/changes first, then stop and tell the user to use `/dev` for implementation.
 
@@ -47,7 +47,7 @@ If the user asks to "write a spec AND implement it", write the spec/changes firs
 
 1. **Specs are living knowledge** — They describe the CURRENT state of the system, not a future plan. They MUST be kept in sync with implementation.
 2. **One spec per major feature** — Never create a single monolithic spec for an entire application. Each major feature area (e.g., authentication, file storage, upload system, password protection) gets its own spec. A general "architecture" or "setup" spec is appropriate for project-level concerns (tech stack, directory structure, deployment topology), but feature behavior belongs in feature-specific specs. This keeps specs focused, readable in one sitting, and independently maintainable.
-3. **Changes are plans** — Planning, task tracking, and implementation details go in `docs/changes/NNNN-name.md`, never in specs.
+3. **Changes are plans** — Planning, task tracking, and implementation details go in `docs/changes/NNNN-name.md` where the fx docs layout is adopted (Phase 5 covers a repo that has not), never in specs.
 4. **RFC 2119 everywhere** — All specs and changes MUST use RFC 2119 keywords (MUST, MUST NOT, SHALL, SHALL NOT, SHOULD, SHOULD NOT, MAY, OPTIONAL) for requirement precision. **In duvet mode this principle is narrowed, not contradicted:** keywords still express every requirement, but they are confined to requirement sections — see "Keywords belong ONLY in requirement sections" under "Duvet Mode — Requirements Traceability".
 5. **Behavioral scenarios** — Every requirement SHOULD have GIVEN/WHEN/THEN scenarios that map directly to test cases. Scenarios live in the document that OWNS the requirement — never copied into a second document that references it.
 6. **Exhaustive exploration** — Research the codebase deeply before writing anything. Every claim in a spec must be verified against actual code.
@@ -238,20 +238,25 @@ Per RFC 2119, these keywords indicate requirement levels:
 
 ## Workflow
 
-### Phase 0: Setup
+### Phase 0: Detect the Docs Layout
 
-**Every time this skill is invoked**, run the fx-setup skill first to ensure docs structure and instruction files are in place:
+#### 0.0 Run the adoption check
 
+Run the read-only check — **never load `fx-setup` from here**:
+
+```bash
+bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh
 ```
-Skill tool: skill="fx-setup"
-```
 
-This is fast and idempotent — it checks what exists and only creates/modifies what's missing. It handles:
-- `docs/` folder structure (specs/, changes/, tasks.md, index.yml, index.md)
-- `AGENTS.md` task-tracking instructions (+ the `CLAUDE.md` → `@AGENTS.md` pointer)
-- `REVIEW.md` PR review instructions (+ `.coderabbit.yaml` pointing CodeRabbit at it)
+Record the output in your working notes for Phases 1–6 and branch per `fx-setup` → `references/adoption.md`:
 
-Wait for fx-setup to complete before proceeding.
+- **`FX_DOCS=adopted`** → proceed exactly as below. A docs-layer path `FX_DOCS_MISSING` names is created, inside `docs/`, by the phase that first needs it (adoption.md § Partial adoption). Every path Phases 3–6 write or create passes adoption.md § Who gates on what's write rule first.
+- **`FX_DOCS=not-adopted`** → choose the native target for Phases 3–6 now (adoption.md § Following the repo's convention): one `NATIVE_SPECS` directory, picked by document type — a decision goes to an ADR directory, a feature or behaviour to a specs, RFC or design directory — asking with AskUserQuestion when several fit.
+  - **The target must be under `docs/`.** For a native directory outside it (`doc/adr/`, `adr/`, `rfcs/`, `design/`), produce the document in the Output report with its intended path and write nothing: § Scope — Documentation Only does not move with the repo's convention.
+  - **Every target — adopted or native, chosen or confirmed by the user — must pass adoption.md § Who gates on what's inside-the-repository rule** before Phases 3–6 write it; one that fails is reported, not written.
+  - **No `NATIVE_SPECS` entry** → ask with AskUserQuestion: (1) one standalone file at a path under `docs/` the user confirms; (2) return the spec in this run's report only; (3) run `/fx-setup` now. Option 3 is an explicit invocation because the user chose it: load `fx-setup` in explicit mode, then re-run this check and proceed as adopted.
+
+**Why this replaced a prerequisite `fx-setup` load:** fx-setup writes `AGENTS.md`, `CLAUDE.md`, `REVIEW.md` and `.coderabbit.yaml`, and on acceptance `.duvet/`, `.gitignore`, mise and CI files — all outside `docs/`, which this skill must never touch, and all an unasked-for diff in a repo with its own convention.
 
 #### 0.1 Detect duvet mode
 
@@ -263,7 +268,7 @@ The gate is defined at the **repository root**, so the check MUST resolve the ro
 
 If `.duvet/` exists, **every rule in "Duvet Mode — Requirements Traceability" above applies for the rest of this run** — REQ IDs for newly created requirements only, one self-contained statement per requirement section, RFC 2119 keywords confined to requirement sections, the extraction check, and the registration and snapshot items you REPORT rather than apply. Record this in your working notes so it is not forgotten by Phase 6.
 
-If it does not exist, proceed normally and do not raise duvet at all. Adopting duvet is `fx-setup`'s and `fx-upgrade`'s decision to offer — both entry points do — not this skill's.
+If it does not exist, proceed normally and do not raise duvet at all. Adopting duvet is `fx-setup`'s and `fx-upgrade`'s decision to offer when the user runs them — not this skill's.
 
 ---
 
@@ -304,12 +309,16 @@ Use `WebSearch` to find:
 
 #### 1.4 Existing Specs and Changes
 
-Read all existing specs and changes to understand the current documentation landscape:
+Read all existing specs and changes to understand the current documentation landscape.
+
+**Adopted:**
 
 ```bash
 ls docs/specs/ docs/changes/ 2>/dev/null
 cat docs/index.yml 2>/dev/null
 ```
+
+**Not adopted:** list each `NATIVE_SPECS` directory and read its two or three newest documents (by number, else by `git log` date) — they are the shape Phase 3 mirrors.
 
 Check if a spec already exists for this area. If so, this is an **update**, not a creation.
 
@@ -354,6 +363,10 @@ AskUserQuestion:
 
 #### 3.1 Create Spec Directory
 
+**Not adopted:** skip 3.1 and write the new document — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule — in the native directory Phase 0.0 selected, mirroring its newest document — naming and numbering, front-matter, headings, status vocabulary (`fx-setup` → `references/adoption.md` § Following the repo's convention). 3.2's content rules still apply (verified claims, altitude, single owner, scope discipline); the template sections, the Changelog table and RFC 2119 keywords apply only where the existing documents already use them. Example: `docs/adr/0007-<title>.md` copying 0006's headings and starting at `Proposed`; in a repo with only `docs/specs/` (this catalog's shape), `docs/specs/<name>/index.md` in the existing specs' shape, with no index file created.
+
+Check `docs/specs/<spec-name>` against `fx-setup` → `references/adoption.md` § Who gates on what's write rule before creating it.
+
 ```bash
 mkdir -p docs/specs/<spec-name>
 ```
@@ -362,7 +375,7 @@ Where `<spec-name>` is a brief, descriptive kebab-case name (e.g., `user-authent
 
 #### 3.2 Write the Spec
 
-Read the template at `references/spec-index-template.md` and write `docs/specs/<spec-name>/index.md`.
+Read the template at `references/spec-index-template.md` and write `docs/specs/<spec-name>/index.md` — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule.
 
 **Critical rules:**
 - Describe the system **as it currently exists in the codebase**. If the feature doesn't exist yet, describe the desired behavior and note it as unimplemented.
@@ -385,7 +398,7 @@ A single spec MUST:
 
 **Spec organization for a new project:**
 
-1. **Architecture/fx-setup spec** (optional) — Covers project-level concerns: tech stack, directory structure, deployment topology, dev workflow. Does NOT contain feature requirements.
+1. **Architecture/setup spec** (optional) — Covers project-level concerns: tech stack, directory structure, deployment topology, dev workflow. Does NOT contain feature requirements.
 2. **Feature specs** (one per major feature) — Each covers a distinct capability of the system. Change documents reference the feature spec they implement.
 
 **Example:** For a file hosting app, create separate specs:
@@ -415,6 +428,8 @@ The `index.md` MUST link to all supplementary documents.
 
 ### Phase 4: Update Existing Spec
 
+**Not adopted:** edit the existing native document in place, in its own format.
+
 #### 4.1 Deep Implementation Audit
 
 This is the most critical step. Explore the codebase **exhaustively** to find every divergence between the spec and the actual implementation:
@@ -440,7 +455,7 @@ Categorize findings:
 
 #### 4.3 Update the Spec
 
-Edit `docs/specs/<spec-name>/index.md` to reflect the current truth:
+Edit `docs/specs/<spec-name>/index.md` — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule — to reflect the current truth:
 - Add missing requirements discovered during audit
 - Update requirements that have changed
 - Remove requirements for deprecated behavior
@@ -450,7 +465,7 @@ Edit `docs/specs/<spec-name>/index.md` to reflect the current truth:
 
 #### 4.4 Update Changelog
 
-Add an entry to the spec's Changelog for every update:
+Add an entry to the spec's Changelog for every update (same file, same write rule as 4.3):
 
 ```markdown
 | YYYY-MM-DD | <Description of what changed> | [NNNN-change-name](../../changes/NNNN-change-name.md) |
@@ -461,6 +476,8 @@ If updating to match existing implementation (no change document), use `—` for
 ---
 
 ### Phase 5: Propose Change Documents
+
+**Not adopted: skip `docs/changes/` entirely.** Put the plan where the native convention holds plans if it has such a section (an RFC's implementation plan, an ADR's consequences — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule); otherwise put the task breakdown in the Output report. Offer to file issues only with the user's confirmation — creating one is a shared-system write. 5.3.1 Testing Requirements still applies wherever the plan lands.
 
 For every gap between the spec (desired state) and the implementation (current state), create change documents in `docs/changes/`.
 
@@ -483,7 +500,7 @@ Split large efforts into multiple change documents. It is BETTER to have many sm
 
 #### 5.3 Write Change Documents
 
-Read the template at `references/change-template.md` and write each change to `docs/changes/NNNN-<name>.md`.
+Read the template at `references/change-template.md` and write each change to `docs/changes/NNNN-<name>.md` — each a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule, `docs/changes/` included when this creates it.
 
 **Critical rules:**
 - Every change MUST reference the spec it relates to
@@ -561,7 +578,9 @@ The rules you write MUST come from the project you're operating in, discovered v
 
 ### Phase 6: Update Indexes
 
-After creating or modifying specs and changes, update both index files. **Index files MUST strictly follow their templates — no ad-hoc columns, renamed fields, or alternative status values.**
+**Not adopted: skip 6.1 and 6.2.** Update the native convention's own index if it keeps one (a `docs/adr/README.md`, say) the way its existing entries are written — a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule like any other — and report — do not apply — any registration outside `docs/`, such as a `mkdocs.yml` nav entry, as 6.3 already does for duvet. **Adopted with `FX_DOCS_MISSING` naming an index file:** recreate it from the templates below (adoption.md § Partial adoption).
+
+After creating or modifying specs and changes, update both index files — `docs/index.yml` and `docs/index.md`, each a target under `fx-setup` → `references/adoption.md` § Who gates on what's write rule. **Index files MUST strictly follow their templates — no ad-hoc columns, renamed fields, or alternative status values.**
 
 #### 6.1 Update `docs/index.yml`
 
@@ -651,3 +670,5 @@ After completing all phases, report:
    - "Changes ready for implementation via `/dev` or `/team`"
    - "Spec has open questions that need resolution first"
    - "Spec updated to match current implementation — no changes needed"
+   - "Written to <native path(s)>" when the repo follows its own convention
+8. **Docs layout** — when Phase 0.0 found the docs layer not adopted and a phase was skipped or redirected, the docs-layer block from `fx-setup` → `references/adoption.md` § Report, naming the native path(s) written, or "none found" and where the content went.
