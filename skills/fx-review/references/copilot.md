@@ -1,24 +1,14 @@
----
-name: copilot-review
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Requests, waits for, inspects, and settles a head-scoped GitHub Copilot review."
----
+# Copilot
 
-# Copilot Review
+`fx-review` loads this file when it is invoked `with copilot` (its § Invocation).
+It holds Copilot's mechanics only — requesting a review, waiting for one that
+covers the right commit, and the API behaviour that makes both harder than they
+look. The procedure — carrying the Scope Brief, triaging in filter order, sweeping
+a class, converging, reporting — is `fx-review` Steps 1–8, and none of it is
+restated here.
 
-> **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
-> the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
-> every skill referenced below is installed as a sibling there.
->
-> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
-> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
-> Substitute it; never write a literal `.claude/` path on another host.
-
-**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
-canonical review procedure — carrying the Scope Brief, triaging in filter order,
-sweeping a class, converging, reporting. This skill is the **Copilot adapter**:
-requesting a review, waiting for one that covers the right commit, and the API
-behaviour that makes both harder than they look. Where the two appear to
-disagree, `fx-review` wins.
+In this file, **"this skill" means `fx-review` invoked `with copilot`**. A bare
+step number names a step of this file; "`fx-review` Step N" names the procedure's.
 
 Request, wait for, and resolve GitHub Copilot's PR review on a pull request.
 
@@ -154,11 +144,10 @@ class halfway spends a full Copilot wait to be told about the other half.
 - After creating a PR (SDLC Step 6.3)
 - **After every push to the PR branch** — including pushes that only fix review feedback. This is not optional and it is the step most often skipped.
 - Before merging any PR (team coordinator merge gate), against the head commit being merged
-- When user says "check copilot", "wait for copilot", "copilot review"
 
 ## Parallel With Other Reviewers
 
-This skill can run **in parallel** with `coderabbit-review`, the only other PR-level reviewer this catalog requests.
+This skill can run **in parallel** with `fx-review with coderabbit`, the only other PR-level reviewer this catalog requests.
 
 Launch each reviewer's waiter in the shape your host's row prescribes
 (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits) and handle whichever
@@ -171,7 +160,7 @@ Do not budget for Copilot being quick. Observed delivery ranges from **85 s to
 
 ## Arguments
 
-This skill expects a PR number **and the Scope Brief**: `skill='copilot-review', args='<PR_NUMBER> — <Scope Brief verbatim>'`. Copilot cannot be handed the brief itself, but this skill triages its output and settles it through `resolve-pr-feedback`, and both need it (`fx-review` Step 1). A bare PR number makes the whole chain re-derive the exclusions from the PR description.
+This skill expects a PR number **and the Scope Brief** — `args='with copilot — <PR_NUMBER> — <Scope Brief verbatim>'`, per `fx-review` § Invocation. Copilot cannot be handed the brief itself, but this skill triages its output and settles it through `resolve-pr-feedback`, and both need it (`fx-review` Step 1). A bare PR number makes the whole chain re-derive the exclusions from the PR description.
 
 ## Workflow
 
@@ -205,7 +194,7 @@ the wake. On Claude Code that is `run_in_background: true` plus its completion
 notification:
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
-bash [SKILLS_DIR]/copilot-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> \
+bash [SKILLS_DIR]/fx-review/scripts/wait-for-copilot-review.sh <PR_NUMBER> \
   > [AGENT_DIR]/team/waits/copilot-<PR_NUMBER>.log 2>&1
 ```
 
@@ -308,7 +297,7 @@ and replies to and resolves every Copilot thread. Under a coordinator it returns
 the blocking set unfixed for the coordinator's one batched fix; run standalone,
 it fixes the blocking set once and pushes once. **It settles only Copilot's
 threads, runs one round, and never nudges, waits or re-requests** (its § One round) — Steps 4–5 below are the loop, and the re-request its report names after a push is this skill's Step 5. CodeRabbit's
-threads are `coderabbit-review`'s.
+threads are `references/coderabbit.md`'s.
 
 ### Step 4: Confirm Resolution
 

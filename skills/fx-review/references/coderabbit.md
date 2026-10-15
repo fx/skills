@@ -1,23 +1,13 @@
----
-name: coderabbit-review
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Handles CodeRabbit's PR-level review as an optional review adapter with Scope Brief triage and rate-limit degradation."
----
+# CodeRabbit
 
-# CodeRabbit Review
+`fx-review` loads this file when it is invoked `with coderabbit` (its
+§ Invocation). It holds CodeRabbit's mechanics only — the GitHub App's check and
+threads, and the rate-limit exception. The procedure — carrying the Scope Brief,
+triaging in filter order, sweeping a class, converging, reporting — is
+`fx-review` Steps 1–8, and none of it is restated here.
 
-> **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
-> the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
-> every skill referenced below is installed as a sibling there.
->
-> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
-> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
-> Substitute it; never write a literal `.claude/` path on another host.
-
-**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
-canonical review procedure — carrying the Scope Brief, triaging in filter order,
-sweeping a class, converging, reporting. This skill is the **CodeRabbit adapter**:
-the GitHub App's check and threads, and the rate-limit exception. Where the two
-appear to disagree, `fx-review` wins.
+In this file, **"this skill" means `fx-review` invoked `with coderabbit`**. A bare
+step number names a step of this file; "`fx-review` Step N" names the procedure's.
 
 **CodeRabbit is PR-level only, and optional.** It applies when the repo's CodeRabbit
 GitHub App auto-reviews pull requests, which exposes a `CodeRabbit` check. Most
@@ -26,12 +16,13 @@ reason to wait or retry.
 
 > **There is no local CodeRabbit mode.** The `cr` CLI is no longer used anywhere in
 > this SDLC catalog. **Codex is the only local pre-PR reviewer** — see
-> `codex-review` and `dev` Step 4.5. Do not reintroduce a `cr` call,
+> `references/codex.md` and `dev` Step 4.5. Do not reintroduce a `cr` call,
 > and do not treat a missing local CodeRabbit pass as a gap.
 
 ## Arguments
 
-`args='<PR_NUMBER> — <Scope Brief verbatim>'`.
+`args='with coderabbit — <PR_NUMBER> — <Scope Brief verbatim>'`, per `fx-review`
+§ Invocation.
 
 ## How the brief reaches CodeRabbit — it does not
 
@@ -85,7 +76,7 @@ a log file and reading that file on the wake. On Claude Code that is
 `run_in_background: true` plus its completion notification:
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
-bash [SKILLS_DIR]/coderabbit-review/scripts/wait-for-coderabbit-review.sh <PR_NUMBER> \
+bash [SKILLS_DIR]/fx-review/scripts/wait-for-coderabbit-review.sh <PR_NUMBER> \
   > [AGENT_DIR]/team/waits/rabbit-<PR_NUMBER>.log 2>&1
 ```
 
@@ -299,7 +290,7 @@ jq '[.[] | select(.isResolved == false
 
 ## Concurrency with other reviewers
 
-This skill runs **in parallel** with `copilot-review`. That parallelism needs no
+This skill runs **in parallel** with `fx-review with copilot`. That parallelism needs no
 mode selection: launch each reviewer's waiter in the shape your host's row
 prescribes (`[SKILLS_DIR]/dev/references/host-adapters.md` § Long waits), then
 handle whichever wake arrives first.

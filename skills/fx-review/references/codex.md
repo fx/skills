@@ -1,23 +1,13 @@
----
-name: codex-review
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Runs a scoped one-shot Codex CLI branch review as an external review adapter."
----
+# Codex
 
-# Codex Review
+`fx-review` loads this file when it is invoked `with codex` (its § Invocation).
+It holds Codex's mechanics only — how to drive the `codex` CLI, and nothing else.
+The procedure — carrying the Scope Brief, triaging in filter order, sweeping a
+class, converging, reporting — is `fx-review` Steps 1–8, and none of it is
+restated here.
 
-> **Path note:** `[SKILLS_DIR]` below is the directory holding this skill's own folder —
-> the parent of the directory containing this `SKILL.md`. Substitute its absolute path;
-> every skill referenced below is installed as a sibling there.
->
-> `[AGENT_DIR]` is your host's in-repo agent directory — `.claude` on Claude Code,
-> `.agents` on Codex (`[SKILLS_DIR]/dev/references/host-adapters.md` § `[AGENT_DIR]`).
-> Substitute it; never write a literal `.claude/` path on another host.
-
-**⛔ Load `fx-review` first** (Skill tool: `skill="fx-review"`). It is the
-canonical review procedure — carrying the Scope Brief, triaging in filter order,
-sweeping a class, converging, reporting. This skill is the **Codex adapter**: how
-to drive the `codex` CLI, and nothing else. Where the two appear to disagree,
-`fx-review` wins.
+In this file, **"this skill" means `fx-review` invoked `with codex`**. A bare step
+number names a step of this file; "`fx-review` Step N" names the procedure's.
 
 Codex is a **local, one-shot** reviewer against the current branch, and it is the
 **only** local reviewer in this SDLC — the entire pre-PR review pass
@@ -181,7 +171,7 @@ invocation, and the `AGENTS.md` pointer check, so none of them can be
 half-remembered:
 ```bash
 mkdir -p [AGENT_DIR]/team/waits && \
-bash [SKILLS_DIR]/codex-review/scripts/run-codex-review.sh /tmp/scope-prompt.md \
+bash [SKILLS_DIR]/fx-review/scripts/run-codex-review.sh /tmp/scope-prompt.md \
   > [AGENT_DIR]/team/waits/codex-review.log 2>&1
 ```
 
@@ -260,7 +250,7 @@ The script applies these defaults itself. Override per run via env:
 
 ```bash
 CODEX_REVIEW_MODEL=gpt-5.6-terra CODEX_REVIEW_EFFORT=high \
-  bash [SKILLS_DIR]/codex-review/scripts/run-codex-review.sh /tmp/scope-prompt.md
+  bash [SKILLS_DIR]/fx-review/scripts/run-codex-review.sh /tmp/scope-prompt.md
 ```
 
 **Default to `gpt-5.6-terra` at `medium`** — roughly a tenth of the wall clock of
@@ -273,7 +263,7 @@ worth it for review — it found nothing more, and a 15-minute pass makes the
 convergence loop unaffordable long before the iteration bound.
 
 The measurements behind this choice are in the commit that made it
-(`git log -S gpt-5.6-terra -- skills/codex-review/SKILL.md`), not
+(`git log -S gpt-5.6-terra`), not
 here: they are one branch on one machine at one point in time, and they date the
 moment the models change.
 
@@ -315,7 +305,7 @@ local run:
 - **There are no threads to resolve.** Resolution here means the code is fixed, or
   the finding is a recorded non-issue. An immaterial observation goes straight
   into the closing note rather than into a reply.
-- **A fix is a commit, not a push.** Make atomic commits, and re-run Step 7's loop
+- **A fix is a commit, not a push.** Make atomic commits, and re-run `fx-review` Step 7's loop
   against them.
 
 ## The gate
