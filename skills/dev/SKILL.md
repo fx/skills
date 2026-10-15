@@ -58,6 +58,7 @@ Standards that bind the Implementer, in addition to **Test Policy** and **Scope 
 - Follow the repository's `AGENTS.md` and every mandatory project rule it names.
 - Test bug fixes first: reproduce the bug with a failing test, then fix it.
 - Match the surrounding code's style, naming, and idiom.
+- **Load the `shell` skill (Skill tool: skill='shell') before your first shell command** and follow it for every command you run — stopping and waiting on processes by pattern is the most common way a delegate has destroyed its own work.
 - Follow security best practices — no secrets, credentials, or private identifiers in code, tests, fixtures, or commit messages.
 - **Commit subjects: no `#<number>`, no waves/phases.** A commit subject auto-links `#N` to PR/issue #N, and it propagates into the PR title (GitHub pre-fills the title from a single commit's subject) and the squash-merge commit subject — so the PR-title rule applies here too: never put `#<number>` (`#4`, `(#4)`, `#123`) in a commit subject unless N is a real PR/issue ref on this repo, and never use a wave/phase/step/change-doc number there. See the `github` skill's "`#<number>` PR-Title Rule".
 
@@ -146,6 +147,8 @@ duvet# During an explicitly invoked `dev` lifecycle, the coordinator MUST delega
 Every long wait in this lifecycle — reviewer waiters, the CI waiter, sub-agents you spawn — runs in the shape `references/host-adapters.md` § Long waits prescribes, under the discipline in `references/background-waits.md`. **Before the first wait, check whether this session is headless** (`references/host-adapters.md` § Headless sessions): non-interactive, no user to reply mid-run, or a process that exits when your turn ends.
 
 **In a headless session, never end your turn while a sub-agent, reviewer, or CI wait is outstanding.** Run the waiters in the foreground as that section prescribes, relaunching on `STATUS=PENDING`; wait for every sub-agent to return; and carry the lifecycle all the way to the Step 8.4 hand-off before you reply. Every instruction below to "keep working and collect it on a wake" assumes a host that can wake you — headless, nothing will, and ending the turn silently skips every remaining gate. Polling with `sleep` stays forbidden either way.
+
+**Load the `shell` skill before Step 0; it binds every command you run.**
 
 ### Scope Discipline (STOP rule)
 
