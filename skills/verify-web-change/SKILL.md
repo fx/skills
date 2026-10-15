@@ -363,6 +363,10 @@ if ! "$READY"; then
         sleep 0.5
     done
     kill -KILL -- "-$DEV_PID" 2>/dev/null
+    sleep 0.5
+    if kill -0 -- "-$DEV_PID" 2>/dev/null; then
+        echo "❌ Dev server process group $DEV_PID survived KILL — PID kept in $VERIFY_DIR/dev-server.pid" >&2
+    fi
     exit 1
 fi
 ```
@@ -497,7 +501,8 @@ Dev Server Logs: [relevant lines from $VERIFY_DIR/dev-server.log]
 Stop processes by their tracked PIDs, never by pattern — the `shell` skill's § Stop a process by PID or through what owns it, never by pattern says why. Stop the dev server's whole process group (`shell` → `references/process-control.md` § Stop the group):
 
 ```bash
-# Stop the dev server's process group by PID; keep VERIFY_DIR if it survives
+# Stop the dev server's process group by PID; keep VERIFY_DIR and fail if it survives
+STOP_FAILED=false
 if [[ -f "$VERIFY_DIR/dev-server.pid" ]]; then
     DEV_PID=$(cat "$VERIFY_DIR/dev-server.pid")
     kill -TERM -- "-$DEV_PID" 2>/dev/null
@@ -510,7 +515,8 @@ if [[ -f "$VERIFY_DIR/dev-server.pid" ]]; then
         sleep 0.5
     fi
     if kill -0 -- "-$DEV_PID" 2>/dev/null; then
-        echo "❌ Dev server process group $DEV_PID still running — kept $VERIFY_DIR" >&2
+        echo "❌ Dev server process group $DEV_PID survived KILL — kept $VERIFY_DIR" >&2
+        STOP_FAILED=true
     else
         rm -rf -- "${VERIFY_DIR:?}"
     fi
@@ -524,7 +530,14 @@ if [[ -n "${COMPOSE_FILE:-}" ]]; then
         docker-compose down 2>/dev/null || true
     fi
 fi
+
+# Cleanup is not done while the dev server still holds its port
+if "$STOP_FAILED"; then
+    exit 1
+fi
 ```
+
+If Step 8 fails, report the surviving process group and the kept `VERIFY_DIR` to the user; do not report cleanup as done.
 
 ## Reference
 

@@ -15,6 +15,8 @@
 #   0 - Stack launched and the dev server answered 2xx/3xx
 #   1 - Failed to launch stack, or the dev server never became ready
 #       (its process group is stopped; the log stays in $VERIFY_DIR)
+#   2 - The dev server never became ready and its process group survived KILL
+#       (the PID stays in $VERIFY_DIR/dev-server.pid)
 
 set -e
 
@@ -254,6 +256,11 @@ stop_dev_server() {
         sleep 0.5
     done
     kill -KILL -- "-$pid" 2>/dev/null || true
+    sleep 0.5
+    if kill -0 -- "-$pid" 2>/dev/null; then
+        echo "[Server] ❌ Process group $pid survived KILL — PID kept in $VERIFY_DIR/dev-server.pid" >&2
+        return 1
+    fi
 }
 
 wait_for_server() {
@@ -285,7 +292,7 @@ wait_for_server() {
     curl -fsS -o /dev/null "http://localhost:$port" 2>&1 || true
     echo "[Server] Last output (log kept at $VERIFY_DIR/dev-server.log):"
     tail -20 "$VERIFY_DIR/dev-server.log" 2>/dev/null || true
-    stop_dev_server "$pid"
+    stop_dev_server "$pid" || return 2
     return 1
 }
 
