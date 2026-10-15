@@ -376,8 +376,13 @@ fi
 # Codex reads AGENTS.md. It does NOT read REVIEW.md or CLAUDE.md — it is the one
 # reviewer that needs a pointer, and only where a REVIEW.md exists to point at.
 # Checked from the repository root, so a run from a subdirectory does not report
-# a bridge that is actually present. Report and continue on defaults; never
-# invoke fx-setup or fx-upgrade from here (fx-review Step 6).
+# a bridge that is actually present. Never invoke fx-setup or fx-upgrade from here
+# (fx-review Step 6), and never write the pointer: that is the user's call.
+#
+# Without the pointer, the rules still reach Codex for THIS run: REVIEW.md is
+# PREPENDED to the scope prompt, so the prompt still ends with the BLOCKING block,
+# which fx-review requires to be its last part. Nothing on disk changes. Only an
+# unreadable or empty REVIEW.md falls back to reviewing on defaults.
 BRIDGE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 if [[ ! -e "$BRIDGE_ROOT/REVIEW.md" && ! -L "$BRIDGE_ROOT/REVIEW.md" ]]; then
     echo "REVIEW.md: absent — nothing to bridge; Codex reviews on AGENTS.md and the scope prompt."
@@ -385,11 +390,24 @@ elif grep -q "## Code Review Rules" "$BRIDGE_ROOT/AGENTS.md" 2>/dev/null; then
     echo "AGENTS.md -> REVIEW.md pointer: present"
 else
     echo "WARNING: REVIEW.md exists but AGENTS.md has no '## Code Review Rules' section."
-    echo "         Codex cannot see REVIEW.md, so it will review on defaults."
-    echo "         The pointer is fx-upgrade's M1.4, applied when the user asks for it —"
-    echo "         not from this review."
-    echo "         If Codex flags something REVIEW.md explicitly permits, this is why:"
-    echo "         say so rather than silently applying the finding."
+    review_rules=""
+    if [[ -r "$BRIDGE_ROOT/REVIEW.md" ]]; then
+        review_rules=$(cat "$BRIDGE_ROOT/REVIEW.md" 2>/dev/null) || review_rules=""
+    fi
+    if [[ -n "${review_rules//[[:space:]]/}" ]]; then
+        SCOPE_PROMPT=$(printf '%s\n\n%s\n\n%s\n\n%s' \
+            "These are this repository's code review rules, from its REVIEW.md. Apply them to this review:" \
+            "$review_rules" \
+            "--- end of REVIEW.md ---" \
+            "$SCOPE_PROMPT")
+        echo "REVIEW.md: prepended to the scope prompt for this run (no Code Review Rules pointer)."
+        echo "         The pointer is fx-upgrade's M1.4, applied when the user asks for it —"
+        echo "         not from this review."
+    else
+        echo "         REVIEW.md could not be read or is empty, so Codex reviews on defaults."
+        echo "         If Codex flags something REVIEW.md explicitly permits, this is why:"
+        echo "         say so rather than silently applying the finding."
+    fi
 fi
 
 # ── Disable every locally configured MCP server, individually, by name ───────

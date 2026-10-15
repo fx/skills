@@ -29,10 +29,13 @@ is a `## Code Review Rules` section in `AGENTS.md` pointing at `REVIEW.md`, whic
 (§ Running it) — do not re-check it by hand. It reports one of three states: no
 `REVIEW.md` → there is nothing to bridge, and it prints one informational line
 with no remediation; `REVIEW.md` without the pointer → a warning naming
-`fx-upgrade`'s M1.4 — report it with the instruction-layer block from `fx-setup` →
-`references/adoption.md` § Report and keep reviewing on defaults (never run
-`fx-setup` or `fx-upgrade` from here; `fx-review` Step 6 explains why); pointer
-present → its `present` line and nothing more.
+`fx-upgrade`'s M1.4, and the script prepends `REVIEW.md` to the scope prompt for
+that run (`REVIEW.md: prepended to the scope prompt …`; an unreadable or empty
+file falls back to defaults) — report the missing pointer with the
+instruction-layer block from `fx-setup` → `references/adoption.md` § Report
+(never run `fx-setup` or `fx-upgrade` from here; `fx-review` Step 6 explains why);
+pointer present → its `present` line and nothing more. Prepending keeps the
+BLOCKING block the prompt's last part, and nothing on disk changes.
 
 If Codex flags something `REVIEW.md` explicitly permits, the pointer is not
 landing — say so rather than silently applying the finding.
