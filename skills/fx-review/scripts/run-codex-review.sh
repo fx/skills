@@ -505,7 +505,16 @@ fi
 # PREFLIGHT: ASK CODEX WHAT IT ACTUALLY LOADED UNDER THESE FLAGS, IN DRY RUN TOO. A
 # flag codex rejects makes `codex review` exit before reviewing anything, and a flag
 # it accepts but misreads leaves a server enabled; both looked like success before
-# this check existed. Every enumerated server must come back `enabled == false`.
+# this check existed.
+#
+# ⛔ CHECK WHAT WAS EXPECTED, NOT ONLY WHAT CAME BACK. `all(.enabled == false)` over
+# the returned list passes on a list that dropped a server — or on `[]` — so the
+# preflight's set of names must EQUAL the enumerated set (same names, same count),
+# and every one of them must report `enabled == false`. A missing, extra or
+# duplicated name is an ERROR, just as the thread reads fail closed on a short read
+# against `totalCount`. Zero enumerated and zero returned is the one empty case that
+# passes.
+#
 # stderr is kept out of the capture — codex can print warnings there, which would
 # break the JSON — and fetched by a second run only when there is an error to show.
 if ! preflight_out=$(codex "${MCP_OFF[@]}" mcp list --json 2>/dev/null); then
@@ -513,18 +522,29 @@ if ! preflight_out=$(codex "${MCP_OFF[@]}" mcp list --json 2>/dev/null); then
     codex "${MCP_OFF[@]}" mcp list --json 2>&1 >/dev/null | sed 's/^/  /' >&2 || true
     finish ERROR
 fi
-if ! printf '%s' "$preflight_out" | jq -e 'all(.[]; .enabled == false)' >/dev/null 2>&1; then
-    echo "Error: under the MCP disable flags, codex still reports an enabled server:" >&2
-    printf '%s' "$preflight_out" | jq -r '.[] | select(.enabled != false) | "  " + .name' >&2 2>/dev/null \
-        || printf '%s\n' "$preflight_out" >&2
-    echo "Refusing to run: an enabled server can block the review indefinitely." >&2
+if ! preflight_problems=$(printf '%s' "$preflight_out" | jq -r --argjson want "$mcp_json" '
+        if type != "array" or any(.[]; type != "object") then "  output is not a list of servers"
+        else
+          ($want | map(.name) | sort) as $w | (map(.name) | sort) as $g
+          | ([$w[] | select(. as $n | $g | index($n) | not)] | map("  missing: " + .)),
+            ([$g[] | select(. as $n | $w | index($n) | not)] | map("  unexpected: " + .)),
+            (if ($w | length) != ($g | length) then ["  count: enumerated \($w | length), preflight returned \($g | length)"] else [] end),
+            ([.[] | select(.enabled != false) | "  still enabled: " + .name])
+          | .[]
+        end' 2>/dev/null); then
+    preflight_problems="  output could not be parsed"
+fi
+if [[ -n "$preflight_problems" ]]; then
+    echo "Error: the MCP preflight does not match the enumerated servers:" >&2
+    printf '%s\n' "$preflight_problems" >&2
+    echo "Refusing to run: a server left enabled can block the review indefinitely." >&2
     finish ERROR
 fi
 
 # Echo the resolved flag set so a PARTIAL one is visible. A partial set is the worst
 # outcome — the command looks correct, most servers are disabled, and the one it
 # missed hangs the run exactly as before.
-echo "MCP servers disabled for this run: ${#MCP_NAMES[@]} (preflight: all report enabled=false)"
+echo "MCP servers disabled for this run: ${#MCP_NAMES[@]} (preflight: the same ${#MCP_NAMES[@]}, all enabled=false)"
 if (( ${#MCP_NAMES[@]} == 0 )); then
     echo "  (enumeration succeeded and reported no configured servers)"
 else

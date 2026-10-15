@@ -139,10 +139,11 @@ disabled.
 
 **`scripts/run-codex-review.sh` does exactly this**, building the table from
 `codex mcp list --json`, then asking codex what it loaded under those flags and
-refusing to run (`STATUS=ERROR`) unless every server reports `enabled: false`. Do
-not hand-roll it: the script also treats an
-enumeration *failure* as a setup failure and refuses to run, whereas a hand-rolled
-loop silently yields an empty flag set and reproduces the hang. This paragraph
+refusing to run (`STATUS=ERROR`) unless it returns exactly the enumerated
+servers — none missing, none extra — and every one reports `enabled: false`. Do
+not hand-roll it: the script also treats an enumeration *failure* as a setup
+failure and refuses to run, whereas a hand-rolled loop silently yields an empty
+flag set and reproduces the hang. This paragraph
 documents the mechanism; the script is the only supported way to apply it.
 
 **Enumerate with `codex mcp list --json`, never by parsing `config.toml`.** Not
