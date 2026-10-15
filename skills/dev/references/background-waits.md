@@ -10,7 +10,7 @@ A skill that waits still documents its **own** invocation — which script, whic
 
 ### What this does NOT govern
 
-**A bounded readiness or teardown wait inside a single command is not one of these, and this file does not forbid it.** A loop that polls a service it just started — bounded, checking the producer is alive, and failing when its gate fails, as the `shell` skill's § Wait on the thing itself spells it — is part of one command whose next step depends on it, is bounded by its own iteration count, and has no completion notification to wait for. Backgrounding it would break the sequence it exists to order. `verify-web-change` uses exactly these for Docker, Compose health, and dev-server readiness, and they are correct.
+**A bounded readiness or teardown wait inside a single command is not one of these, and this file does not forbid it.** A loop that polls a service it just started is part of one command whose next step depends on it, is bounded by its own iteration count, and has no completion notification to wait for. Backgrounding it would break the sequence it exists to order. `verify-web-change`'s Docker, Compose-health and dev-server readiness polls are waits of this kind, so this file does not govern them. How to write such a poll is the `shell` skill's § Wait on the thing itself.
 
 The line is **who signals completion**: if something outside your command will tell you it finished, run it as a long wait and wait for that signal. If nothing will, and you are gating the next line of your own script, a bounded in-command poll is right.
 

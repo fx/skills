@@ -476,7 +476,7 @@ Dev Server Logs: [relevant lines from /tmp/dev-server.log]
 
 ### Step 8: Cleanup
 
-Stop processes by their tracked PIDs, per the `shell` skill § Stop a process by PID or through what owns it, never by pattern:
+Stop processes by their tracked PIDs, never by pattern — the `shell` skill's § Stop a process by PID or through what owns it, never by pattern says why:
 
 ```bash
 # Kill dev server by PID
