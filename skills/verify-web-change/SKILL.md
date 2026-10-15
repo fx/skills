@@ -15,6 +15,8 @@ Verify that pull request changes work correctly in a running web application usi
 
 Execute these steps in order. Do not skip steps.
 
+**Load the `shell` skill (Skill tool: skill='shell') before Step 1** and follow it for every command this workflow runs — Steps 2–8 run shell commands, and Steps 4.6–8 start and stop the dev server per its § Stop a process by PID or through what owns it, never by pattern.
+
 ### Step 1: Verify Playwright MCP Availability
 
 **MUST exit if this step fails.**
@@ -309,8 +311,6 @@ fi
 ```
 
 #### 4.6 Start Dev Server with PID Tracking
-
-Start and stop every process per the `shell` skill (§ Stop a process by PID or through what owns it, never by pattern) — load it before Step 3.
 
 Start the server in its own process group, so Step 8 can stop the server child the package-manager script launches, and keep its PID and log in a fresh scratch directory (`shell` → `references/process-control.md` § Start it in its own process group). The start runs in `bash` because zsh refuses `set -m` without a terminal. Carry the printed `VERIFY_DIR` into every later step:
 
