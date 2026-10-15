@@ -310,6 +310,8 @@ fi
 
 #### 4.6 Start Dev Server with PID Tracking
 
+Start and stop every process per the `shell` skill (§ Stop a process by PID or through what owns it, never by pattern) — load it before Step 3.
+
 Start the server in background and capture its PID for reliable cleanup:
 
 ```bash
