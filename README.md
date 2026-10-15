@@ -29,6 +29,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure every reviewer in this catalog follows; `with codex` runs a scoped one-shot Codex CLI branch review, `with copilot` requests, waits for and settles a head-scoped GitHub Copilot review, and `with coderabbit` handles CodeRabbit's optional PR-level review with rate-limit degradation. |
 | `resolve-pr-feedback` | Settles one round of automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions for the sources requested or present, then reports and returns; it never waits or re-requests a review, and any other configured reviewer is settled by hand by the caller. |
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
+| `shell` | Rules for agent-run shell commands — stop and wait on processes by PID or owner rather than name pattern, bound every poll, handle the shell dialect actually running, keep exit statuses visible, never block on a prompt. |
 | `project-management` | Manages project tracking through `docs/tasks.md` and `docs/changes/` where the fx docs layout is adopted, the repo's own tracker where it is not, or an explicitly selected external tracker. |
 | `spec-writer` | Writes and maintains living specs and proposed change documents within an explicitly requested documentation lifecycle. |
 | `fx-setup` | Creates the fx docs and instruction-file layout when you invoke it explicitly; any other load only reports whether the repository has adopted it. |
@@ -60,13 +61,13 @@ The same treatment for the host's *own* per-repo directory, where the workflow s
 
 Skills install flat: `skills/<name>/` becomes `<agent>/skills/<name>/`, and the directory name is what you invoke. There is no namespace, so a name matching a host agent's built-in silently shadows it.
 
-Names here are therefore **bare by default, `fx-`-prefixed where a collision is real or likely.** Three currently are:
+Names here are therefore **bare by default, `fx-`-prefixed only where a host agent reserves the bare name.** Three currently carry the prefix:
 
 | Skill | Why |
 |---|---|
 | `fx-review` | Claude Code reserves `review` |
 | `fx-upgrade` | Claude Code reserves `upgrade` |
-| `fx-setup` | Not reserved, but `setup` is generic enough that another catalog will claim it |
+| `fx-setup` | Not reserved — prefixed under an earlier rule; kept to avoid breaking references |
 
 Everything else keeps its plain name. `AGENTS.md` has the avoid-list and the check.
 

@@ -21,7 +21,7 @@ reference another file.
 
 - A skill's directory name is what agents invoke, and the frontmatter `name` must match it exactly. Flag any mismatch.
 - Flag a name colliding with a Claude Code built-in command or bundled skill — the collision silently shadows it. Avoid-list in `AGENTS.md`.
-- Names are bare by default; `fx-` only where a collision is real or likely. Flag a prefix on an already-distinctive name, and a reserved name left unprefixed. `fx-review`, `fx-upgrade`, `fx-setup` are the current cases — do not suggest shortening them.
+- Names are bare by default; `fx-` only on a name a host agent reserves. Flag a prefix on a name no host reserves, and a reserved name left unprefixed. `fx-review` and `fx-upgrade` are the current cases; `fx-setup` keeps its prefix because it predates this rule — do not suggest renaming or shortening any of the three.
 - A renamed skill must have every cross-reference updated. Flag a rename whose old name still appears anywhere under `skills/` or `docs/`.
 
 ### Host Portability

@@ -5,13 +5,18 @@
 # Usage: ./launch-app-stack.sh [project_dir]
 #
 # Outputs:
-#   DEV_PID written to /tmp/dev-server.pid
-#   Dev server logs written to /tmp/dev-server.log
+#   VERIFY_DIR=<absolute path> printed to stdout — a fresh mktemp -d directory
+#   DEV_PID written to $VERIFY_DIR/dev-server.pid (also the dev server's process group)
+#   Dev server logs written to $VERIFY_DIR/dev-server.log
+#   Stop the server by its process group, never by pattern (SKILL.md Step 8)
 #   Detected port printed to stdout
 #
 # Exit codes:
-#   0 - Stack launched successfully
-#   1 - Failed to launch stack
+#   0 - Stack launched and the dev server answered 2xx/3xx
+#   1 - Failed to launch stack, or the dev server never became ready
+#       (its process group is stopped; the log stays in $VERIFY_DIR)
+#   2 - The dev server never became ready and its process group survived KILL
+#       (the PID stays in $VERIFY_DIR/dev-server.pid)
 
 set -e
 
@@ -243,6 +248,21 @@ install_dependencies() {
 
 # --- Server startup and readiness ---
 
+stop_dev_server() {
+    local pid="$1"
+    kill -TERM -- "-$pid" 2>/dev/null || true
+    for i in $(seq 1 10); do
+        kill -0 -- "-$pid" 2>/dev/null || return 0
+        sleep 0.5
+    done
+    kill -KILL -- "-$pid" 2>/dev/null || true
+    sleep 0.5
+    if kill -0 -- "-$pid" 2>/dev/null; then
+        echo "[Server] ❌ Process group $pid survived KILL — PID kept in $VERIFY_DIR/dev-server.pid" >&2
+        return 1
+    fi
+}
+
 wait_for_server() {
     local port="$1"
     local pid="$2"
@@ -251,15 +271,16 @@ wait_for_server() {
     echo "[Server] Waiting for http://localhost:$port..."
 
     for i in $(seq 1 $max_attempts); do
-        if curl -s -o /dev/null -w '%{http_code}' "http://localhost:$port" 2>/dev/null | grep -qE '^[23]'; then
+        # -f: an HTTP error such as 500 is not ready
+        if curl -fsS -o /dev/null "http://localhost:$port" 2>/dev/null; then
             echo "[Server] Ready! (attempt $i)"
             return 0
         fi
 
-        # Check if the process died
-        if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+        # Check if the dev server's process group died
+        if [[ -n "$pid" ]] && ! kill -0 -- "-$pid" 2>/dev/null; then
             echo "[Server] ❌ Process exited unexpectedly. Last output:"
-            tail -20 /tmp/dev-server.log 2>/dev/null || true
+            tail -20 "$VERIFY_DIR/dev-server.log" 2>/dev/null || true
             return 1
         fi
 
@@ -267,10 +288,12 @@ wait_for_server() {
         sleep 2
     done
 
-    echo "[Server] ⚠️  Server may not be ready after ${max_attempts} attempts."
-    echo "[Server] Last output:"
-    tail -10 /tmp/dev-server.log 2>/dev/null || true
-    return 0  # Proceed anyway — Playwright navigate may trigger lazy startup
+    echo "[Server] ❌ Not ready after ${max_attempts} attempts:"
+    curl -fsS -o /dev/null "http://localhost:$port" 2>&1 || true
+    echo "[Server] Last output (log kept at $VERIFY_DIR/dev-server.log):"
+    tail -20 "$VERIFY_DIR/dev-server.log" 2>/dev/null || true
+    stop_dev_server "$pid" || return 2
+    return 1
 }
 
 # --- Main execution ---
@@ -310,9 +333,16 @@ if [[ -n "$PACKAGE_MANAGER" ]] && [[ -n "$DEV_COMMAND" ]]; then
     echo "=== Starting dev server ==="
     echo "Running: $PACKAGE_MANAGER run $DEV_COMMAND"
 
-    $PACKAGE_MANAGER run $DEV_COMMAND > /tmp/dev-server.log 2>&1 &
+    VERIFY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/verify-web-change.XXXXXX")
+    echo "VERIFY_DIR=$VERIFY_DIR"
+
+    # Own process group, so a group stop also reaches the server child the
+    # package manager launches; killing only the PM's PID orphans it.
+    set -m
+    $PACKAGE_MANAGER run $DEV_COMMAND > "$VERIFY_DIR/dev-server.log" 2>&1 < /dev/null &
     DEV_PID=$!
-    echo "$DEV_PID" > /tmp/dev-server.pid
+    set +m
+    echo "$DEV_PID" > "$VERIFY_DIR/dev-server.pid"
     echo "Dev server PID: $DEV_PID"
 
     wait_for_server "$PORT" "$DEV_PID"
@@ -320,8 +350,8 @@ if [[ -n "$PACKAGE_MANAGER" ]] && [[ -n "$DEV_COMMAND" ]]; then
     echo ""
     echo "=== Stack is running ==="
     echo "  URL: http://localhost:$PORT"
-    echo "  PID: $DEV_PID (saved to /tmp/dev-server.pid)"
-    echo "  Log: /tmp/dev-server.log"
+    echo "  PID: $DEV_PID, also its process group (saved to $VERIFY_DIR/dev-server.pid)"
+    echo "  Log: $VERIFY_DIR/dev-server.log"
 else
     echo ""
     echo "[Warning] Could not detect how to start the application."

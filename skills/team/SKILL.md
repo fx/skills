@@ -200,7 +200,7 @@ ln -s <REPO_ROOT>/node_modules <REPO_ROOT>/[AGENT_DIR]/worktrees/<slug>/node_mod
 
 Spawn ONE cheap probe teammate (size **small** — see the size table in STEP 3) pinned to a worktree. Have it write a marker file in the worktree and confirm (a) the marker is **absent** in the main repo, (b) `pwd`/branch/toplevel are the worktree's, then clean up. Only proceed once it reports isolation OK. This catches a broken setup before any real code is written. (If the probe lands in the main repo, the workaround failed — stop and re-check paths.)
 
-A confirmed gotcha: **the teammate's shell cwd RESETS to the main repo root after EVERY bash command** ("Shell cwd was reset to …"). That is exactly why the preamble below forces an absolute `cd` on every command — relative paths silently resolve against the MAIN repo, not the worktree.
+A confirmed gotcha: **the teammate's shell cwd RESETS to the main repo root after EVERY bash command** ("Shell cwd was reset to …"). That is exactly why the preamble below forces an absolute `cd` on every command — relative paths silently resolve against the MAIN repo, not the worktree. The host behaviour itself is the `shell` skill's § Host notes.
 
 ### 2.5.3 Pin each implementer to its worktree (prompt preamble)
 

@@ -27,14 +27,13 @@ Flat only. The [`skills`](https://github.com/vercel-labs/skills) CLI supports ca
 
 Format: `[a-z0-9-]+`, 1–64 chars, no leading/trailing hyphen, no `--`. That satisfies the spec, Codex (≤64 chars), and Pi (which warns but still loads on violation).
 
-**Names are bare by default.** `dev`, `team`, `learn`, `github` — no vanity prefix, because it costs a keystroke on every invocation and buys nothing when the name is already distinctive.
+**Names are bare by default.** `dev`, `team`, `learn`, `github` — no vanity prefix, because it costs a keystroke on every invocation and buys nothing unless a host reserves the name.
 
-**Prefix `fx-` when a collision is real or likely.** Two triggers, in order:
+**Prefix `fx-` only when a host agent reserves the bare name.** `review` → `fx-review`, `upgrade` → `fx-upgrade`. That is the one trigger: only host built-ins can be known ahead of time, so a prefix chosen to dodge some other catalog's name guards against nothing anyone can check.
 
-1. **The name is reserved by a host agent** — mandatory. `review` → `fx-review`, `upgrade` → `fx-upgrade`.
-2. **The name is a bare common noun another catalog would plausibly claim** — judgement, applied sparingly. `setup` → `fx-setup`. The flat namespace has no tiebreak, so the loser of a collision is whichever skill the host happens to load second.
+`fx-setup` predates this rule. No host reserves `setup`; it was prefixed under an earlier rule that also covered generic nouns, and keeps the prefix because a rename breaks every cross-reference.
 
-Everything else stays bare. Do not prefix a name that is already distinctive (`resolve-pr-feedback`, `tech-scout`), and do not rename an existing bare skill without one of the two triggers above — a rename breaks every cross-reference and every user's muscle memory.
+Everything else stays bare, however generic. Do not add a prefix to a name no host reserves, and do not rename an existing bare skill unless a host comes to reserve its name — a rename breaks every cross-reference and every user's muscle memory.
 
 ### Reserved names
 
