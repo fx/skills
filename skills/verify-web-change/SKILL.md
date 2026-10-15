@@ -312,13 +312,18 @@ fi
 
 Start and stop every process per the `shell` skill (§ Stop a process by PID or through what owns it, never by pattern) — load it before Step 3.
 
-Start the server in background and capture its PID for reliable cleanup:
+Start the server in its own process group, so Step 8 can stop the server child the package-manager script launches, and keep its PID and log in a fresh scratch directory (`shell` → `references/process-control.md` § Start it in its own process group). The start runs in `bash` because zsh refuses `set -m` without a terminal. Carry the printed `VERIFY_DIR` into every later step:
 
 ```bash
-$PM run $DEV_CMD > /tmp/dev-server.log 2>&1 &
-DEV_PID=$!
-echo "Dev server started (PID: $DEV_PID)"
-echo "$DEV_PID" > /tmp/dev-server.pid
+VERIFY_DIR=$(mktemp -d)
+echo "VERIFY_DIR=$VERIFY_DIR"
+PM="$PM" DEV_CMD="$DEV_CMD" VERIFY_DIR="$VERIFY_DIR" bash <<'EOF'
+set -m
+"$PM" run "$DEV_CMD" > "$VERIFY_DIR/dev-server.log" 2>&1 < /dev/null &
+echo "$!" > "$VERIFY_DIR/dev-server.pid"
+EOF
+DEV_PID=$(cat "$VERIFY_DIR/dev-server.pid")
+echo "Dev server started (PID and process group: $DEV_PID)"
 ```
 
 #### 4.7 Wait for Server to be Ready
@@ -326,6 +331,7 @@ echo "$DEV_PID" > /tmp/dev-server.pid
 **Do NOT use a fixed sleep.** Poll until the server responds:
 
 ```bash
+DEV_PID=$(cat "$VERIFY_DIR/dev-server.pid")
 echo "Waiting for server at http://localhost:$PORT..."
 for i in $(seq 1 30); do
     if curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT" 2>/dev/null | grep -qE '^[23]'; then
@@ -336,7 +342,7 @@ for i in $(seq 1 30); do
     # Check if the process died
     if ! kill -0 "$DEV_PID" 2>/dev/null; then
         echo "❌ Dev server exited unexpectedly. Last output:"
-        tail -20 /tmp/dev-server.log
+        tail -20 "$VERIFY_DIR/dev-server.log"
         exit 1
     fi
 
@@ -347,7 +353,7 @@ done
 # Final readiness check
 if ! curl -s -o /dev/null "http://localhost:$PORT" 2>/dev/null; then
     echo "⚠️  Server may not be ready. Last output:"
-    tail -10 /tmp/dev-server.log
+    tail -10 "$VERIFY_DIR/dev-server.log"
     echo "Proceeding anyway — Playwright navigate may trigger lazy startup."
 fi
 ```
@@ -381,8 +387,8 @@ If critical errors exist, report them and investigate.
 #### 5.4 Verify Basic Functionality
 
 Confirm the application loads and shows expected content. If it doesn't load:
-- Check dev server logs: `tail -30 /tmp/dev-server.log`
-- Check if server process is still running: `kill -0 $(cat /tmp/dev-server.pid) 2>/dev/null && echo "running" || echo "dead"`
+- Check dev server logs: `tail -30 "$VERIFY_DIR/dev-server.log"`
+- Check if server process is still running: `kill -0 "$(cat "$VERIFY_DIR/dev-server.pid")" 2>/dev/null && echo "running" || echo "dead"`
 - Check console for errors
 - Check network requests for failures
 
@@ -432,7 +438,10 @@ If the codebase has Playwright tests covering the changed area, run them against
 if [[ -f "playwright.config.ts" ]] || [[ -f "playwright.config.js" ]]; then
     echo "Running existing Playwright tests..."
     # Point tests at the running dev server
-    BASE_URL="http://localhost:$PORT" npx playwright test --reporter=line 2>&1 | tail -30
+    BASE_URL="http://localhost:$PORT" npx playwright test --reporter=line > "$VERIFY_DIR/playwright.log" 2>&1
+    PW_EXIT=$?
+    tail -30 "$VERIFY_DIR/playwright.log"
+    echo "Playwright exit status: $PW_EXIT"
 fi
 ```
 
@@ -471,26 +480,32 @@ Details:
 - [specific issue 2]
 
 Console Errors: [if any]
-Dev Server Logs: [relevant lines from /tmp/dev-server.log]
+Dev Server Logs: [relevant lines from $VERIFY_DIR/dev-server.log]
 ```
 
 ### Step 8: Cleanup
 
-Stop processes by their tracked PIDs, never by pattern — the `shell` skill's § Stop a process by PID or through what owns it, never by pattern says why:
+Stop processes by their tracked PIDs, never by pattern — the `shell` skill's § Stop a process by PID or through what owns it, never by pattern says why. Stop the dev server's whole process group (`shell` → `references/process-control.md` § Stop the group):
 
 ```bash
-# Kill dev server by PID
-if [[ -f /tmp/dev-server.pid ]]; then
-    DEV_PID=$(cat /tmp/dev-server.pid)
-    if kill -0 "$DEV_PID" 2>/dev/null; then
-        kill "$DEV_PID" 2>/dev/null || true
-        # Wait briefly, then force-kill if still running
-        sleep 1
-        kill -0 "$DEV_PID" 2>/dev/null && kill -9 "$DEV_PID" 2>/dev/null || true
+# Stop the dev server's process group by PID; keep VERIFY_DIR if it survives
+if [[ -f "$VERIFY_DIR/dev-server.pid" ]]; then
+    DEV_PID=$(cat "$VERIFY_DIR/dev-server.pid")
+    kill -TERM -- "-$DEV_PID" 2>/dev/null
+    for i in $(seq 1 10); do
+        kill -0 -- "-$DEV_PID" 2>/dev/null || break
+        sleep 0.5
+    done
+    if kill -0 -- "-$DEV_PID" 2>/dev/null; then
+        kill -KILL -- "-$DEV_PID"
+        sleep 0.5
     fi
-    rm -f /tmp/dev-server.pid
+    if kill -0 -- "-$DEV_PID" 2>/dev/null; then
+        echo "❌ Dev server process group $DEV_PID still running — kept $VERIFY_DIR" >&2
+    else
+        rm -rf -- "${VERIFY_DIR:?}"
+    fi
 fi
-rm -f /tmp/dev-server.log
 
 # Stop docker services if we started them
 if [[ -n "${COMPOSE_FILE:-}" ]]; then
@@ -552,7 +567,7 @@ docker info > /dev/null 2>&1 && echo "Docker is running"
 Install the MCP server and configure it in Claude Code settings.
 
 ### Application Won't Start
-- Check dev server logs: `tail -30 /tmp/dev-server.log`
+- Check dev server logs: `tail -30 "$VERIFY_DIR/dev-server.log"`
 - Check if ports are already in use: `ss -tlnp | grep $PORT`
 - Verify docker services are running: `docker compose ps`
 - Check for missing environment variables — look for `.env.example`
