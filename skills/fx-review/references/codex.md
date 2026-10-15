@@ -106,19 +106,29 @@ A code reviewer needs no MCP servers. Disabling them removes the whole failure
 class instead of dodging one trigger, and it starts faster. Do not "try without it
 first."
 
-### The override that works — per server, by name
+### The override that works — every server, by name, in one table
 
-**`-c 'mcp_servers={}'` does NOT work. Do not use it.** Verified on 0.147.0: the
-map is merged, not replaced, so every server stays loaded and every tool stays
+**`-c 'mcp_servers={}'` does NOT work. Do not use it.** Verified on 0.147.0 and
+again on 0.162.1: the map is merged, not replaced, so every server stays loaded and every tool stays
 available. It looks like it worked because a run that happens not to call a tool
 shows no MCP output — the servers are still there. Setting `CODEX_HOME` to a
 sanitized directory does not work either.
 
-What works is disabling each server **individually** by name.
+What works is naming each server **individually** and replacing its entry with a
+disabled stub of the same transport, all in one table:
+`-c 'mcp_servers={"<name>"={command="true",enabled=false},...}'` (an HTTP server
+gets a dead loopback `url` instead of `command`). Verified on 0.162.1, the simpler
+forms fail: `-c mcp_servers.<name>.enabled=false` is rejected outright —
+`invalid transport in mcp_servers.<name>` — for any server `codex mcp list`
+reports that `config.toml` does not declare, so `codex review` exits without
+reviewing anything; a per-server `-c` cannot address a name containing a dot; and
+a later table override silently re-enables servers an earlier per-server `-c`
+disabled.
 
-**`scripts/run-codex-review.sh` does exactly this**, emitting one
-`-c mcp_servers.<name>.enabled=false` per server enumerated from
-`codex mcp list --json`. Do not hand-roll it: the script also treats an
+**`scripts/run-codex-review.sh` does exactly this**, building the table from
+`codex mcp list --json`, then asking codex what it loaded under those flags and
+refusing to run (`STATUS=ERROR`) unless every server reports `enabled: false`. Do
+not hand-roll it: the script also treats an
 enumeration *failure* as a setup failure and refuses to run, whereas a hand-rolled
 loop silently yields an empty flag set and reproduces the hang. This paragraph
 documents the mechanism; the script is the only supported way to apply it.
@@ -179,8 +189,9 @@ Write the scope prompt (built as below) to a file and pass its path, or pass `-`
 to read it from stdin. The script applies the model and effort defaults below
 per invocation (`CODEX_REVIEW_MODEL` / `CODEX_REVIEW_EFFORT` override them); it
 never edits the user's `~/.codex/config.toml`. `CODEX_REVIEW_OUT=<path>` also tees the review to a file;
-`CODEX_REVIEW_DRY_RUN=1` prints the resolved command without running it, which is
-the fastest way to confirm the MCP flag set is complete.
+`CODEX_REVIEW_DRY_RUN=1` runs the MCP preflight and prints the resolved command
+without reviewing, which is the fastest way to confirm the MCP flag set is
+complete and accepted.
 
 The script picks the current branch, diffs it against its base, and prints the
 review (highest-risk first) to stdout. It never modifies your working tree.
@@ -203,7 +214,7 @@ one.**
 | STATUS | Exit | What to do |
 |---|---|---|
 | `COMPLETED` | codex's own, whatever it is — the script passes it through unchanged and asserts nothing about any particular value, so 126, 127 and 137 are as reachable as 0/1/2 — **or 128+N if a signal killed the runner after the outcome was recorded** (see the ERROR row for the narrow gap just before that recording, which still reports ERROR) | The review ran to completion. **Read the findings on stdout** and triage them per `fx-review`. A `CODEX_EXIT=<n>` line accompanies it; report that number rather than `$?`, and do not read a verdict into it — a non-zero `codex` exit does not tell you whether the reviewer failed or merely had opinions, only the findings do. |
-| `DRY_RUN` | 0 | `CODEX_REVIEW_DRY_RUN=1` was set, so no review ran. Confirm the resolved MCP flag set, then launch the real pass. Never record it as a completed review. |
+| `DRY_RUN` | 0 | `CODEX_REVIEW_DRY_RUN=1` was set and the MCP preflight passed, so no review ran. Confirm the resolved MCP flag set, then launch the real pass. Never record it as a completed review. |
 | `ERROR` | 3 (documented setup failures), 4 (the runner aborted internally), or 128+N (a signal killed it **before the outcome is recorded** — SIGTERM gives 143; recording is a separate statement immediately after the pipeline returns, so a signal in that single-assignment gap reports ERROR for a review that had, in fact, already finished — known, and not closable in bash, since trap dispatch happens between commands) | The review never started, or it died mid-flight. Fix what the log names and re-run. **Not a clean pass** — there is no review to converge. |
 
 The ERROR exit code is deliberately not a fixed set — branch on `STATUS=`, which is emitted on every one of those paths, and treat the number as diagnosis only. A signalled runner still prints a sentinel but keeps the signal's own 128+N status, because an `exit` inside an EXIT trap cannot override one; the script's header says why that is left alone. It also terminates `codex` and confirms it is gone before writing that line — `codex` outlives a signalled runner and still holds the log's file descriptor, so without that step it appends review prose *after* the sentinel and a run that finished reads as one that never did. `SIGKILL` is the exception that proves the contract — no trap runs, so there is no `STATUS=` tail, which is the "running or dead" case above.
@@ -211,13 +222,14 @@ The ERROR exit code is deliberately not a fixed set — branch on `STATUS=`, whi
 **The exit code and the `STATUS=` line answer different questions**: the exit code says how the *runner* died, `STATUS=` says whether the *review* finished. A signal that arrives after the review completed — while the runner is still writing the `tee` warning, the `CODEX_EXIT=` line and the sentinel itself — gives `STATUS=COMPLETED` at exit 143, because the findings are already in the log. Read them; do not re-run. `143` plus `STATUS=COMPLETED` is a well-formed outcome, not a contradiction, and it is the one case where the exit code is not codex's own — which is why you report `CODEX_EXIT=`. The one exception is the recording statement itself: a signal landing there still reports `STATUS=ERROR` for a review that had, in fact, finished — see the `ERROR` row above.
 
 The script has **no timeout**: Codex is one-shot and its runtime is its own. It
-exits 3 on a usage error (missing or empty scope prompt, `codex` not on PATH) —
+exits 3 on a setup error (missing or empty scope prompt, `codex` not on PATH, an
+MCP enumeration or preflight failure) —
 deliberately not 1 or 2, which `codex` itself uses, so "the reviewer failed" never
 looks like "the reviewer had opinions".
 
 ### ⛔ Scope flags and a custom prompt are mutually exclusive
 
-Verified on 0.146.0, both of these are rejected:
+Verified on 0.146.0 and again on 0.162.1, both of these are rejected:
 
 ```
 error: the argument '--base <BRANCH>' cannot be used with '[PROMPT]'
@@ -265,11 +277,13 @@ convergence loop unaffordable long before the iteration bound.
 The measurements behind this choice are in the commit that made it
 (`git log -S gpt-5.6-terra`), not
 here: they are one branch on one machine at one point in time, and they date the
-moment the models change.
+moment the models change. They already have: as of codex-cli 0.162.1,
+`codex debug models` lists newer models above `gpt-5.6-terra`. Re-measure on a
+real branch before changing the default; do not swap it on the catalog alone.
 
 ### Flags and availability
 
-- Verified on 0.147.0, `codex review` accepts exactly nine options:
+- Verified on 0.147.0 and unchanged on 0.162.1, `codex review` accepts exactly nine options:
   `--strict-config`, `-c/--config`, `--uncommitted`, `--base`, `--enable`,
   `--commit`, `--disable`, `--title`, `-h/--help`. There is **no** `--json`/`-o`
   and **no** `--dangerously-bypass-approvals-and-sandbox` (that is `codex exec`).
