@@ -23,17 +23,24 @@
 # ⛔ NO TIMEOUT, and run it in the BACKGROUND — exactly as run-codex-review.sh's header
 #    says, and for the same reasons. `claude -p` prints nothing until it finishes.
 #
-# COMPLETION CONTRACT — identical to run-codex-review.sh's, with `CLAUDE_EXIT=` in
-# place of `CODEX_EXIT=`. The LAST line of stdout is always `STATUS=<state>`:
-# COMPLETED (exit = claude's own, or 128+N if a signal lands after the outcome was
-# recorded), DRY_RUN (0), ERROR (3 setup failure, 4 internal abort, 128+N signal). No
-# `STATUS=` tail means running or dead. The full rationale for every clause — the
-# reap-before-sentinel, PIPESTATUS capture, the recording gap — is that script's header
-# and is not restated here; the mechanics below are the same code.
+# COMPLETION CONTRACT — run-codex-review.sh's, with `CLAUDE_EXIT=` in place of
+# `CODEX_EXIT=` and ONE deliberate difference below. The LAST line of stdout is always
+# `STATUS=<state>`: COMPLETED (exit 0, or 128+N if a signal lands after the outcome was
+# recorded), DRY_RUN (0), ERROR (3 setup or claude failure, 4 internal abort, 128+N
+# signal). No `STATUS=` tail means running or dead. The full rationale for every
+# clause — the reap-before-sentinel, PIPESTATUS capture, the recording gap — is that
+# script's header and is not restated here; the mechanics below are the same code.
+#
+# THE DIFFERENCE: A NON-ZERO `claude` EXIT IS `STATUS=ERROR`, NOT `COMPLETED`. Codex's
+# exit is passed through uninterpreted because a non-zero `codex review` can mean "had
+# opinions". `claude -p` has no such meaning: findings exit 0, and non-zero is a
+# failure — "Not logged in" exits 1 before any review happens (verified). Reporting
+# that as COMPLETED would turn an unauthenticated CLI into a passed local gate.
+# `CLAUDE_EXIT=<n>` still accompanies it, so the caller can report the number.
 #
 # Exit 3 covers exactly: a usage error, `claude` or `git` missing, an unreadable or
-# empty scope prompt, no resolvable base, an empty branch diff, and a failure to
-# render the diff for the reviewer.
+# empty scope prompt, no resolvable base, an empty branch diff, a failure to render
+# the diff for the reviewer, and `claude` itself exiting non-zero.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # WHY THESE FLAGS
@@ -52,9 +59,15 @@
 #    (a stalled tool call with no TTY to answer it), removed the same way: wholesale.
 # 3. NO SESSION FILE. `--no-session-persistence` keeps one-shot reviews out of the
 #    user's resume list.
-# 4. NOT `--bare`. It would skip hooks and CLAUDE.md, but it also forces API-key auth
-#    and so breaks every OAuth-logged-in user. The prompt preamble below names
-#    AGENTS.md and REVIEW.md explicitly instead.
+# 4. NO HOOKS. `--tools` binds only model-invoked tools; a user, project or plugin
+#    `SessionStart`/`UserPromptSubmit`/`Stop` hook runs shell commands regardless and
+#    could modify the tree. `--settings '{"disableAllHooks":true}'` turns them off —
+#    verified: a project SessionStart and UserPromptSubmit hook both fired without it
+#    and neither fired with it. Hooks a managed (admin) policy enforces are outside
+#    any per-invocation flag's reach.
+# 5. NOT `--bare`. It would also skip hooks, but it forces API-key auth and so breaks
+#    every OAuth-logged-in user. The prompt preamble below names AGENTS.md and
+#    REVIEW.md explicitly in place of its CLAUDE.md skip.
 #
 # THE DIFF IS RENDERED HERE, NOT BY THE REVIEWER. `codex review` derives the diff
 # itself; `claude -p` has no review mode and no shell, so the script computes the
@@ -274,6 +287,7 @@ CLAUDE_OPTS=(
     --allowedTools Read Grep Glob
     --add-dir "$REVIEW_TMP"
     --permission-mode dontAsk
+    --settings '{"disableAllHooks":true}'
     --no-session-persistence
     --output-format text
     --effort "$CLAUDE_REVIEW_EFFORT"
@@ -304,9 +318,9 @@ if [[ -n "${CLAUDE_REVIEW_OUT:-}" ]]; then
     set +e
     printf '%s\n' "$FULL_PROMPT" | "${CLAUDE_ENV[@]}" claude "${CLAUDE_OPTS[@]}" | tee "$CLAUDE_REVIEW_OUT"
     pipe_status=("${PIPESTATUS[@]}")
-    COMPLETION_EXIT="${pipe_status[1]}"
+    if (( pipe_status[1] == 0 )); then COMPLETION_EXIT=0; fi
     set -e
-    if (( ${pipe_status[2]:-0} != 0 )); then
+    if (( pipe_status[1] == 0 && ${pipe_status[2]:-0} != 0 )); then
         echo "WARNING: could not write the review to CLAUDE_REVIEW_OUT=${CLAUDE_REVIEW_OUT}"
         echo "         (tee exited ${pipe_status[2]}). The review itself COMPLETED and its"
         echo "         findings are on stdout above — read them there, not from that file."
@@ -315,9 +329,14 @@ else
     set +e
     printf '%s\n' "$FULL_PROMPT" | "${CLAUDE_ENV[@]}" claude "${CLAUDE_OPTS[@]}"
     pipe_status=("${PIPESTATUS[@]}")
-    COMPLETION_EXIT="${pipe_status[1]}"
+    if (( pipe_status[1] == 0 )); then COMPLETION_EXIT=0; fi
     set -e
 fi
 
 emit_claude_exit "${pipe_status[1]}"
-finish COMPLETED "${pipe_status[1]}"
+if (( pipe_status[1] != 0 )); then
+    echo "Error: claude exited ${pipe_status[1]} — no review happened (not logged in, or the" >&2
+    echo "CLI failed). Not a completed review; report it and skip the pass." >&2
+    finish ERROR
+fi
+finish COMPLETED 0

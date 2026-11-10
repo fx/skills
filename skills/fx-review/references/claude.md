@@ -58,6 +58,9 @@ What the script does, so none of it is half-remembered:
   an answer nobody can give. The reviewer cannot edit the branch it reviews.
   Allowing "read-only" git subcommands is not a substitute — `git diff
   --output=<file>` writes a tracked file and still matches `Bash(git diff:*)`.
+- **No hooks.** `--settings '{"disableAllHooks":true}'`: a user, project or
+  plugin hook runs shell commands whatever `--tools` says, so it could change the
+  tree. Hooks enforced by a managed (admin) policy are beyond any per-run flag.
 - **No MCP servers.** `--strict-mcp-config` with no `--mcp-config` loads none,
   removing the same stalled-tool-call hang `references/codex.md` documents.
 - **The diff is rendered by the script.** `claude` has no review mode and the
@@ -72,8 +75,8 @@ What the script does, so none of it is half-remembered:
   dirty. Commit the work to a branch first and say you did.
 - **No session file** (`--no-session-persistence`), and nested-session variables
   are cleared so the run behaves the same from any caller.
-- **Not `--bare`.** It skips hooks and `CLAUDE.md`, but it also forces API-key
-  auth and breaks every OAuth login.
+- **Not `--bare`.** It would skip hooks too, but it forces API-key auth and
+  breaks every OAuth login.
 
 ### Model and effort
 
@@ -84,10 +87,14 @@ Never edit the user's `~/.claude/settings.json` to change either.
 
 ### Read the `STATUS=` line
 
-The contract is `references/codex.md` § Read the `STATUS=` line, unchanged, with
-`CLAUDE_EXIT=<n>` in place of `CODEX_EXIT=<n>`. Branch on `STATUS=`, read the
-findings on `COMPLETED`, and report `CLAUDE_EXIT=` rather than `$?`. Exit 3 here
-also covers an unresolvable base, a branch whose content does not differ from its
+The contract is `references/codex.md` § Read the `STATUS=` line, with
+`CLAUDE_EXIT=<n>` in place of `CODEX_EXIT=<n>` and **one difference: a non-zero
+`claude` exit is `STATUS=ERROR` (exit 3), never `COMPLETED`.** A non-zero
+`codex review` can mean "had opinions"; a non-zero `claude -p` only means it
+failed — not logged in exits 1 before any review runs — so `COMPLETED` always
+exits 0 here (or 128+N for a signal after completion). Branch on `STATUS=`, read
+the findings on `COMPLETED`, and report `CLAUDE_EXIT=` rather than `$?`. Exit 3 here
+also covers `claude` exiting non-zero, an unresolvable base, a branch whose content does not differ from its
 base (an empty or reverted change), and a failed diff render.
 
 `CLAUDE_REVIEW_DRY_RUN=1` prints the resolved command and exits `STATUS=DRY_RUN`;
