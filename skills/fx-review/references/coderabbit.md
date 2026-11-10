@@ -15,8 +15,9 @@ repos do not have it installed; that is a normal, expected outcome and never a
 reason to wait or retry.
 
 > **There is no local CodeRabbit mode.** The `cr` CLI is no longer used anywhere in
-> this SDLC catalog. **Codex is the only local pre-PR reviewer** — see
-> `references/codex.md` and `dev` Step 4.5. Do not reintroduce a `cr` call,
+> this SDLC catalog. **The only local pre-PR reviewer is the one `fx-review with
+> local` picks** — Codex or Claude, see `fx-review` § Picking the local reviewer
+> and `dev` Step 4.5. Do not reintroduce a `cr` call,
 > and do not treat a missing local CodeRabbit pass as a gap.
 
 ## Arguments

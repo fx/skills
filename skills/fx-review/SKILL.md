@@ -1,6 +1,6 @@
 ---
 name: fx-review
-description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Provides the canonical Scope Brief, triage, materiality, convergence, and reporting procedure every reviewer in this catalog follows, and runs one named reviewer — Codex, Copilot, or CodeRabbit — when invoked with that tool."
+description: "Explicit-use only — invoke when the user explicitly names this skill, or when an active explicitly invoked workflow calls it. Provides the canonical Scope Brief, triage, materiality, convergence, and reporting procedure every reviewer in this catalog follows, and runs one named reviewer — Codex, Claude, Copilot, or CodeRabbit — when invoked with that tool, or the host-appropriate local reviewer when invoked with local."
 ---
 
 # Review — Shared Reviewer Procedure
@@ -14,7 +14,8 @@ description: "Explicit-use only — invoke when the user explicitly names this s
 > Substitute it; never write a literal `.claude/` path on another host.
 
 **The one procedure every reviewer in this catalog follows.** The per-tool
-references under `references/` — `codex.md`, `copilot.md`, `coderabbit.md` — and
+references under `references/` — `codex.md`, `claude.md`, `copilot.md`,
+`coderabbit.md` — and
 `resolve-pr-feedback` with its per-source references are adapters. They
 describe how to drive one particular tool: its command, its
 flags and quirks, the shape of its output, the threads or checks it exposes.
@@ -47,7 +48,7 @@ section; where a tool reference or `resolve-pr-feedback` needs either, it names
 them rather than copying.
 
 **One exception, and only one: text sent verbatim to an external tool.** A prompt
-handed to `codex review` or any reviewer outside this repo cannot follow a
+handed to `codex review`, `claude -p` or any reviewer outside this repo cannot follow a
 link, so it MUST inline the rule. Such a block is a **mirror**: mark it as one,
 keep it a faithful restatement, and update it in the same commit that changes the
 canonical text. Nothing an agent reads directly qualifies — only strings crossing
@@ -66,7 +67,9 @@ comes first, and the tool name matches case-insensitively.
 
 | Tool | What it runs | Reads | Script | Called from |
 |---|---|---|---|---|
-| `codex` | A scoped one-shot Codex CLI review of the current branch, run locally. No PR number. | `references/codex.md` | `[SKILLS_DIR]/fx-review/scripts/run-codex-review.sh` | `dev` Step 4.5 and its Step 6.1 delta re-entry; `team` through `dev` |
+| `local` | Not a tool — resolves to exactly one of `codex` or `claude` per § Picking the local reviewer, then runs as that tool. No PR number. | the resolved tool's | the resolved tool's | `dev` Step 4.5 and its Step 6.1 delta re-entry; `team` through `dev` |
+| `codex` | A scoped one-shot Codex CLI review of the current branch, run locally. No PR number. | `references/codex.md` | `[SKILLS_DIR]/fx-review/scripts/run-codex-review.sh` | `local` on Claude Code and on any other non-Codex host; a user naming it |
+| `claude` | A scoped, read-only one-shot `claude -p` review of the current branch, run locally. No PR number. | `references/claude.md` | `[SKILLS_DIR]/fx-review/scripts/run-claude-review.sh` | `local` on Codex; a user naming it |
 | `copilot` | Requests, waits for, inspects and settles a head-scoped GitHub Copilot review. PR number required. | `references/copilot.md` | `[SKILLS_DIR]/fx-review/scripts/wait-for-copilot-review.sh` | `dev` Steps 6.3 and 8.1; `team` gate 2 |
 | `coderabbit` | The CodeRabbit GitHub App's PR-level check and threads, optional, with rate-limit degradation. PR number required. | `references/coderabbit.md` | `[SKILLS_DIR]/fx-review/scripts/wait-for-coderabbit-review.sh` | `dev` Steps 6.3 and 8.1; `team` gate 2b |
 
@@ -75,14 +78,48 @@ comes first, and the tool name matches case-insensitively.
   number names that file's own step, and "`fx-review` Step N" names this file's.
 - **The Scope Brief is mandatory in every form** (Step 1).
 - **Exactly one tool per invocation.** Two tools, or one not in the table: stop,
-  name the three valid tools, and run nothing. A caller that needs two reviewers
+  name the valid tools, and run nothing. `local` counts as one: it resolves to a
+  single tool before anything runs. A caller that needs two reviewers
   makes two calls, as `dev` Step 8.1 does — running several from one call would be
   orchestration no caller asked for.
 - **No tool named:** Steps 1–8 are the whole procedure, applied by you to the
   diff, branch or spec in front of you. No reference is loaded and no external
-  reviewer runs — **never fan out to all three.** Requesting a Copilot review or
+  reviewer runs — **never fan out to the roster.** Requesting a Copilot review or
   starting a waiter acts on someone's PR; doing it because no tool was named is an
   implicit lifecycle trigger, which this catalog's explicit-use rule forbids.
+
+### Picking the local reviewer
+
+**The local reviewer is the CLI of the other model family from the one running
+this session.** A reviewer from the family that wrote the change shares its blind
+spots and tends to approve its reasoning; the other family is the adversarial
+read. Resolve `with local` once per invocation, before anything runs:
+
+| Session host | `local` resolves to |
+|---|---|
+| Claude Code | `codex` |
+| Codex | `claude` |
+| Any other host | `codex` |
+
+**A user instruction naming the local reviewer wins over the table** — in the
+request itself, the repository's `AGENTS.md` / `CLAUDE.md`, or the user's own
+global agent instructions. It must name the reviewer explicitly ("use claude as
+the local reviewer"); a general preference for a model is not one. Say in the
+report which rule picked the reviewer.
+
+You know which host you are running on — it is the one whose tools you are
+calling (`[SKILLS_DIR]/dev/references/host-adapters.md` § Host mappings). Do not
+infer it from which CLIs are installed: both usually are.
+
+**No fallback to the other CLI.** If the resolved CLI is missing or
+unauthenticated, report it once and skip the pass as that tool's reference
+says — never switch to the session's own family to fill the slot, which turns
+the adversarial pass into a self-review that looks like one. A caller that
+records the skipped pass as a permitted degradation (`dev` Step 4.5) does so
+under the resolved tool's name.
+
+**`with codex` and `with claude` stay literal.** Naming a tool always runs that
+tool, on any host; only `with local` consults the table.
 
 ---
 
@@ -231,12 +268,13 @@ recurring, and its commit is expected.
 review.**
 
 1. **`REVIEW.md` at the repo root, when it is a regular file.** One entry stops
-   Codex, Copilot and CodeRabbit — the whole roster — from raising it again; they
-   all resolve to that file.
+   Codex, Claude, Copilot and CodeRabbit — the whole roster — from raising it
+   again; they all resolve to that file.
 2. **Otherwise, the first `NATIVE_REVIEW_RULES` entry** from `fx-setup`'s check
    (`bash [SKILLS_DIR]/fx-setup/scripts/check-docs-layout.sh`, or the output the
    coordinator already recorded): a review section in `AGENTS.md` — Codex, Copilot
-   and CodeRabbit all read `AGENTS.md` (`fx-setup` →
+   and CodeRabbit all read `AGENTS.md`, and the Claude script names it in its
+   prompt (`fx-setup` →
    `references/instruction-files.md` § Who reads what) — then
    `.github/copilot-instructions.md`, which only Copilot reads. **Append only:** add
    the rule, written in full, at the end of that section, and change nothing else.
@@ -347,7 +385,7 @@ State the shape, not a verdict, so the operator can see it rather than take
   nothing.
 - **Whether you reconstructed the Scope Brief** rather than being handed one.
 
-**For a reviewer that receives the brief** — Codex, a sub-agent — a run
+**For a reviewer that receives the brief** — Codex, Claude, a sub-agent — a run
 producing **zero** out-of-scope findings is the signal it was well built, and
 persistent out-of-scope noise means it is too thin: tighten it before the next
 iteration rather than filtering by hand again.
@@ -363,10 +401,11 @@ covers it, none silently fixed and none silently dropped.
 
 ## The external-reviewer block
 
-**One reviewer reads a string rather than this file: `codex review`, via its
-prompt.** It cannot follow a link, so it needs the rules inlined — the one case
-§ The two canonical sources exempts. There is **one** such block, here, and
-`references/codex.md` sends this text rather than writing its own.
+**The local reviewers read a string rather than this file: `codex review` and
+`claude -p`, via their prompts.** Neither can follow a link into this catalog, so
+they need the rules inlined — the one case § The two canonical sources exempts.
+There is **one** such block, here, and `references/codex.md` and
+`references/claude.md` send this text rather than writing their own.
 
 (Copilot and the CodeRabbit GitHub App accept no prompt at all, so the brief
 reaches them only at triage — see `fx-review` Step 8.)
@@ -488,7 +527,7 @@ restates Steps 1–8.
   only permitted operations are replying to an existing *bot* thread with
   `addPullRequestReviewThreadReply` and resolving it with `resolveReviewThread`.
 - **Never run an interactive auth command** — not `codex login`, not
-  `gh auth login`. The workspace is expected to be authenticated; if it is not,
+  `claude login`, not `gh auth login`. The workspace is expected to be authenticated; if it is not,
   STOP and report it to the user.
 - **Absence of feedback is not evidence of quality.** A reviewer that has not run,
   a poll that saw nothing, and a timeout are all *unreviewed*, not clean.

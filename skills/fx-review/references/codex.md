@@ -1,6 +1,7 @@
 # Codex
 
-`fx-review` loads this file when it is invoked `with codex` (its § Invocation).
+`fx-review` loads this file when it is invoked `with codex`, or `with local` on
+a host that resolves to Codex (its § Picking the local reviewer).
 It holds Codex's mechanics only — how to drive the `codex` CLI, and nothing else.
 The procedure — carrying the Scope Brief, triaging in filter order, sweeping a
 class, converging, reporting — is `fx-review` Steps 1–8, and none of it is
@@ -9,19 +10,22 @@ restated here.
 In this file, **"this skill" means `fx-review` invoked `with codex`**. A bare step
 number names a step of this file; "`fx-review` Step N" names the procedure's.
 
-Codex is a **local, one-shot** reviewer against the current branch, and it is the
-**only** local reviewer in this SDLC — the entire pre-PR review pass
-(`dev` Step 4.5), run before the PR is created (`dev` Step 5).
+Codex is a **local, one-shot** reviewer against the current branch. Where
+`with local` resolves to it — every host except Codex itself — it is the entire
+pre-PR review pass (`dev` Step 4.5), run before the PR is created (`dev` Step 5).
+On a Codex host the same slot goes to `references/claude.md` instead; the two
+never both run.
 
 > There is no local CodeRabbit pass — the `cr` CLI is not used anywhere. CodeRabbit
 > applies only at the PR level, and only when the repo's GitHub App is installed.
-> There is no Claude-side pass either: `/simplify` and `/code-review` are not part
-> of this lifecycle, so nothing runs before Codex here.
+> `/simplify` and `/code-review` are not part of this lifecycle either, so nothing
+> runs before the local reviewer here.
 
 ## Project conventions: Codex is the one reviewer that needs a bridge
 
 Codex reads `AGENTS.md`. It does **not** read `REVIEW.md` or `CLAUDE.md`. Every
-other reviewer reaches `REVIEW.md` on its own; Codex is the exception. The bridge
+other reviewer reaches `REVIEW.md` on its own — Claude because its script names the
+file in the prompt; Codex is the exception. The bridge
 is a `## Code Review Rules` section in `AGENTS.md` pointing at `REVIEW.md`, which
 `fx-setup` and `fx-upgrade` create when the user runs them.
 
@@ -312,6 +316,7 @@ local run:
 
 A **converged** Codex review — no blocking finding left unresolved
 (`[SKILLS_DIR]/dev/references/scope-contract.md` § Convergence) — is the local gate
-to PR creation (`dev` Step 4.5 → Step 5). It is the only local gate; there is
-no local CodeRabbit review, and no Claude-side review, to converge alongside it. Outstanding **immaterial** observations do not hold the PR; carry them
+to PR creation (`dev` Step 4.5 → Step 5) wherever `with local` resolved to Codex.
+It is the only local gate; there is no local CodeRabbit review, and no Claude pass,
+to converge alongside it. Outstanding **immaterial** observations do not hold the PR; carry them
 into its description as a closing note.
