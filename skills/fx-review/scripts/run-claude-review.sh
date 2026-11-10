@@ -232,7 +232,7 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 # Compare content, not commit ids: an empty commit, or a change reverted before the
 # review, moves HEAD and leaves nothing to read — and a review of nothing would still
 # report COMPLETED.
-if git diff --quiet "$BASE_SHA" "$HEAD_SHA" --; then
+if git diff --quiet --no-ext-diff --no-textconv "$BASE_SHA" "$HEAD_SHA" --; then
     echo "Error: $BRANCH has no changes against $BASE_REF (${BASE_SHA:0:12}) — nothing to review." >&2
     finish ERROR
 fi
