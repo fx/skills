@@ -131,7 +131,8 @@ documents the mechanism; the script is the only supported way to apply it.
 bundled plugin or the desktop app can contribute servers; for those the override
 creates an entry with no transport, and codex refuses to load any config at all
 (`invalid transport in mcp_servers.<name>`, observed on 0.162.1). The script
-therefore also sets `command="/bin/false"` on every stdio server, then **verifies
+therefore also gives every override a transport — `command="/bin/false"` for a
+stdio server, `url="http://127.0.0.1:9/"` for any other — then **verifies
 the flag set** with `codex <flags> mcp list --json` — the config must load and
 every server must report disabled — and refuses to run (exit 3) otherwise.
 

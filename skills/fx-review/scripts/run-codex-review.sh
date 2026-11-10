@@ -153,7 +153,8 @@
 #
 #    A server contributed by a bundled plugin or the desktop app is not in config.toml,
 #    and `enabled=false` alone makes codex refuse the whole config. Stdio servers also
-#    get `command="/bin/false"`, and the resulting flag set is VERIFIED with
+#    get `command="/bin/false"`, every other transport `url="http://127.0.0.1:9/"`,
+#    and the resulting flag set is VERIFIED with
 #    `codex <flags> mcp list --json` before the review starts.
 #
 # These are per-invocation overrides. This script NEVER writes to ~/.codex/config.toml
@@ -440,9 +441,10 @@ toml_key() {
 # A server that is not declared in config.toml — one a bundled plugin or the desktop
 # app contributes — cannot be disabled by `enabled=false` alone: the override creates
 # a config entry with no transport and codex refuses to load at all ("invalid
-# transport in `mcp_servers.<name>`"). Observed on 0.162.1. For a stdio server, also
-# override `command` with a binary that exits at once, which gives the entry a valid
-# transport; it is never launched, because the entry is disabled.
+# transport in `mcp_servers.<name>`"). Observed on 0.162.1. So every override also
+# carries a transport: `command` = a binary that exits at once for a stdio server,
+# `url` = the discard port on loopback for anything else. Neither is ever contacted,
+# because the entry is disabled. Both forms verified to load on 0.162.1.
 if [[ -n "$mcp_names" ]]; then
     while IFS=$'\t' read -r name transport; do
         if [[ -n "$name" ]]; then
@@ -450,6 +452,8 @@ if [[ -n "$mcp_names" ]]; then
             MCP_OFF+=(-c "mcp_servers.$(toml_key "$name").enabled=false")
             if [[ "$transport" == "stdio" ]]; then
                 MCP_OFF+=(-c "mcp_servers.$(toml_key "$name").command=\"/bin/false\"")
+            else
+                MCP_OFF+=(-c "mcp_servers.$(toml_key "$name").url=\"http://127.0.0.1:9/\"")
             fi
         fi
     done <<< "$mcp_names"

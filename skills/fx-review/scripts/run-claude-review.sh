@@ -11,13 +11,14 @@
 # Env:
 #   CLAUDE_REVIEW_OUT=<path>    also tee the review to this file
 #   CLAUDE_REVIEW_DRY_RUN=1     print the resolved command and exit 0 without running
-#   CLAUDE_REVIEW_MODEL=<id>    override the review model     (default below)
+#   CLAUDE_REVIEW_MODEL=<id>    pass --model; unset, the user's own default model applies
 #   CLAUDE_REVIEW_EFFORT=<lvl>  override reasoning effort     (default below)
 #   CLAUDE_REVIEW_BASE=<ref>    override the base the branch is diffed against
 #
-# MODEL AND EFFORT ARE OVERRIDDEN PER INVOCATION, NEVER IN THE USER'S SETTINGS — the
-# same reasoning as run-codex-review.sh. The model is an alias, not a pinned id, so
-# the CLI resolves it to the current release.
+# NO DEFAULT MODEL. The catalog never hardcodes a model name (AGENTS.md), so the run
+# uses whatever the user's own `claude` default is unless CLAUDE_REVIEW_MODEL names
+# one. Effort is overridden per invocation, never in the user's settings — the same
+# reasoning as run-codex-review.sh.
 #
 # ⛔ NO TIMEOUT, and run it in the BACKGROUND — exactly as run-codex-review.sh's header
 #    says, and for the same reasons. `claude -p` prints nothing until it finishes.
@@ -31,17 +32,21 @@
 # and is not restated here; the mechanics below are the same code.
 #
 # Exit 3 covers exactly: a usage error, `claude` or `git` missing, an unreadable or
-# empty scope prompt, no resolvable base, and an empty branch diff.
+# empty scope prompt, no resolvable base, an empty branch diff, and a failure to
+# render the diff for the reviewer.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # WHY THESE FLAGS
 #
-# 1. READ-ONLY BY CONSTRUCTION, NOT BY REQUEST. `--tools` limits the built-ins to
-#    Read/Grep/Glob/Bash, `--allowedTools` pre-approves only read-only git
-#    subcommands, and `--permission-mode dontAsk` denies everything not pre-approved
-#    instead of waiting for an answer nobody can give. A reviewer that can edit the
-#    tree it reviews changes the branch under the coordinator. Verified: `touch` is
-#    denied and `git log` runs.
+# 1. READ-ONLY BY CONSTRUCTION, NOT BY REQUEST. `--tools Read,Grep,Glob` — no Bash
+#    at all, so nothing the reviewer runs can write — and `--permission-mode dontAsk`
+#    denies anything not pre-approved instead of waiting for an answer nobody can
+#    give. A reviewer that can edit the tree it reviews changes the branch under the
+#    coordinator. Bash restricted to "read-only" git subcommands is NOT read-only:
+#    `git diff --output=<file>` overwrites a tracked file and matches
+#    `Bash(git diff:*)`, and `git grep -O` runs a pager command. So the script renders
+#    the diff and the commit log into a private temp dir (`--add-dir`) and the
+#    reviewer reads them as files.
 # 2. NO MCP SERVERS. `--strict-mcp-config` with no `--mcp-config` loads none —
 #    verified, the session reports no MCP tools. The same hang hazard as Codex's
 #    (a stalled tool call with no TTY to answer it), removed the same way: wholesale.
@@ -51,9 +56,11 @@
 #    and so breaks every OAuth-logged-in user. The prompt preamble below names
 #    AGENTS.md and REVIEW.md explicitly instead.
 #
-# THE BASE IS RESOLVED HERE, NOT BY THE REVIEWER. `codex review` derives the diff
-# itself; `claude -p` has no review mode, so the script computes the merge-base and
-# names it in the prompt. The work must be committed on a branch — same rule as Codex.
+# THE DIFF IS RENDERED HERE, NOT BY THE REVIEWER. `codex review` derives the diff
+# itself; `claude -p` has no review mode and no shell, so the script computes the
+# merge-base, writes `git diff <base>...HEAD` and `git log <base>..HEAD` to files, and
+# names them in the prompt. External diff drivers and textconv are disabled for that
+# render. The work must be committed on a branch — same rule as Codex.
 #
 # Nested-session variables are cleared so the run behaves the same whether the caller
 # is Codex, another harness, or a Claude Code session the user pointed at `claude`.
@@ -61,8 +68,9 @@
 
 set -euo pipefail
 
-CLAUDE_REVIEW_MODEL="${CLAUDE_REVIEW_MODEL:-opus}"
+CLAUDE_REVIEW_MODEL="${CLAUDE_REVIEW_MODEL:-}"
 CLAUDE_REVIEW_EFFORT="${CLAUDE_REVIEW_EFFORT:-medium}"
+REVIEW_TMP=""
 
 PROMPT_SRC="${1:-}"
 
@@ -122,7 +130,13 @@ emit_recorded_outcome() {
     exit 4
 }
 
-trap 'if (( STATUS_EMITTED == 0 )); then reap_descendants; emit_recorded_outcome; fi' EXIT
+# The rendered diff is the reviewer's copy of the branch; never leave it behind.
+cleanup_tmp() {
+    if [[ -n "$REVIEW_TMP" ]]; then rm -rf "$REVIEW_TMP" 2>/dev/null || true; fi
+    return 0
+}
+
+trap 'cleanup_tmp; if (( STATUS_EMITTED == 0 )); then reap_descendants; emit_recorded_outcome; fi' EXIT
 
 finish() {
     local status="$1"
@@ -202,8 +216,23 @@ fi
 
 HEAD_SHA=$(git rev-parse HEAD)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$BASE_SHA" == "$HEAD_SHA" ]]; then
-    echo "Error: HEAD ($BRANCH) has no commits beyond $BASE_REF — nothing to review." >&2
+# Compare content, not commit ids: an empty commit, or a change reverted before the
+# review, moves HEAD and leaves nothing to read — and a review of nothing would still
+# report COMPLETED.
+if git diff --quiet "$BASE_SHA" "$HEAD_SHA" --; then
+    echo "Error: $BRANCH has no changes against $BASE_REF (${BASE_SHA:0:12}) — nothing to review." >&2
+    finish ERROR
+fi
+
+if ! REVIEW_TMP=$(mktemp -d "${TMPDIR:-/tmp}/claude-review.XXXXXX"); then
+    echo "Error: could not create a temp dir for the rendered diff." >&2
+    finish ERROR
+fi
+DIFF_FILE="$REVIEW_TMP/branch.diff"
+LOG_FILE="$REVIEW_TMP/commits.txt"
+if ! git --no-pager diff --no-ext-diff --no-textconv "$BASE_SHA...$HEAD_SHA" > "$DIFF_FILE" \
+   || ! git --no-pager log --no-color "$BASE_SHA..$HEAD_SHA" > "$LOG_FILE"; then
+    echo "Error: could not render the branch diff or log for the reviewer." >&2
     finish ERROR
 fi
 
@@ -226,9 +255,10 @@ fi
 PREAMBLE="You are a code reviewer running non-interactively. You cannot edit files, and
 you must not try: report findings only.
 
-Review the changes on branch '$BRANCH' against its base: the diff is
-\`git diff $BASE_SHA...$HEAD_SHA\`, and \`git log $BASE_SHA..$HEAD_SHA\` lists its
-commits. Read any surrounding file you need for context. Report findings ordered
+Review the changes on branch '$BRANCH' against its base. The full diff
+(\`git diff $BASE_SHA...$HEAD_SHA\`) is in $DIFF_FILE, and the commits it covers
+(\`git log $BASE_SHA..$HEAD_SHA\`) are in $LOG_FILE. Read both first. You have no
+shell; read any surrounding file in the repository with your file tools for context. Report findings ordered
 highest-risk first, each with file:line, what is wrong, and the concrete failure.
 
 $RULES_LINE
@@ -240,19 +270,17 @@ FULL_PROMPT="${PREAMBLE}${SCOPE_PROMPT}"
 CLAUDE_OPTS=(
     -p
     --strict-mcp-config
-    --tools "Read,Grep,Glob,Bash"
+    --tools "Read,Grep,Glob"
     --allowedTools Read Grep Glob
-        "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)"
-        "Bash(git blame:*)" "Bash(git status:*)" "Bash(git ls-files:*)"
-        "Bash(git rev-parse:*)" "Bash(git merge-base:*)" "Bash(git grep:*)"
+    --add-dir "$REVIEW_TMP"
     --permission-mode dontAsk
     --no-session-persistence
     --output-format text
-    --model "$CLAUDE_REVIEW_MODEL"
     --effort "$CLAUDE_REVIEW_EFFORT"
 )
-echo "MCP servers: none (--strict-mcp-config)"
-echo "Model: ${CLAUDE_REVIEW_MODEL}  Effort: ${CLAUDE_REVIEW_EFFORT}"
+if [[ -n "$CLAUDE_REVIEW_MODEL" ]]; then CLAUDE_OPTS+=(--model "$CLAUDE_REVIEW_MODEL"); fi
+echo "MCP servers: none (--strict-mcp-config)  Tools: Read, Grep, Glob (no shell)"
+echo "Model: ${CLAUDE_REVIEW_MODEL:-(claude default)}  Effort: ${CLAUDE_REVIEW_EFFORT}"
 
 if [[ -n "${CLAUDE_REVIEW_DRY_RUN:-}" ]]; then
     echo ""
@@ -265,8 +293,8 @@ echo ""
 echo "Running claude review (one-shot, no timeout — this takes many minutes)..."
 echo ""
 
-# The prompt goes on stdin, not argv: `--allowedTools` is variadic and would swallow a
-# trailing positional prompt. stdin also keeps a long brief out of the process list.
+# The prompt goes on stdin, not argv: `--allowedTools` and `--add-dir` are variadic
+# and would swallow a trailing positional prompt. stdin also keeps a long brief out of the process list.
 CLAUDE_ENV=(env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID
             -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_PID -u CLAUDE_EFFORT)
 

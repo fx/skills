@@ -53,15 +53,18 @@ prints nothing until it finishes, so the log stays short until then.
 
 What the script does, so none of it is half-remembered:
 
-- **Read-only by construction.** `--tools Read,Grep,Glob,Bash`, `--allowedTools`
-  pre-approving only read-only `git` subcommands, and `--permission-mode dontAsk`,
-  which denies everything else instead of waiting for an answer nobody can give.
-  The reviewer cannot edit the branch it reviews.
+- **Read-only by construction: no shell.** `--tools Read,Grep,Glob` and
+  `--permission-mode dontAsk`, which denies anything else instead of waiting for
+  an answer nobody can give. The reviewer cannot edit the branch it reviews.
+  Allowing "read-only" git subcommands is not a substitute — `git diff
+  --output=<file>` writes a tracked file and still matches `Bash(git diff:*)`.
 - **No MCP servers.** `--strict-mcp-config` with no `--mcp-config` loads none,
   removing the same stalled-tool-call hang `references/codex.md` documents.
-- **The base is resolved by the script.** `claude` has no review mode, so the
-  script computes the merge-base with the remote default branch (override with
-  `CLAUDE_REVIEW_BASE=<ref>`) and names the range in the prompt. Every run reads
+- **The diff is rendered by the script.** `claude` has no review mode and the
+  reviewer has no shell, so the script computes the merge-base with the remote
+  default branch (override with `CLAUDE_REVIEW_BASE=<ref>`), writes the
+  `<base>...HEAD` diff and the commit log into a private temp dir it passes with
+  `--add-dir`, names both files in the prompt, and deletes the dir on exit. Every run reads
   the whole branch; a delta re-run is scoped by the prompt, exactly as for Codex
   (`dev` Step 6.1).
 - **Committed work only.** The review reads `<base>...HEAD`; uncommitted edits
@@ -74,17 +77,18 @@ What the script does, so none of it is half-remembered:
 
 ### Model and effort
 
-Defaults: `opus` at `medium`, applied per invocation and overridable with
-`CLAUDE_REVIEW_MODEL` / `CLAUDE_REVIEW_EFFORT`. The model is the CLI's alias, so it
-tracks the current release. Never edit the user's `~/.claude/settings.json` to
-change them.
+No model is passed by default — the catalog never hardcodes a model name, so the
+user's own `claude` default applies. `CLAUDE_REVIEW_MODEL=<model>` passes one for a
+single run. Effort defaults to `medium`, overridable with `CLAUDE_REVIEW_EFFORT`.
+Never edit the user's `~/.claude/settings.json` to change either.
 
 ### Read the `STATUS=` line
 
 The contract is `references/codex.md` § Read the `STATUS=` line, unchanged, with
 `CLAUDE_EXIT=<n>` in place of `CODEX_EXIT=<n>`. Branch on `STATUS=`, read the
 findings on `COMPLETED`, and report `CLAUDE_EXIT=` rather than `$?`. Exit 3 here
-also covers an unresolvable base and a branch with no commits beyond its base.
+also covers an unresolvable base, a branch whose content does not differ from its
+base (an empty or reverted change), and a failed diff render.
 
 `CLAUDE_REVIEW_DRY_RUN=1` prints the resolved command and exits `STATUS=DRY_RUN`;
 `CLAUDE_REVIEW_OUT=<path>` also tees the review to a file.
