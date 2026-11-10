@@ -1,9 +1,11 @@
 # PR Review
 
 Canonical review conventions for this repository. Every automated reviewer reads
-this file: GitHub Copilot natively, CodeRabbit via `.coderabbit.yaml`, and Codex
-via the `## Code Review Rules` pointer in `AGENTS.md`. Those three are the whole
-roster — Codex locally before the PR, Copilot and CodeRabbit on the PR.
+this file: GitHub Copilot natively, CodeRabbit via `.coderabbit.yaml`, Codex
+via the `## Code Review Rules` pointer in `AGENTS.md`, and Claude because its
+review script names this file in the prompt. That is the whole roster — one local
+reviewer before the PR (Codex, or Claude when the session runs on Codex), Copilot
+and CodeRabbit on the PR.
 
 Rules here improve review quality and suppress known false positives. This file
 is pasted verbatim into reviewer prompts — write rules out in full, never

@@ -26,7 +26,7 @@ Symlink installs (the default) read straight through to the checkout, so `git pu
 | `dev` | Runs the complete attended SDLC lifecycle through requirements, implementation, review, CI, and finalization, stopping at an unmerged PR; also defines the Implementer role its coordinators delegate implementation to. |
 | `team` | Wraps `dev`: runs its lifecycle for every change in the approved scope, unattended, and merges each PR itself once the merge gates pass. |
 | `requirements-analyzer` | Analyzes supplied implementation requirements, repository context, and acceptance criteria, and produces the implementation outline the lifecycle implements from. |
-| `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure every reviewer in this catalog follows; `with codex` runs a scoped one-shot Codex CLI branch review, `with copilot` requests, waits for and settles a head-scoped GitHub Copilot review, and `with coderabbit` handles CodeRabbit's optional PR-level review with rate-limit degradation. |
+| `fx-review` | The canonical Scope Brief, triage, materiality, convergence, and reporting procedure every reviewer in this catalog follows; `with local` runs a scoped one-shot branch review by the other model family's CLI (`codex` on Claude Code and other hosts, `claude` on Codex; `with codex` / `with claude` pick one directly), `with copilot` requests, waits for and settles a head-scoped GitHub Copilot review, and `with coderabbit` handles CodeRabbit's optional PR-level review with rate-limit degradation. |
 | `resolve-pr-feedback` | Settles one round of automated PR feedback — Copilot, CodeRabbit and Codecov findings and failing CI checks — loading per-source instructions for the sources requested or present, then reports and returns; it never waits or re-requests a review, and any other configured reviewer is settled by hand by the caller. |
 | `github` | Reference guidance for GitHub CLI, pull-request, review-thread, and GitHub API operations. |
 | `shell` | Rules for agent-run shell commands — stop and wait on processes by PID or owner rather than name pattern, bound every poll, handle the shell dialect actually running, keep exit statuses visible, never block on a prompt. |
@@ -73,7 +73,7 @@ Everything else keeps its plain name. `AGENTS.md` has the avoid-list and the che
 
 ## Requirements
 
-Most skills assume `git` and the GitHub CLI (`gh`), authenticated. Beyond that: `fx-review with codex` needs the Codex CLI; `verify-web-change` needs the Playwright MCP server; `fx-review with copilot` and `with coderabbit` need those GitHub Apps installed on the repository, and degrade to a `NOT_CONFIGURED` status when they are not. Review is exactly those three: Codex locally before the PR, then Copilot and CodeRabbit on the PR.
+Most skills assume `git` and the GitHub CLI (`gh`), authenticated. Beyond that: `fx-review with local` needs the Codex CLI, or the Claude Code CLI when running on Codex; `verify-web-change` needs the Playwright MCP server; `fx-review with copilot` and `with coderabbit` need those GitHub Apps installed on the repository, and degrade to a `NOT_CONFIGURED` status when they are not. Review is exactly one local reviewer before the PR, then Copilot and CodeRabbit on the PR.
 
 ## Contributing
 

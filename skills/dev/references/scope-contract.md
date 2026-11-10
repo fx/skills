@@ -49,7 +49,7 @@ Build it **once**, as early as possible — the first skill to act on a user req
 
 **Every review invocation MUST carry the Scope Brief.** This applies to `fx-review` — with or without a tool — and `resolve-pr-feedback`, and to any other reviewer a user invokes directly over the same change.
 
-**The reviewers this catalog *drives* are Codex, Copilot and CodeRabbit, and no others.** Codex runs locally before the PR; Copilot and CodeRabbit — the latter only where its GitHub App is installed — run on the PR. No workflow here runs a Claude-side review pass: `/code-review`, `/simplify`, and reviewing sub-agents are not lifecycle gates. A user can still invoke them by hand, and when they do, the brief applies to them too.
+**The reviewers this catalog *drives* are one local CLI reviewer — Codex or Claude, whichever `fx-review` § Picking the local reviewer resolves for the host — then Copilot and CodeRabbit, and no others.** The local reviewer runs before the PR; Copilot and CodeRabbit — the latter only where its GitHub App is installed — run on the PR. No workflow here runs an in-session review pass: `/code-review`, `/simplify`, and reviewing sub-agents are not lifecycle gates. A user can still invoke them by hand, and when they do, the brief applies to them too.
 
 **That is a rule about what to *request*, not about whose threads to settle.** A repo may have other reviewers configured that these skills never invoke. Their threads still gate the merge — `docs/specs/fx-dev-authority/index.md` § Unresolved Reviewer Threads Gate Every Merge requires that no thread from *any* configured automated reviewer be left open under a merge, and that requirement is not narrowed by this roster. Triage and settle whatever arrives; just do not add a reviewer pass of your own.
 
@@ -110,7 +110,7 @@ Every downstream rule is written in terms of **blocking**, deliberately. Fix blo
 
 **This generalises, and it is the rule that keeps this document workable: every normative rule here is defined once and referenced, never restated.** That covers the blocking definition, the convergence test, the iteration bound, the two conditions that re-open scope, and the resolver dispositions below. A skill that paraphrases one of them creates a copy that goes stale the moment the original changes — and a stale copy is always the *narrower* one, so it under-blocks, under-converges, or re-opens scope it should not. Name the rule and link the section. If a skill genuinely needs different behaviour, change it here, for everyone.
 
-**One exception, and only one: text sent verbatim to an external tool.** A prompt handed to `codex review` or any reviewer outside this repo cannot follow a link, so it MUST inline the rule. Such a block is a **mirror**: mark it as one, keep it a faithful restatement of the canonical section rather than an independent edit, and update it in the same commit that changes the canonical text. Nothing an agent reads directly qualifies — only strings crossing a process boundary.
+**One exception, and only one: text sent verbatim to an external tool.** A prompt handed to `codex review`, `claude -p` or any reviewer outside this repo cannot follow a link, so it MUST inline the rule. Such a block is a **mirror**: mark it as one, keep it a faithful restatement of the canonical section rather than an independent edit, and update it in the same commit that changes the canonical text. Nothing an agent reads directly qualifies — only strings crossing a process boundary.
 
 ### Resolver dispositions
 
