@@ -127,6 +127,14 @@ enumeration *failure* as a setup failure and refuses to run, whereas a hand-roll
 loop silently yields an empty flag set and reproduces the hang. This paragraph
 documents the mechanism; the script is the only supported way to apply it.
 
+**`enabled=false` alone breaks on a server that is not in `config.toml`.** A
+bundled plugin or the desktop app can contribute servers; for those the override
+creates an entry with no transport, and codex refuses to load any config at all
+(`invalid transport in mcp_servers.<name>`, observed on 0.162.1). The script
+therefore also sets `command="/bin/false"` on every stdio server, then **verifies
+the flag set** with `codex <flags> mcp list --json` — the config must load and
+every server must report disabled — and refuses to run (exit 3) otherwise.
+
 **Enumerate with `codex mcp list --json`, never by parsing `config.toml`.** Not
 every active server is declared there — servers can also arrive from
 project-scoped or managed configuration, and a `config.toml` scrape silently

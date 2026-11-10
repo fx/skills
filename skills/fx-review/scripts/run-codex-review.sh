@@ -105,7 +105,8 @@
 # which. 3 and 4 are this script's own codes and are never codex's.
 #
 # Exit 3 covers exactly: a usage error, `codex` missing from PATH, an unreadable or
-# empty scope prompt, and a failed MCP enumeration. Deliberately not 1 or 2 — those
+# empty scope prompt, a failed MCP enumeration, and a disable-override set that codex
+# rejects or that leaves a server enabled. Deliberately not 1 or 2 — those
 # are reserved by `codex` itself, and conflating them would make "the reviewer
 # failed" look like "the reviewer had opinions".
 #
@@ -149,6 +150,11 @@
 #    misses those. That produces a PARTIAL flag set — the worst outcome, because the
 #    command looks correct, most servers are disabled, and the one it missed hangs
 #    the run exactly as before.
+#
+#    A server contributed by a bundled plugin or the desktop app is not in config.toml,
+#    and `enabled=false` alone makes codex refuse the whole config. Stdio servers also
+#    get `command="/bin/false"`, and the resulting flag set is VERIFIED with
+#    `codex <flags> mcp list --json` before the review starts.
 #
 # These are per-invocation overrides. This script NEVER writes to ~/.codex/config.toml
 # or ~/.codex/AGENTS.md — those are the user's, machine-wide, and a review has no
@@ -403,7 +409,8 @@ if ! mcp_json=$(codex mcp list --json 2>/dev/null); then
     finish ERROR
 fi
 
-if ! mcp_names=$(printf '%s' "$mcp_json" | jq -r '.[].name' 2>/dev/null); then
+# One line per server: name, TAB, transport type.
+if ! mcp_names=$(printf '%s' "$mcp_json" | jq -r '.[] | "\(.name)\t\(.transport.type // "")"' 2>/dev/null); then
     echo "Error: could not parse \`codex mcp list --json\` output, so the set of MCP" >&2
     echo "servers to disable is UNKNOWN. Refusing to run — see above." >&2
     finish ERROR
@@ -430,13 +437,45 @@ toml_key() {
     fi
 }
 
+# A server that is not declared in config.toml — one a bundled plugin or the desktop
+# app contributes — cannot be disabled by `enabled=false` alone: the override creates
+# a config entry with no transport and codex refuses to load at all ("invalid
+# transport in `mcp_servers.<name>`"). Observed on 0.162.1. For a stdio server, also
+# override `command` with a binary that exits at once, which gives the entry a valid
+# transport; it is never launched, because the entry is disabled.
 if [[ -n "$mcp_names" ]]; then
-    while IFS= read -r name; do
+    while IFS=$'\t' read -r name transport; do
         if [[ -n "$name" ]]; then
             MCP_NAMES+=("$name")
             MCP_OFF+=(-c "mcp_servers.$(toml_key "$name").enabled=false")
+            if [[ "$transport" == "stdio" ]]; then
+                MCP_OFF+=(-c "mcp_servers.$(toml_key "$name").command=\"/bin/false\"")
+            fi
         fi
     done <<< "$mcp_names"
+fi
+
+# VERIFY THE FLAG SET BEFORE SPENDING A REVIEW ON IT. Re-resolve the server list with
+# the overrides applied: codex must load the config, and every server must report
+# disabled. Either failure used to surface only as a review that "completed" with a
+# config error and no findings, or as the hang this section exists to prevent.
+if (( ${#MCP_NAMES[@]} > 0 )); then
+    if ! verify_json=$(codex "${MCP_OFF[@]}" mcp list --json 2>/dev/null); then
+        echo "Error: codex rejects the MCP disable overrides — the config does not load" >&2
+        echo "with them applied. Refusing to run. Inspect with:" >&2
+        echo "  codex ${MCP_OFF[*]} mcp list --json" >&2
+        finish ERROR
+    fi
+    if ! still_on=$(printf '%s' "$verify_json" | jq -r '.[] | select(.enabled) | .name' 2>/dev/null); then
+        echo "Error: could not parse the verification listing. Refusing to run." >&2
+        finish ERROR
+    fi
+    if [[ -n "$still_on" ]]; then
+        echo "Error: MCP servers still enabled after the overrides:" >&2
+        printf '  %s\n' $still_on >&2
+        echo "Refusing to run — an enabled server can hang the review on its first action." >&2
+        finish ERROR
+    fi
 fi
 
 # Echo the resolved flag set so a PARTIAL one is visible. A partial set is the worst
